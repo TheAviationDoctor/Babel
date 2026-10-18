@@ -28,21 +28,23 @@ No. The library is *finite*, meaning it has a fixed number of books (each one un
 
 With the default settings:
 
-- Each book holds `2^5 = 32` characters per line, `2^6 = 64` lines per page, and `2^9 = 512` pages. That's a total of `2^20 = 1,048,576` characters per book.
+- Each book holds `2^5 = 32` characters per line, `2^6 = 64` lines per page, and `2^9 = 512` pages. That's a total of `2^20 = 1,048,576` characters per book. That's probably about twice the length of a typical English novel.
 
-- The character set contains `2^6 = 64` symbols (uppercase letters A–Z, digits 0–9, and punctuation marks).
+- The alphabet contains `2^6 = 64` symbols (`26` uppercase letters A–Z, `10` digits 0–9, and `28` punctuation marks). That's exactly half as many symbols as the ASCII set, but empirically tested to represent virtually every one of the 11.7 million characters sampled across 18 public-domain classics from the Gutenberg website.
 
-- There are therefore `64^(2^20) = 2^6,291,456 ≈ 9.38 × 10^1,893,916` unique books in the Library (which does not contain duplicates). That's 1 followed by nearly 2 million zeros.
+- There are therefore `64^(2^20) = 2^6,291,456 ≈ 9.38 × 10^1,893,916` unique books in the Library (which does not contain duplicates). That's one followed by nearly two million zeros.
 
-- Each hexagon holds `2^2 = 4` bookshelves of `2^2 = 4` shelves each and `2^5 = 32` books per shelf. That's a total of `2^9 = 512` books per hexagon. So, the Library has `2^6,291,456 / 2^9 = 2^6,291,447 ≈ 1.83× 10^1,893,914` hexagons. Barely two order of magnitude fewer hexagons than books.
+- Each hexagonal room holds `2^2 = 4` bookshelves of `2^2 = 4` shelves each and `2^5 = 32` books per shelf. That's a total of `2^9 = 512` books per hexagon. So, the Library has `2^6,291,456 / 2^9 = 2^6,291,447 ≈ 1.83× 10^1,893,914` hexagons. Barely two order of magnitude fewer hexagons than books.
 
-- For perspective: there are about `10^80` atoms in the observable universe. Imagine every atom contained an entire universe, each with just as many atoms as ours. Then imagine every atom in that nested universe contained another universe, etc. You would need nearly 24,000 levels of nested universes before the *cumulative* number of atoms reached this the number of books or hexagons in the Library.
+- For perspective: there are about `10^80` atoms in the observable universe. Imagine every atom contained an entire universe, each with just as many atoms as ours. Then imagine every atom in that nested universe contained another universe, etc. You would need nearly 24,000 levels of nested universes before the *cumulative* number of atoms reached the number of books or hexagons in the Library.
 
 - To balance the horizontal and vertical coordinates within the Library, the hexagons are split about evenly along the east-west gallery and vertically across the floors. There are `2^3,145,722 ≈ 4.79 × 10^946,956` hexagons per floor and `2^3,145,725 ≈ 3.83 × 10^946,957` floors.
 
-- Technically, a floor is only 2.61 meters high against 8.83 meters in length per hexagon, but there are 8 times as many floors as hexagons per floor, so the Library is about 2.4 times taller than it is long. Each floor is `4.2 × 10^946,957` meters long from east to west and the Library is `1.0 × 10^946,958` meters tall.
+- Technically, a floor is only 2.61 meters high against 8.83 meters in length per hexagon, but there are 8 times as many floors as hexagons per floor, so the Library is about 2.4 times taller than it is long. Each floor's gallery is `4.2 × 10^946,957` meters long from east to west and the Library is `1.0 × 10^946,958` meters tall.
 
-- Conveniently, the doorways line up on one straight east-west axis along each gallery, and the air shafts line up vertically through every floor. So one could shine a laser through both and (ignoring the air medium) measure how long it would take for light to come back around to its starting position. From east to west, that time would be `4.5 × 10^946,941` years, and from top to bottom, `1.1 × 10^946,942` years. At walking pace, traversing one floor takes about `10^946,950` years. For perspective, our universe is only `1.4 × 10^10` years old.
+- For perspective: our observable universe is only `8.7 × 10^26` meters across, so `1.1 × 10^946,931` of them could fit on top of each other in the Library.
+
+- Conveniently, the doorways line up on one straight east-west axis along each gallery, and the air shafts line up vertically through every floor. So one could shine a laser through both and (ignoring dissipation and slightly slower speed from the air medium) measure how long it would take for light to come back around to its starting position. From east to west, that time would be `4.5 × 10^946,941` years, and from top to bottom, `1.1 × 10^946,942` years. At walking pace, traversing one floor's gallery would take about `10^946,950` years. For perspective, our universe is only `1.4 × 10^10` years old.
 
 ## Is the Library three-dimensional?
 
