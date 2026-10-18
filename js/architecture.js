@@ -55,6 +55,14 @@
     d.Dx = 2 * d.a + d.hallLen; // distance between hexagon centres along a gallery
     d.hallX0 = d.a;
     d.hallX1 = d.Dx - d.a;
+    // a wooden lintel across the top of the doorway at each end of the vestibule, bearing a
+    // sign that names the way one is facing: EAST at the east end, WEST at the west end
+    d.lintelH = Math.min(0.2, Math.max(0.06, d.roomH - d.doorH - 0.03));
+    d.lintelDepth = 0.04;
+    d.signW = Math.min(4.5 * (d.lintelH - 0.04), d.hallW - 0.2); // the texture's proportions: 4.5 to 1
+    d.signH = d.signW / 4.5;
+    d.signDepth = 0.018;
+    d.signY = d.doorH + d.lintelH / 2;
 
     // lamps: two per hexagon, placed across the gallery axis, above the walkway
     const mid = (d.shaftA + d.aIn) / 2;
@@ -414,6 +422,13 @@
     plaster.poly([[ox1, 0, hw], [x1, 0, hw], [x1, H, hw], [ox1, H, hw]], [0, 0, -1]);
     plaster.poly([[ox0, d.doorH, hw], [ox1, d.doorH, hw], [ox1, H, hw], [ox0, H, hw]], [0, 0, -1]);
 
+    // the lintels over the two doorways, and the boards of their signs
+    const ld = d.lintelDepth, sd = d.signDepth, sw = d.signW / 2 + 0.012, sh = d.signH / 2 + 0.012, sy = d.signY;
+    wood.box(x0, d.doorH, -hw, x0 + ld, d.doorH + d.lintelH, hw, 'XyY');
+    wood.box(x1 - ld, d.doorH, -hw, x1, d.doorH + d.lintelH, hw, 'xyY');
+    wood.box(x0 + ld, sy - sh, -sw, x0 + ld + sd, sy + sh, sw, 'XyYzZ');
+    wood.box(x1 - ld - sd, sy - sh, -sw, x1 - ld, sy + sh, sw, 'xyYzZ');
+
     // skirting boards
     wood.box(x0, 0, -hw, dx0 - 0.06, 0.1, -hw + 0.02, 'YZX');
     wood.box(dx1 + 0.06, 0, -hw, x1, 0.1, -hw + 0.02, 'YZx');
@@ -634,6 +649,29 @@
     return { wood: wood.geometry(), soft: soft.geometry(), shade, bulb };
   }
 
+  /** The faces of the two signs, textured from the signs' texture (EAST above, WEST below). */
+  function buildSignFaces(d) {
+    const off = d.lintelDepth + d.signDepth + 0.0015;
+    const yb = d.signY - d.signH / 2, yt = d.signY + d.signH / 2, w = d.signW / 2;
+    const pos = [], nor = [], uv = [], idx = [];
+    const quad = (x, nx, zLeft, zRight, v0, v1) => {
+      const b = pos.length / 3;
+      // bottom left, bottom right, top right, top left, as the reader facing the sign sees them
+      pos.push(x, yb, zLeft, x, yb, zRight, x, yt, zRight, x, yt, zLeft);
+      for (let i = 0; i < 4; i++) nor.push(nx, 0, 0);
+      uv.push(0, v0, 1, v0, 1, v1, 0, v1);
+      idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
+    };
+    quad(d.hallX1 - off, -1, -w, w, 0.5, 1); // EAST, read facing east (+x), where +z is on the right
+    quad(d.hallX0 + off, 1, w, -w, 0, 0.5); // WEST, read facing west, where −z is on the right
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx);
+    return g;
+  }
+
   /** Book geometry with a part attribute: 2 = spine, 1 = boards, 0 = page edges. */
   function buildBook(d) {
     const g = new THREE.BoxGeometry(d.bookT - 0.005, d.bookH, d.bookD);
@@ -773,6 +811,38 @@
     }
   `;
 
+  const SIGN_VERT = `
+    varying vec3 vLocal;
+    varying vec3 vN;
+    varying vec2 vUv;
+    #include <fog_pars_vertex>
+    void main() {
+      vLocal = position;
+      vN = normal;
+      vUv = uv;
+      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+      gl_Position = projectionMatrix * mvPosition;
+      #include <fog_vertex>
+    }
+  `;
+
+  const SIGN_FRAG = `
+    uniform sampler2D map;
+    varying vec3 vLocal;
+    varying vec3 vN;
+    varying vec2 vUv;
+    ${LIGHTING_GLSL}
+    #include <fog_pars_fragment>
+    void main() {
+      vec3 n = normalize(vN);
+      vec3 base = texture2D(map, vUv).rgb;
+      float gilt = smoothstep(0.22, 0.36, base.r - base.b); // gold leaf catches more of the light
+      vec3 c = expose(base * lampLight(vLocal, n) * (1.0 + 2.6 * gilt));
+      gl_FragColor = vec4(c + dither(gl_FragCoord.xy) / 255.0, 1.0);
+      #include <fog_fragment>
+    }
+  `;
+
   const LAMP = new THREE.Color(1.0, 0.78, 0.52); // the lamps' warm light
   const SCREEN = new THREE.Color(0.62, 0.82, 0.78); // the catalogue's cool glow
 
@@ -798,6 +868,12 @@
     const defines = {};
     if (opts.cellMatrix) { defines.USE_CELL_MATRIX = ''; uniforms.uCellMatrix = { value: new THREE.Matrix4() }; }
     return new THREE.ShaderMaterial({ uniforms, defines, vertexShader: ARCH_VERT, fragmentShader: ARCH_FRAG, fog: true, side: opts.side || THREE.FrontSide, vertexColors: !!opts.vertexColors });
+  }
+
+  function signMaterial(map, lights, opts) {
+    const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog]);
+    Object.assign(uniforms, lightingUniforms(lights, opts || {}), { map: { value: map } });
+    return new THREE.ShaderMaterial({ uniforms, vertexShader: SIGN_VERT, fragmentShader: SIGN_FRAG, fog: true });
   }
 
   function bookMaterial(map, lights, variants) {
@@ -865,6 +941,7 @@
       vesTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.vestibule, { colors: [null, null, null, SCREEN] }),
       niche: archMaterial(textures.plaster, [0.4, 0.4], 0xffffff, L.niche, { vertexColors: true, colors: [SCREEN], falloff: 1.4, ambient: 0.04 }),
       screen: new THREE.MeshBasicMaterial({ map: textures.screen, fog: true }),
+      signs: signMaterial(textures.signs, L.vestibule, { colors: [null, null, null, SCREEN], ambient: 0.08 }),
       wellPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc4b597, L.well, { side: THREE.DoubleSide, ambient: 0.08 }),
       wellStone: archMaterial(textures.stone, [0.7, 0.7], 0xdccdb0, L.well, { side: THREE.DoubleSide, ambient: 0.08 }),
       cellWood: archMaterial(textures.wood, [0.9, 2.2], 0xffffff, L.cell, { vertexColors: true, falloff: 1.1, ambient: 0.05 }),
@@ -887,6 +964,7 @@
       doorLeaf: buildDoorLeaf(d),
       niche: buildNiche(d),
       screen: new THREE.PlaneGeometry(d.screen.w, d.screen.h),
+      signs: buildSignFaces(d),
       cellWood: cell.wood, cellSoft: cell.soft, shade: cell.shade, bulb: cell.bulb,
       sinkMirror: new THREE.PlaneGeometry(d.sinkMirror.w, d.sinkMirror.h),
     };

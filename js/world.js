@@ -266,6 +266,10 @@
       niche.add(screen);
       group.add(niche);
 
+      // the signs over the two doorways of the vestibule
+      const signs = new THREE.Mesh(G.signs, M.signs);
+      group.add(signs);
+
       // the cell itself, drawn only near the reader
       const interior = new THREE.Group();
       interior.add(new THREE.Mesh(G.cellWood, light.wood));
@@ -296,7 +300,7 @@
       const books = new THREE.InstancedMesh(geo, M.books, S);
       books.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       group.add(books);
-      return { group, books, tint, variant, tints: new Float32Array(S * 3), dg: 0, df: 0, door, interior, niche, light };
+      return { group, books, tint, variant, tints: new Float32Array(S * 3), dg: 0, df: 0, door, interior, niche, signs, light };
     }
 
     _acquire() { return this.pool.pop() || this._createCell(); }
@@ -391,6 +395,7 @@
         cell.interior.visible = Math.abs(df - pf) <= 1 && Math.abs(dg - pg) <= 3;
         cell.door.visible = Math.abs(df - pf) <= 1;
         cell.niche.visible = Math.abs(df - pf) <= 1;
+        cell.signs.visible = Math.abs(df - pf) <= 1;
       }
       this._trimCaches(pg, pf);
       this.clearHover();

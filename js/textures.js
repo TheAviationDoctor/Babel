@@ -237,6 +237,69 @@
     return t;
   }
 
+  /**
+   * The two signs over the vestibule's doorways, one above the other in a single
+   * texture: EAST in the top half, WEST in the bottom half. Gilt capitals on walnut.
+   * Painted again once the typeface has loaded, if it was not ready at start-up.
+   */
+  function signs() {
+    const w = 1152, h = 512, c = canvas(w, h), g = c.getContext('2d');
+    const rand = rngFrom('signs');
+    const grain = valueNoise(w, h / 2, 3, rand, 4);
+    const FONT = '"Libre Bodoni", "Bodoni 72", Didot, Georgia, serif';
+    const paint = () => {
+      for (const [k, word] of [[0, 'EAST'], [1, 'WEST']]) {
+        const y0 = k * (h / 2), hh = h / 2;
+        // walnut, with a little grain along the board
+        const img = g.createImageData(w, hh);
+        for (let y = 0; y < hh; y++) {
+          for (let x = 0; x < w; x++) {
+            const i = y * w + x;
+            const ring = 0.5 + 0.5 * Math.sin((y / hh) * 9 * Math.PI + grain[i] * 7);
+            const l = 0.7 + 0.18 * Math.pow(ring, 3) + 0.12 * (grain[(i * 7) % grain.length] - 0.5);
+            img.data[i * 4] = 62 * l; img.data[i * 4 + 1] = 38 * l; img.data[i * 4 + 2] = 22 * l; img.data[i * 4 + 3] = 255;
+          }
+        }
+        g.putImageData(img, 0, y0);
+        // a bevelled edge, and a fine gilt rule inside it
+        g.strokeStyle = 'rgba(255, 228, 180, 0.12)'; g.lineWidth = 6;
+        g.strokeRect(5, y0 + 5, w - 10, hh - 10);
+        g.strokeStyle = 'rgba(0, 0, 0, 0.45)'; g.lineWidth = 4;
+        g.strokeRect(12, y0 + 12, w - 24, hh - 24);
+        g.strokeStyle = '#b8914d'; g.lineWidth = 4;
+        g.strokeRect(30, y0 + 30, w - 60, hh - 60);
+        // the word, widely spaced, as if carved and gilded
+        const size = 178;
+        g.font = `500 ${size}px ${FONT}`;
+        g.textBaseline = 'alphabetic';
+        const track = size * 0.26;
+        const letters = word.split('');
+        const widths = letters.map((ch) => g.measureText(ch).width);
+        const total = widths.reduce((a, b) => a + b, 0) + track * (letters.length - 1);
+        const base = y0 + hh / 2 + size * 0.34;
+        const gold = g.createLinearGradient(0, base - size * 0.7, 0, base);
+        gold.addColorStop(0, '#f0d48e'); gold.addColorStop(0.55, '#d1a85c'); gold.addColorStop(1, '#9c7334');
+        let x = (w - total) / 2;
+        letters.forEach((ch, i) => {
+          g.fillStyle = 'rgba(0, 0, 0, 0.55)';
+          g.fillText(ch, x + 3, base + 4); // the cut, in shadow
+          g.fillStyle = gold;
+          g.fillText(ch, x, base);
+          x += widths[i] + track;
+        });
+      }
+    };
+    paint();
+    const t = toTexture(c, false);
+    t.generateMipmaps = true;
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.anisotropy = 8;
+    try {
+      document.fonts.load(`500 178px ${FONT}`).then(() => { paint(); t.needsUpdate = true; }).catch(() => {});
+    } catch (e) { /* the fallback serif stays */ }
+    return t;
+  }
+
   /** Soft radial glow for the lamps. */
   function glow() {
     const s = 128, c = canvas(s, s), g = c.getContext('2d');
@@ -263,6 +326,7 @@
         tilesAspect: tiles.aspect,
         spines: spineAtlas(),
         screen: screen(),
+        signs: signs(),
         glow: glow(),
       };
     },
