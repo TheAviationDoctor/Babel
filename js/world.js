@@ -49,6 +49,25 @@
 
     isDoorOpen(dg, df) { return this.doorOpenness(dg, df) > 0.9; }
 
+    /* ---------------- the book the catalogue found ---------------- */
+
+    /** Marks a book (drawn a little out of its row and brighter). Pass null to clear. */
+    setMark(mark) {
+      const old = this.mark;
+      this.clearHover();
+      this.mark = mark;
+      for (const m of [old, mark]) {
+        if (!m) continue;
+        const cell = this.cell(m.dg, m.df);
+        if (cell) this._dress(cell, cell.dg, cell.df);
+      }
+    }
+
+    isMarked(dg, df, slot) {
+      const m = this.mark;
+      return !!m && m.dg === dg && m.df === df && m.slot === slot;
+    }
+
     toggleDoor(dg, df) {
       const key = dg + ',' + df;
       let s = this.doors.get(key);
@@ -78,6 +97,7 @@
     setAnchor(gallery, floor) {
       this.anchor = { gallery, floor };
       if (this.doors) this.doors.clear();
+      this.mark = null;
       this.galleryCache.clear();
       this.floorCache.clear();
       for (const cell of this.cells.values()) this._release(cell);
@@ -164,6 +184,15 @@
       door.add(leaf);
       group.add(door);
 
+      // the catalogue in its niche opposite
+      const niche = new THREE.Group();
+      niche.add(new THREE.Mesh(G.niche, M.niche));
+      const screen = new THREE.Mesh(G.screen, M.screen);
+      screen.position.set(d.screen.x, d.screen.y, d.screen.z);
+      screen.rotation.y = Math.PI;
+      niche.add(screen);
+      group.add(niche);
+
       // the cell itself, drawn only near the reader
       const interior = new THREE.Group();
       interior.add(new THREE.Mesh(G.cellWood, M.cellWood));
@@ -194,7 +223,7 @@
       const books = new THREE.InstancedMesh(geo, M.books, S);
       books.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       group.add(books);
-      return { group, books, tint, variant, tints: new Float32Array(S * 3), dg: 0, df: 0, door, interior };
+      return { group, books, tint, variant, tints: new Float32Array(S * 3), dg: 0, df: 0, door, interior, niche };
     }
 
     _acquire() { return this.pool.pop() || this._createCell(); }
@@ -232,6 +261,19 @@
         m.elements[12] += L.nx * push;
         m.elements[14] += L.nz * push;
         cell.books.setMatrixAt(slot, m);
+      }
+      const mk = this.mark;
+      if (mk && mk.dg === dg && mk.df === df && mk.slot < count) {
+        const L = this._bookLayout[mk.slot];
+        cell.books.getMatrixAt(mk.slot, m);
+        m.elements[12] -= L.nx * 0.07;
+        m.elements[14] -= L.nz * 0.07;
+        cell.books.setMatrixAt(mk.slot, m);
+        for (let k = 0; k < 3; k++) {
+          const v = Math.min(1, cell.tints[mk.slot * 3 + k] * 1.35 + 0.08);
+          cell.tints[mk.slot * 3 + k] = v;
+          cell.tint.array[mk.slot * 3 + k] = v;
+        }
       }
       cell.books.count = count;
       this._applyDoor(cell);
@@ -274,6 +316,7 @@
         // cells can only be seen from close by, through their door
         cell.interior.visible = Math.abs(df - pf) <= 1 && Math.abs(dg - pg) <= 3;
         cell.door.visible = Math.abs(df - pf) <= 1;
+        cell.niche.visible = Math.abs(df - pf) <= 1;
       }
       this._trimCaches(pg, pf);
       this.clearHover();

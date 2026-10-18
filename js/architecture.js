@@ -86,6 +86,10 @@
     d.doorPivot = [d.hingeX + 0.02, -(d.hallW / 2) - 0.025]; // hinge axis (x, z)
     d.cellDoor = R(d.hingeX - 0.005, d.hingeX + 0.05, d.doorPivot[1] - d.closetW, d.cellZ0); // the door, once open
     d.cellObstacles = [d.bed, d.nightTable, d.toilet, d.sink];
+
+    // The north door gives onto a shallow niche holding the catalogue's touchscreen.
+    d.nicheDepth = 0.45;
+    d.screen = { x: d.closetX, y: 1.33, w: 0.52, h: 0.38, z: d.hallW / 2 + d.nicheDepth - 0.052 };
     d.wellR = 1.3;
     d.openW = 1.2;
     d.colR = 0.14;
@@ -402,15 +406,19 @@
     plaster.poly([[dx1, 0, -hw], [dx1, 0, cz0], [dx1, dH, cz0], [dx1, dH, -hw]], [-1, 0, 0]);
     plaster.poly([[dx0, dH, -hw], [dx1, dH, -hw], [dx1, dH, cz0], [dx0, dH, cz0]], [0, -1, 0]);
     wood.box(dx0, 0, cz0, dx1, 0.012, -hw, 'YzZ');
-    // north wall (+z): opening onto the stair
-    plaster.poly([[x0, 0, hw], [ox0, 0, hw], [ox0, H, hw], [x0, H, hw]], [0, 0, -1]);
+    // north wall (+z): the niche of the catalogue, then the opening onto the stair
+    const nx0 = d.closetX - d.closetW / 2, nx1 = d.closetX + d.closetW / 2;
+    plaster.poly([[x0, 0, hw], [nx0, 0, hw], [nx0, H, hw], [x0, H, hw]], [0, 0, -1]);
+    plaster.poly([[nx1, 0, hw], [ox0, 0, hw], [ox0, H, hw], [nx1, H, hw]], [0, 0, -1]);
+    plaster.poly([[nx0, dH, hw], [nx1, dH, hw], [nx1, H, hw], [nx0, H, hw]], [0, 0, -1]);
     plaster.poly([[ox1, 0, hw], [x1, 0, hw], [x1, H, hw], [ox1, H, hw]], [0, 0, -1]);
     plaster.poly([[ox0, d.doorH, hw], [ox1, d.doorH, hw], [ox1, H, hw], [ox0, H, hw]], [0, 0, -1]);
 
     // skirting boards
     wood.box(x0, 0, -hw, dx0 - 0.06, 0.1, -hw + 0.02, 'YZX');
     wood.box(dx1 + 0.06, 0, -hw, x1, 0.1, -hw + 0.02, 'YZx');
-    wood.box(x0, 0, hw - 0.02, ox0 - 0.06, 0.1, hw, 'Yzx');
+    wood.box(x0, 0, hw - 0.02, nx0 - 0.06, 0.1, hw, 'YzX');
+    wood.box(nx1 + 0.06, 0, hw - 0.02, ox0 - 0.06, 0.1, hw, 'Yzx');
     wood.box(ox1 + 0.06, 0, hw - 0.02, x1, 0.1, hw, 'YzX');
     // frame around the stair opening
     wood.box(ox0 - 0.06, 0, hw - 0.025, ox0, d.doorH + 0.06, hw, 'xXYz');
@@ -421,18 +429,10 @@
     wood.box(dx1, 0, -hw, dx1 + 0.06, dH + 0.06, -hw + 0.045, 'xXYZ');
     wood.box(dx0, dH, -hw, dx1, dH + 0.06, -hw + 0.045, 'yYZ');
 
-    // the closet opposite, its door shut
-    {
-      const z = hw, cx0 = d.closetX - d.closetW / 2, cx1 = d.closetX + d.closetW / 2;
-      wood.box(cx0, 0.02, z - 0.03, cx1, d.closetH, z, 'xXyYz');
-      wood.box(cx0 + 0.08, 0.12, z - 0.04, cx1 - 0.08, d.closetH * 0.42, z - 0.03, 'xXyYz');
-      wood.box(cx0 + 0.08, d.closetH * 0.5, z - 0.04, cx1 - 0.08, d.closetH - 0.1, z - 0.03, 'xXyYz');
-      wood.box(cx0 - 0.06, 0, z - 0.045, cx0, d.closetH + 0.06, z, 'xXYz');
-      wood.box(cx1, 0, z - 0.045, cx1 + 0.06, d.closetH + 0.06, z, 'xXYz');
-      wood.box(cx0, d.closetH, z - 0.045, cx1, d.closetH + 0.06, z, 'yYz');
-      const kx = cx1 - 0.09;
-      wood.box(kx - 0.02, 1.0, z - 0.06, kx + 0.02, 1.04, z - 0.03, 'xXyYz');
-    }
+    // frame of the niche opposite
+    wood.box(nx0 - 0.06, 0, hw - 0.045, nx0, dH + 0.06, hw, 'xXYz');
+    wood.box(nx1, 0, hw - 0.045, nx1 + 0.06, dH + 0.06, hw, 'xXYz');
+    wood.box(nx0, dH, hw - 0.045, nx1, dH + 0.06, hw, 'yYz');
 
     // mirror frame on the south wall, facing the stair
     const mx0 = d.mirrorX - d.mirrorW / 2, mx1 = d.mirrorX + d.mirrorW / 2, my0 = d.mirrorY0, my1 = d.mirrorY0 + d.mirrorH;
@@ -498,6 +498,27 @@
       const kx = w - 0.11, k0 = s * 0.02, k1 = s * 0.055;
       b.box(kx - 0.02, 1.0, Math.min(k0, k1), kx + 0.02, 1.04, Math.max(k0, k1), 'xXyYzZ');
     }
+    return b.geometry();
+  }
+
+  /** The niche of the catalogue: its walls, and the terminal's casing (the screen is separate). */
+  function buildNiche(d) {
+    const b = new Builder();
+    const hw = d.hallW / 2, x0 = d.closetX - d.closetW / 2, x1 = d.closetX + d.closetW / 2;
+    const z0 = hw, z1 = hw + d.nicheDepth, H = d.closetH, sc = d.screen;
+    b.tint(0xd5d0c2);
+    b.poly([[x0, 0, z0], [x0, 0, z1], [x0, H, z1], [x0, H, z0]], [1, 0, 0]);
+    b.poly([[x1, 0, z0], [x1, 0, z1], [x1, H, z1], [x1, H, z0]], [-1, 0, 0]);
+    b.poly([[x0, 0, z1], [x1, 0, z1], [x1, H, z1], [x0, H, z1]], [0, 0, -1]);
+    b.poly([[x0, H, z0], [x1, H, z0], [x1, H, z1], [x0, H, z1]], [0, -1, 0]);
+    b.tint(0x9a958a);
+    b.poly([[x0, 0, z0], [x1, 0, z0], [x1, 0, z1], [x0, 0, z1]], [0, 1, 0]);
+    // the casing, dark and plain, and a narrow ledge beneath it
+    b.tint(0x2a2b2a);
+    b.box(sc.x - sc.w / 2 - 0.04, sc.y - sc.h / 2 - 0.05, z1 - 0.05, sc.x + sc.w / 2 + 0.04, sc.y + sc.h / 2 + 0.04, z1, 'xXyYz');
+    b.box(sc.x - sc.w / 2 + 0.02, sc.y - sc.h / 2 - 0.1, z1 - 0.14, sc.x + sc.w / 2 - 0.02, sc.y - sc.h / 2 - 0.07, z1, 'xXyYz');
+    b.tint(0x3a3c3a);
+    b.box(sc.x - 0.012, sc.y - sc.h / 2 - 0.035, z1 - 0.053, sc.x + 0.012, sc.y - sc.h / 2 - 0.025, z1 - 0.05, 'z');
     return b.geometry();
   }
 
@@ -630,7 +651,7 @@
 
   const LIGHTING_GLSL = `
     uniform vec4 uLights[4];
-    uniform vec3 uLampColor;
+    uniform vec3 uLightColors[4];
     uniform float uAmbient;
     uniform float uFalloff;
     uniform float uExposure;
@@ -641,7 +662,7 @@
         float d2 = max(dot(L, L), 0.01);
         float ndl = dot(n, L) * inversesqrt(d2);
         float wrap = clamp((ndl + 0.25) / 1.25, 0.0, 1.0);
-        sum += uLampColor * (uLights[i].w * wrap / (1.0 + d2 * uFalloff));
+        sum += uLightColors[i] * (uLights[i].w * wrap / (1.0 + d2 * uFalloff));
       }
       return sum;
     }
@@ -751,10 +772,13 @@
     }
   `;
 
+  const LAMP = new THREE.Color(1.0, 0.78, 0.52); // the lamps' warm light
+  const SCREEN = new THREE.Color(0.62, 0.82, 0.78); // the catalogue's cool glow
+
   function lightingUniforms(lights, opts) {
     return {
       uLights: { value: lights },
-      uLampColor: { value: new THREE.Color(1.0, 0.78, 0.52) },
+      uLightColors: { value: [0, 1, 2, 3].map((i) => (opts.colors && opts.colors[i]) || LAMP.clone()) },
       uAmbient: { value: opts.ambient !== undefined ? opts.ambient : 0.05 },
       uFalloff: { value: opts.falloff !== undefined ? opts.falloff : 0.55 },
       uExposure: { value: opts.exposure !== undefined ? opts.exposure : 1.35 },
@@ -789,6 +813,13 @@
         V(d.hallX0 - 0.25, 1.8, 0, 0.72),
         V(d.hallX1 + 0.25, 1.8, 0, 0.72),
         V(d.wellX, 1.3, d.wellZ, 0.18),
+        V(d.screen.x, d.screen.y, d.hallW / 2 + 0.1, 0.32),
+      ],
+      // inside the niche: the screen, and the vestibule's light
+      niche: [
+        V(d.screen.x, d.screen.y, d.screen.z - 0.3, 0.75),
+        V(d.hallX0 - 0.25, 1.8, 0, 0.72),
+        V(d.hallX1 + 0.25, 1.8, 0, 0.72),
         V(0, 0, 0, 0),
       ],
       // the night lamp, light from the vestibule through the door, a little fill
@@ -827,9 +858,11 @@
       hexWood: wood(L.hexagon),
       hexPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.hexagon),
       hexTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.hexagon),
-      vesWood: wood(L.vestibule),
-      vesPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.vestibule),
-      vesTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.vestibule),
+      vesWood: archMaterial(textures.wood, [0.9, 2.2], 0xb0845a, L.vestibule, { colors: [null, null, null, SCREEN] }),
+      vesPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.vestibule, { colors: [null, null, null, SCREEN] }),
+      vesTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.vestibule, { colors: [null, null, null, SCREEN] }),
+      niche: archMaterial(textures.plaster, [0.4, 0.4], 0xffffff, L.niche, { vertexColors: true, colors: [SCREEN], falloff: 1.4, ambient: 0.04 }),
+      screen: new THREE.MeshBasicMaterial({ map: textures.screen, fog: true }),
       wellPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc4b597, L.well, { side: THREE.DoubleSide, ambient: 0.08 }),
       wellStone: archMaterial(textures.stone, [0.7, 0.7], 0xdccdb0, L.well, { side: THREE.DoubleSide, ambient: 0.08 }),
       cellWood: archMaterial(textures.wood, [0.9, 2.2], 0xffffff, L.cell, { vertexColors: true, falloff: 1.1, ambient: 0.05 }),
@@ -850,6 +883,8 @@
       book: buildBook(d),
       mirror: new THREE.PlaneGeometry(d.mirrorW, d.mirrorH),
       doorLeaf: buildDoorLeaf(d),
+      niche: buildNiche(d),
+      screen: new THREE.PlaneGeometry(d.screen.w, d.screen.h),
       cellWood: cell.wood, cellSoft: cell.soft, shade: cell.shade, bulb: cell.bulb,
       sinkMirror: new THREE.PlaneGeometry(d.sinkMirror.w, d.sinkMirror.h),
     };

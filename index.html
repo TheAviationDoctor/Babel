@@ -62,11 +62,12 @@
         <span id="page-count"></span>
       </form>
       <button id="next-page" type="button" aria-label="Next page">›</button>
+      <button id="show-passage" type="button" hidden>Show the passage</button>
       <button id="random-page" type="button">Open at random</button>
       <button id="copy-page" type="button">Copy page</button>
       <button id="close-book" type="button" class="primary">Put the book back</button>
     </nav>
-    <p class="book-keys">Arrow keys turn pages. Esc puts the book back.</p>
+    <p class="book-keys" id="book-keys">Arrow keys turn pages. Esc puts the book back.</p>
   </div>
 </section>
 
@@ -99,6 +100,94 @@
   </div>
 </section>
 
+<section id="terminal" class="screen" hidden aria-labelledby="terminal-title">
+  <div class="glass">
+    <header class="glass-head">
+      <h2 id="terminal-title">The catalogue</h2>
+      <div class="tabs" role="tablist" aria-label="What to do">
+        <button id="tab-find" type="button" role="tab" aria-selected="true" aria-controls="panel-find">Find a text</button>
+        <button id="tab-go" type="button" role="tab" aria-selected="false" aria-controls="panel-go">Go to a hexagon</button>
+      </div>
+      <button id="terminal-close" type="button" class="quiet">Step away</button>
+    </header>
+
+    <div id="panel-find" class="panel" role="tabpanel" aria-labelledby="tab-find">
+      <form id="find-form" class="find" autocomplete="off">
+        <label for="find-text">Text to find</label>
+        <textarea id="find-text" rows="3" spellcheck="false" placeholder="Type or paste any text"></textarea>
+        <div class="find-foot">
+          <p id="find-note" class="note"></p>
+          <div class="row">
+            <button id="find-paste" type="button">Paste</button>
+            <button id="find-go" type="submit" class="primary">Find</button>
+          </div>
+        </div>
+      </form>
+
+      <div id="find-results" class="results" hidden>
+        <p class="query">Searching for <span id="find-query"></span></p>
+        <section class="result" aria-labelledby="nearest-title">
+          <h3 id="nearest-title">The nearest copy</h3>
+          <p id="nearest-status" class="status" aria-live="polite"></p>
+          <p id="nearest-where" class="where"></p>
+          <div class="row">
+            <button id="nearest-read" type="button" hidden>Read it here</button>
+            <button id="nearest-go" type="button" class="primary" hidden>Go to it</button>
+            <button id="nearest-stop" type="button" hidden>Stop searching</button>
+            <button id="nearest-start" type="button" hidden>Search nearby anyway</button>
+          </div>
+        </section>
+        <section class="result" aria-labelledby="certain-title">
+          <h3 id="certain-title">A copy that certainly exists</h3>
+          <p class="status">Found by running the shelving backwards, with the text from the first character of the book onwards.</p>
+          <fieldset class="fill">
+            <legend>The rest of that book</legend>
+            <label><input type="radio" name="fill" value="random" checked> random characters</label>
+            <label><input type="radio" name="fill" value="blank"> blank</label>
+          </fieldset>
+          <p id="certain-where" class="where"></p>
+          <div class="row">
+            <button id="certain-read" type="button">Read it here</button>
+            <button id="certain-go" type="button" class="primary">Go there</button>
+            <button id="certain-copy" type="button">Copy its address</button>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div id="panel-go" class="panel" role="tabpanel" aria-labelledby="tab-go" hidden>
+      <section class="go">
+        <h3>Along the gallery, and up or down</h3>
+        <form id="go-offset" class="row offset" autocomplete="off">
+          <label><input id="go-east" type="text" inputmode="numeric" value="0"> hexagons east</label>
+          <label><input id="go-up" type="text" inputmode="numeric" value="0"> floors up</label>
+          <button type="submit" class="primary">Go</button>
+        </form>
+        <p class="note">Negative numbers go west, or down.</p>
+        <p id="go-offset-error" class="error" hidden></p>
+      </section>
+      <section class="go">
+        <h3>To an address</h3>
+        <form id="go-address" autocomplete="off">
+          <label for="go-address-text">Paste a full address, as copied from the pause menu or from this catalogue</label>
+          <textarea id="go-address-text" rows="3" spellcheck="false" placeholder="Seed: …&#10;Floor: …&#10;Gallery: …"></textarea>
+          <p id="go-address-error" class="error" hidden></p>
+          <div class="row"><button type="submit" class="primary">Go</button></div>
+        </form>
+      </section>
+      <section class="go">
+        <h3>Anywhere</h3>
+        <div class="row"><button id="go-random" type="button">Go to a hexagon at random</button></div>
+      </section>
+      <section class="go">
+        <h3>This hexagon</h3>
+        <p class="note">Seed <span id="term-seed"></span>, floor <span class="addr" id="term-floor"></span>, gallery <span class="addr" id="term-gallery"></span>.</p>
+        <div class="row"><button id="term-copy" type="button">Copy its full address</button></div>
+      </section>
+    </div>
+  </div>
+</section>
+
 <p id="toast" role="status" aria-live="polite" hidden></p>
 <section id="error" class="screen" hidden role="alert">
   <div class="error-block">
@@ -116,6 +205,8 @@
 <script src="js/architecture.js"></script>
 <script src="js/world.js"></script>
 <script src="js/player.js"></script>
+<script src="js/catalogue.js"></script>
+<script src="js/terminal.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

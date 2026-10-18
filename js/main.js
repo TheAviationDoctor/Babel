@@ -17,7 +17,7 @@
     try { localStorage.setItem('babel.settings', JSON.stringify(settings)); } catch (e) { /* ignore */ }
   }
 
-  let raw, lib, assets, world, player, renderer, scene, camera, reflector, sinkReflector, figure;
+  let raw, lib, assets, world, player, renderer, scene, camera, reflector, sinkReflector, figure, terminal;
   let initialSeed = 'borges';
   let mode = 'title';
   let wakeIndex = 0;
@@ -111,6 +111,11 @@
     scene.add(new THREE.HemisphereLight(0xb08a5e, 0x140e09, 1.1));
     sizeMirror();
 
+    terminal = new Babel.Terminal({
+      lib: () => lib, world, player, dims: assets.dims,
+      setMode, startWalking, openBookAt, goToCell, goToAddress, goToRandom, useSeed, toast, copyText,
+    });
+
     wake(0);
     bindInterface();
     window.addEventListener('resize', onResize);
@@ -155,6 +160,8 @@
     wakeIndex = n;
     const loc = lib.wakingLocation(n);
     world.setAnchor(loc.gallery, loc.floor);
+    if (terminal) terminal.reset();
+    player.origin = 'woke';
     player.placeAtStart();
     world.update(0, 0);
     lastCell = '';
@@ -172,6 +179,42 @@
     return true;
   }
 
+  /** Rebuilds the Library with another seed without moving the reader's anchor. */
+  function useSeed(seed) {
+    if (seed === lib.seed) return;
+    lib = buildLibrary(seed);
+    world.setLibrary(lib);
+    world.setAnchor(world.anchor.gallery, world.anchor.floor);
+    terminal.reset();
+    $('seed-input').value = seed;
+    $('seed-input-2').value = seed;
+    toast(`The Library of seed "${seed}".`);
+  }
+
+  /** Goes to hexagon (dg, df) relative to the anchor; with `face`, stands before that book. */
+  function goToCell(dg, df, face) {
+    if (face) player.faceBook(dg, df, face.wall, face.shelf, face.volume);
+    else player.placeAtStart(dg, df);
+    world.update(player.cg, player.cf);
+    lastCell = '';
+    startWalking();
+  }
+
+  /** Goes to a hexagon anywhere, given its absolute floor and gallery addresses. */
+  function goToAddress(gallery, floor, face, mark) {
+    world.setAnchor(gallery, floor);
+    terminal.reset();
+    player.origin = 'arrived';
+    if (mark) world.setMark(Object.assign({ dg: 0, df: 0 }, mark));
+    goToCell(0, 0, face);
+  }
+
+  function goToRandom() {
+    const loc = lib.wakingLocation(1 + Math.floor(Math.random() * 4294967295));
+    goToAddress(loc.gallery, loc.floor, null);
+    toast('You arrive in a hexagon chosen at random.');
+  }
+
   /* ---------------- text ---------------- */
 
   const fmt = (n) => n.toLocaleString('en');
@@ -183,9 +226,9 @@
   }
 
   function controlsHTML() {
-    if (isTouch) return 'Drag on the right of the screen to look. Hold and slide on the left to walk. Tap a book to read it, or a door to open it.';
+    if (isTouch) return 'Drag on the right of the screen to look. Hold and slide on the left to walk. Tap a book to read it, a door to open it, or the catalogue to use it.';
     return 'Look with the mouse. Walk with <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or the arrow keys, and hold <kbd>Shift</kbd> to hurry. ' +
-      'Press <kbd>E</kbd> to take down the book you are looking at or to open a door, and <kbd>Esc</kbd> to pause.';
+      'Press <kbd>E</kbd> to take down the book you are looking at, open a door or use the catalogue, and <kbd>Esc</kbd> to pause.';
   }
 
   function addressHead(digits, count) {
@@ -231,7 +274,9 @@
     $('hud').hidden = next !== 'walking';
     $('reader').hidden = next !== 'reading';
     $('pause').hidden = next !== 'paused';
+    $('terminal').hidden = next !== 'terminal';
     player.enabled = next === 'walking';
+    if ((next === 'terminal' || next === 'reading') && document.pointerLockElement) document.exitPointerLock();
     if (next !== 'walking') { world.clearHover(); gaze = null; gazeKey = ''; $('gaze').hidden = true; }
     if (next === 'paused') renderHere();
     updateMenuButton();
@@ -267,25 +312,42 @@
       gazeKey = '';
       return;
     }
+    if (gaze.kind === 'terminal') { terminal.open(); return; }
     openBook(gaze);
   }
 
+  /** Opens the book the reader is looking at on the shelves. */
   function openBook(target) {
     const dg = player.cg + target.off, df = player.cf;
-    const loc = world.location(dg, df, target.slot);
-    const content = lib.bookAt(loc);
+    const mark = world.mark && world.isMarked(dg, df, target.slot) ? world.mark : null;
+    openBookAt({
+      location: world.location(dg, df, target.slot), slot: target.slot,
+      highlight: mark ? { start: mark.start, length: mark.length } : null, returnTo: 'walking',
+    });
+  }
+
+  /**
+   * Opens any book of the Library. options: { location, slot, content?, highlight?: { start, length }, returnTo }.
+   */
+  function openBookAt(o) {
+    const content = o.content || lib.bookAt(o.location);
     if (!content) { toast('This shelf is empty. The Library ends here.'); return; }
-    const fp = world.fingerprint(dg, df);
+    const fp = lib.hexagonFingerprint(o.location.gallery, o.location.floor);
+    const { wall, shelf, volume } = lib.slotParts(o.slot);
+    const c = lib.config;
     reading = {
-      content, page: 0, target,
-      title: lib.spineTitle(fp, target.slot),
+      content, returnTo: o.returnTo || 'walking', highlight: o.highlight || null,
+      page: o.highlight ? Math.floor(o.highlight.start / c.charactersPerPage) : 0,
+      title: lib.spineTitle(fp, o.slot),
     };
     $('book-title').textContent = reading.title;
-    $('book-where').textContent = `Wall ${target.wall + 1}, shelf ${target.shelf + 1}, volume ${target.volume + 1}`;
-    $('page-count').textContent = `of ${fmt(lib.config.pagesPerBook)}`;
-    $('page-input').max = lib.config.pagesPerBook;
+    $('book-where').textContent = `Wall ${wall + 1}, shelf ${shelf + 1}, volume ${volume + 1}`;
+    $('page-count').textContent = `of ${fmt(c.pagesPerBook)}`;
+    $('page-input').max = c.pagesPerBook;
+    $('show-passage').hidden = !reading.highlight;
+    $('close-book').textContent = reading.returnTo === 'terminal' ? 'Back to the catalogue' : 'Put the book back';
+    $('book-keys').textContent = reading.returnTo === 'terminal' ? 'Arrow keys turn pages. Esc returns to the catalogue.' : 'Arrow keys turn pages. Esc puts the book back.';
     setMode('reading');
-    if (document.pointerLockElement) document.exitPointerLock();
     renderPage();
     $('page').focus({ preventScroll: true });
   }
@@ -303,7 +365,26 @@
     sizePage();
     reading.page = Math.max(0, Math.min(P - 1, reading.page));
     const pre = $('page');
-    pre.textContent = lib.pageLines(reading.content, reading.page).join('\n');
+    const c = lib.config, lines = lib.pageLines(reading.content, reading.page);
+    const h = reading.highlight;
+    pre.textContent = '';
+    if (!h) pre.textContent = lines.join('\n');
+    else {
+      // mark the passage the catalogue found, wherever it falls on this page
+      const base = reading.page * c.charactersPerPage;
+      lines.forEach((line, i) => {
+        const s0 = base + i * c.charactersPerLine;
+        const a = Math.max(h.start, s0) - s0, b = Math.min(h.start + h.length, s0 + c.charactersPerLine) - s0;
+        if (b > a) {
+          if (a > 0) pre.appendChild(document.createTextNode(line.slice(0, a)));
+          const m = document.createElement('mark');
+          m.textContent = line.slice(a, b);
+          pre.appendChild(m);
+          if (b < line.length) pre.appendChild(document.createTextNode(line.slice(b)));
+        } else pre.appendChild(document.createTextNode(line));
+        if (i < lines.length - 1) pre.appendChild(document.createTextNode('\n'));
+      });
+    }
     const folio = document.createElement('span');
     folio.className = 'folio';
     folio.textContent = String(reading.page + 1);
@@ -316,8 +397,10 @@
   function turn(delta) { reading.page += delta; renderPage(); }
 
   function closeBook() {
+    const back = reading && reading.returnTo;
     reading = null;
-    startWalking();
+    if (back === 'terminal') setMode('terminal');
+    else startWalking();
   }
 
   /* ---------------- interface wiring ---------------- */
@@ -346,7 +429,7 @@
     });
     $('copy-address').addEventListener('click', () => {
       const g = world.gallery(player.cg).digits, f = world.floor(player.cf).digits;
-      const text = `Seed: ${lib.seed}\nFloor:\n${lib.addressText(f)}\nGallery:\n${lib.addressText(g)}\n`;
+      const text = lib.hexagonAddressText(g, f);
       copyText(text, `Copied the address (${fmt(text.length)} characters).`);
     });
 
@@ -367,6 +450,10 @@
       copyText(lib.pageLines(reading.content, reading.page).join('\n'), `Copied page ${reading.page + 1}.`);
     });
     $('close-book').addEventListener('click', closeBook);
+    $('show-passage').addEventListener('click', () => {
+      reading.page = Math.floor(reading.highlight.start / lib.config.charactersPerPage);
+      renderPage();
+    });
     $('page-form').addEventListener('submit', (e) => { e.preventDefault(); reading.page = Number($('page-input').value) - 1; renderPage(); $('page').focus(); });
     $('page-input').addEventListener('change', () => { reading.page = Number($('page-input').value) - 1; renderPage(); });
 
@@ -396,6 +483,8 @@
         else if (e.code === 'Escape' || e.code === 'KeyE') { closeBook(); e.preventDefault(); }
       } else if (mode === 'paused') {
         if (e.code === 'Escape' && !inField) startWalking();
+      } else if (mode === 'terminal') {
+        if (e.code === 'Escape') { e.preventDefault(); terminal.close(); }
       }
     });
 
@@ -463,13 +552,30 @@
     figure.position.set(player.x, player.y, player.z);
     figure.rotation.y = player.yaw;
 
-    renderer.render(scene, camera);
+    // behind the catalogue, a book or the pause menu, the Library only needs drawing now and then
+    frameCount++;
+    if (mode === 'walking' || mode === 'title' || frameCount % 4 === 0) renderer.render(scene, camera);
     requestAnimationFrame(frame);
   }
+  let frameCount = 0;
 
   function updateGaze() {
     const book = player.pick(lib);
     const door = player.pickDoor((off) => world.doorOpenness(player.cg + off, player.cf));
+    const term = player.pickTerminal();
+    if (term && (!book || term.t < book.t) && (!door || term.t < door.t)) {
+      const key = `terminal,${player.cg + term.cellOffset},${player.cf}`;
+      if (key === gazeKey) return;
+      gazeKey = key;
+      world.clearHover();
+      gaze = { kind: 'terminal', cellOffset: term.cellOffset };
+      $('gaze-title').hidden = false;
+      $('gaze-title').textContent = 'The catalogue';
+      $('gaze-where').textContent = 'Find any text, or go to any hexagon';
+      $('gaze-hint').textContent = `${isTouch ? 'Tap' : 'Press E or click'} to use it`;
+      $('gaze').hidden = false;
+      return;
+    }
     if (door && (!book || door.t < book.t)) {
       const dg = player.cg + door.cellOffset, df = player.cf;
       const state = world.doorState(dg, df);
@@ -497,7 +603,8 @@
     if (!cell || target.slot >= cell.count) { $('gaze').hidden = true; gaze = null; return; }
     $('gaze-title').hidden = false;
     $('gaze-title').textContent = lib.spineTitle(cell.fingerprint, target.slot);
-    $('gaze-where').textContent = `Wall ${target.wall + 1}, shelf ${target.shelf + 1}, volume ${target.volume + 1}`;
+    const sought = world.isMarked(dg, df, target.slot) ? 'The book you sought: ' : '';
+    $('gaze-where').textContent = `${sought}Wall ${target.wall + 1}, shelf ${target.shelf + 1}, volume ${target.volume + 1}`;
     $('gaze-hint').textContent = isTouch ? 'Tap to read' : 'Press E or click to read';
     $('gaze').hidden = false;
   }
@@ -507,7 +614,8 @@
   Babel.debug = {
     get lib() { return lib; }, get world() { return world; }, get player() { return player; },
     get renderer() { return renderer; }, get mode() { return mode; },
-    openBook, startWalking, pause, setMode,
+    openBook, openBookAt, startWalking, pause, setMode, goToCell, goToAddress,
+    get terminal() { return terminal; },
   };
   Babel.boot = boot;
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

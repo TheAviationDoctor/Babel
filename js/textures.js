@@ -213,6 +213,30 @@
     return t;
   }
 
+  /** The catalogue's resting screen. */
+  function screen() {
+    const w = 512, h = 374, c = canvas(w, h), g = c.getContext('2d');
+    const grd = g.createLinearGradient(0, 0, 0, h);
+    grd.addColorStop(0, '#132120');
+    grd.addColorStop(1, '#0b1312');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = '#d3e3dc';
+    g.font = 'italic 46px "Libre Bodoni", "Bodoni 72", Didot, Georgia, serif';
+    g.fillText('The catalogue', 40, 92);
+    g.fillStyle = 'rgba(211, 227, 220, 0.25)';
+    g.fillRect(40, 116, w - 80, 2);
+    g.fillStyle = '#a9beb6';
+    g.font = '26px "Courier Prime", "Courier New", monospace';
+    g.fillText('Find any text.', 40, 172);
+    g.fillText('Go to any hexagon.', 40, 210);
+    g.fillStyle = '#d3e3dc';
+    g.fillText('Touch to begin', 40, 312);
+    g.fillRect(262, 290, 14, 26);
+    const t = toTexture(c, false);
+    return t;
+  }
+
   /** Soft radial glow for the lamps. */
   function glow() {
     const s = 128, c = canvas(s, s), g = c.getContext('2d');
@@ -238,6 +262,7 @@
         tiles: tiles.texture,
         tilesAspect: tiles.aspect,
         spines: spineAtlas(),
+        screen: screen(),
         glow: glow(),
       };
     },

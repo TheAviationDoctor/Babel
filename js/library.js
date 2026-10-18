@@ -33,6 +33,8 @@
  */
 (function (root, factory) {
   const api = factory();
+  // The same code, as text, so that Web Workers can run it (see js/catalogue.js).
+  api.source = '(' + factory.toString() + ')()';
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.BabelCore = api;
 })(typeof self !== 'undefined' ? self : this, function () {
@@ -289,6 +291,7 @@
   class Library {
     constructor(rawConfig) {
       const cfg = normalizeConfig(rawConfig);
+      this.raw = rawConfig;
       this.config = cfg;
       this.alphabet = cfg.alphabet;
       this.N = cfg.alphabet.length;
@@ -548,6 +551,157 @@
       return out.join(' ');
     }
 
+
+    /* ---------------- Searching ---------------- */
+
+    /**
+     * Turns any text into symbols of the alphabet, as a catalogue would: accents are
+     * removed, letters change case if only the other case is in the alphabet, line breaks
+     * and tabs become spaces, and anything else is left out (and reported).
+     */
+    prepareText(raw) {
+      const map = new Map(this.alphabet.map((c, i) => [c, i]));
+      const text = String(raw).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\r\n?|\n|\t/g, ' ');
+      const out = [], dropped = new Set();
+      let recased = false;
+      for (const ch of text) {
+        let v = map.get(ch);
+        if (v === undefined) {
+          for (const alt of [ch.toUpperCase(), ch.toLowerCase()]) {
+            if (alt !== ch && map.has(alt)) { v = map.get(alt); recased = true; break; }
+          }
+        }
+        if (v === undefined) { dropped.add(ch); continue; }
+        out.push(v);
+      }
+      const symbols = Uint8Array.from(out);
+      return { symbols, text: this.toText(symbols), dropped: [...dropped], recased };
+    }
+
+    /** Position of the first occurrence of `query` in `content` (both symbol arrays), or −1. */
+    static indexOf(content, query, from) {
+      const L = query.length;
+      if (L === 0 || L > content.length) return -1;
+      const first = query[0], last = content.length - L;
+      let i = content.indexOf(first, from || 0);
+      while (i !== -1 && i <= last) {
+        let k = 1;
+        while (k < L && content[i + k] === query[k]) k++;
+        if (k === L) return i;
+        i = content.indexOf(first, i + 1);
+      }
+      return -1;
+    }
+
+    /**
+     * How rare a text of `length` symbols is: the probability that one given book contains
+     * it somewhere, and the expected number of books read before a copy turns up.
+     * (Overlaps of a text with itself are ignored; they change little.)
+     */
+    rarity(length) {
+      const positions = Math.max(0, this.M - length + 1);
+      const log10PerPosition = -length * Math.log10(this.N);
+      const log10Mean = Math.log10(positions || 1) + log10PerPosition; // expected copies per book
+      const pBook = log10Mean > -12 ? 1 - Math.exp(-Math.pow(10, log10Mean)) : Math.pow(10, log10Mean);
+      const log10Books = pBook > 0 ? -Math.log10(pBook) : Infinity; // log10 of expected books to a copy
+      // Hexagons within walking distance R (along galleries and up or down stairs) number about 2R².
+      const log10Hexagons = log10Books - Math.log10(this.S);
+      const log10Distance = log10Hexagons > 0 ? (log10Hexagons - Math.log10(2)) / 2 : 0;
+      return { pBook, log10Books, log10Hexagons, log10Distance };
+    }
+
+    /* ---------------- Distances and addresses ---------------- */
+
+    /** Shortest signed difference b − a around a circle of `modulus` (a digit array one digit longer than a, or null for N^len). */
+    _difference(a, b, modulus) {
+      const N = this.N, len = a.length;
+      const d = new Uint8Array(len + 1);
+      d.set(b);
+      const A = new Uint8Array(len + 1);
+      A.set(a);
+      subDigits(d, A, N); // (b − a) mod N^(len+1)
+      let mod = modulus;
+      if (!mod) { mod = new Uint8Array(len + 1); mod[len] = 1; } // N^len
+      // bring into [0, mod)
+      if (d[len] !== 0 && compareDigits(d, mod) >= 0) {
+        // went negative: add mod until it wraps back into range
+        while (compareDigits(d, mod) >= 0) addDigits(d, mod, N);
+      }
+      while (compareDigits(d, mod) >= 0) subDigits(d, mod, N);
+      const other = mod.slice();
+      subDigits(other, d, N); // mod − d
+      if (compareDigits(other, d) < 0) return { sign: -1, digits: other };
+      return { sign: isZero(d) ? 0 : 1, digits: d };
+    }
+
+    /** Shortest signed number of galleries from gallery a to gallery b (galleries wrap around). */
+    galleryDifference(a, b) { return this._difference(a, b, null); }
+
+    /** Shortest signed number of floors from floor a to floor b (floors wrap around). */
+    floorDifference(a, b) {
+      const F = new Uint8Array(this.floorDigits + 1);
+      F.set(this.floorMax);
+      addSmall(F, 1, this.N);
+      return this._difference(a, b, F);
+    }
+
+    /** Size of a non-negative number given as digits: { exact (a Number, or null if too large), log10 }. */
+    magnitude(digits) {
+      const N = this.N, len = significantLength(digits);
+      if (len === 0) return { exact: 0, log10: -Infinity };
+      if ((len - 1) * Math.log2(N) < 54) {
+        let v = 0;
+        for (let i = len - 1; i >= 0; i--) v = v * N + digits[i];
+        if (v <= Number.MAX_SAFE_INTEGER) return { exact: v, log10: Math.log10(v) };
+      }
+      let lead = 0, scale = 1;
+      for (let i = len - 1; i >= Math.max(0, len - 4); i--) { lead += digits[i] * scale; scale /= N; }
+      return { exact: null, log10: (len - 1) * Math.log10(N) + Math.log10(lead) };
+    }
+
+    /** Reads an address written in the alphabet (most significant symbol first) into digits. */
+    parseAddress(text, length, what) {
+      const map = new Map(this.alphabet.map((c, i) => [c, i]));
+      const chars = Array.from(text);
+      if (chars.length !== length) {
+        throw new Error(`A ${what} address has ${length.toLocaleString('en')} symbols; this one has ${chars.length.toLocaleString('en')}. A space at its start or end may have been lost.`);
+      }
+      const out = new Uint8Array(length);
+      for (let i = 0; i < length; i++) {
+        const v = map.get(chars[i]);
+        if (v === undefined) throw new Error(`The ${what} address contains ${JSON.stringify(chars[i])}, which is not in the alphabet.`);
+        out[length - 1 - i] = v;
+      }
+      return out;
+    }
+
+    /** Reads a full hexagon address as copied from the pause menu or the catalogue. */
+    parseHexagonAddress(text) {
+      const lines = String(text).replace(/\r\n?/g, '\n').split('\n');
+      let seed = null, floor = null, gallery = null;
+      for (let i = 0; i < lines.length; i++) {
+        const m = /^\s*(seed|floor|gallery)\s*:(.*)$/i.exec(lines[i]);
+        if (!m) continue;
+        const key = m[1].toLowerCase();
+        let value = m[2];
+        if (value.trim() === '' && i + 1 < lines.length) { value = lines[i + 1]; i++; }
+        else value = value.replace(/^ /, '');
+        if (key === 'seed') seed = value.trim();
+        else if (key === 'floor') floor = value;
+        else gallery = value;
+      }
+      if (floor === null || gallery === null) throw new Error('Paste an address with a "Floor:" line and a "Gallery:" line, as copied from the pause menu or from this catalogue.');
+      const f = this.parseAddress(floor, this.floorDigits, 'floor');
+      const g = this.parseAddress(gallery, this.galleryDigits, 'gallery');
+      if (compareDigits(f, this.floorMax) > 0) throw new Error('That floor is above the last floor of the Library.');
+      return { seed, floor: f, gallery: g };
+    }
+
+    /** The full address of a hexagon as text, in the form parseHexagonAddress reads. */
+    hexagonAddressText(gallery, floor) {
+      return `Seed: ${this.seed}\nFloor:\n${this.addressText(floor)}\nGallery:\n${this.addressText(gallery)}\n`;
+    }
+
     /* ---------------- Text ---------------- */
 
     /** Converts symbol values to a string. */
@@ -609,8 +763,15 @@
      */
     findText(text, options) {
       options = options || {};
-      const { symbols, unknown } = this.encode(text);
-      if (unknown.length) throw new Error('These characters are not in the alphabet: ' + unknown.join(' '));
+      let symbols;
+      if (text instanceof Uint8Array) {
+        symbols = text;
+        text = this.toText(symbols);
+      } else {
+        const enc = this.encode(text);
+        if (enc.unknown.length) throw new Error('These characters are not in the alphabet: ' + enc.unknown.join(' '));
+        symbols = enc.symbols;
+      }
       const c = this.config;
       const page = options.page || 0;
       const position = options.position || 0;

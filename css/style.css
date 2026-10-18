@@ -206,6 +206,80 @@ input[type="text"]:focus, input[type="number"]:focus { outline: none; border-bot
 #page-count { color: var(--ash); }
 .book-keys { font-size: var(--step--1); color: var(--ash); }
 
+mark { background: rgba(227, 169, 90, 0.55); color: var(--ink); box-shadow: 0 0 0 1px rgba(227, 169, 90, 0.55); }
+
+/* ---------- the catalogue ---------- */
+/* Its screen is a different object from everything else in the Library: cool glass, not lamplight. */
+
+#terminal {
+  --glass: #0f1716;
+  --glow: #d4e3dc;
+  --glow-dim: #8ea29a;
+  --signal: #a8d6c4;
+  background: rgba(6, 8, 8, 0.78);
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+}
+.glass {
+  width: min(58rem, 100%);
+  max-height: 100%;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 1.4rem clamp(1rem, 3vw, 2rem) 1.8rem;
+  border-radius: 14px;
+  background: radial-gradient(120% 90% at 30% 0%, #172423 0%, var(--glass) 60%);
+  box-shadow: 0 0 0 1px rgba(212, 227, 220, 0.12), 0 0 0 7px #1c1d1c, 0 0 0 8px #2c2e2c, 0 30px 90px rgba(0, 0, 0, 0.7), 0 0 70px rgba(130, 200, 180, 0.08);
+  color: var(--glow);
+  font-family: var(--type);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.glass :focus-visible { outline-color: var(--signal); }
+.glass h2 { font-family: var(--display); font-style: italic; font-size: clamp(1.6rem, 3.4vw, 2.2rem); }
+.glass h3 { font-family: var(--display); font-style: italic; font-size: var(--step-1); color: var(--glow); }
+.glass-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem 1.6rem; margin-bottom: 1.2rem; }
+.glass-head h2 { margin-right: auto; }
+.glass button { font-family: var(--type); font-size: 0.9rem; color: var(--glow); border-color: rgba(212, 227, 220, 0.3); border-radius: 6px; }
+.glass button:hover { background: rgba(212, 227, 220, 0.08); border-color: rgba(212, 227, 220, 0.6); }
+.glass button.primary { background: var(--glow); border-color: var(--glow); color: var(--glass); }
+.glass button.primary:hover { background: #e6f1ec; }
+.glass button:disabled { opacity: 0.4; cursor: default; }
+.glass button.quiet { border-color: transparent; color: var(--glow-dim); }
+.tabs { display: flex; gap: 0.3rem; order: 3; width: 100%; border-bottom: 1px solid rgba(212, 227, 220, 0.14); }
+.tabs button { border: 0; border-radius: 0; padding: 0.5em 0.9em; color: var(--glow-dim); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs button[aria-selected="true"] { color: var(--glow); border-bottom-color: var(--signal); background: transparent; }
+.panel { display: grid; gap: 1.4rem; }
+.glass label { color: var(--glow-dim); }
+.glass textarea, .glass input[type="text"] {
+  font-family: var(--type); font-size: 1rem; color: var(--glow);
+  background: rgba(0, 0, 0, 0.28); border: 1px solid rgba(212, 227, 220, 0.22); border-radius: 6px;
+  padding: 0.55em 0.7em; box-sizing: border-box;
+}
+.glass textarea { width: 100%; resize: vertical; min-height: 4.5em; text-transform: none; }
+.glass textarea:focus, .glass input[type="text"]:focus { outline: none; border-color: var(--signal); }
+.find { display: grid; gap: 0.5rem; }
+.find-foot { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.6rem 1.2rem; }
+.find-foot .note { flex: 1 1 22rem; min-width: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
+.note, .glass .status { color: var(--glow-dim); font-size: 0.85rem; }
+.query { color: var(--glow-dim); font-size: 0.85rem; overflow-wrap: anywhere; }
+.query span { color: var(--glow); background: rgba(168, 214, 196, 0.12); padding: 0 0.25em; white-space: pre-wrap; }
+.results { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.2rem 1.6rem; }
+.results .query { grid-column: 1 / -1; }
+.result { display: grid; gap: 0.6rem; align-content: start; padding-top: 0.9rem; border-top: 1px solid rgba(212, 227, 220, 0.14); }
+.result .where { line-height: 1.55; overflow-wrap: anywhere; }
+.result .where strong { font-weight: 400; color: var(--signal); }
+.glass sup { font-size: 0.7em; line-height: 0; }
+.fill { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; color: var(--glow-dim); font-size: 0.85rem; }
+.fill legend { padding: 0; margin-bottom: 0.2rem; width: 100%; }
+.fill input { accent-color: var(--signal); }
+.glass .addr { color: var(--glow); }
+.glass .error { color: #e8b48a; font-size: 0.85rem; }
+.go { display: grid; gap: 0.6rem; padding-top: 0.9rem; border-top: 1px solid rgba(212, 227, 220, 0.14); }
+.offset label { display: flex; align-items: center; gap: 0.5rem; }
+.offset input { width: 15ch; }
+#go-address { display: grid; gap: 0.5rem; }
+
 /* ---------- pause ---------- */
 
 #pause {
@@ -241,6 +315,10 @@ input[type="range"] { accent-color: var(--lamp); width: 100%; }
 .error-block { max-width: 36rem; display: grid; gap: 1rem; margin-left: clamp(0px, 6vw, 7rem); }
 .error-block h2 { font-size: var(--step-2); }
 #error-message { font-family: var(--type); line-height: 1.5; color: var(--lamp); }
+
+@media (max-width: 720px) {
+  .results { grid-template-columns: minmax(0, 1fr); }
+}
 
 @media (max-width: 640px) {
   #title { align-items: flex-end; background: linear-gradient(0deg, rgba(13, 10, 7, 0.96) 0%, rgba(13, 10, 7, 0.75) 60%, rgba(13, 10, 7, 0.35) 100%); }

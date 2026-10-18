@@ -50,14 +50,14 @@
       this._bindInput();
     }
 
-    /** Places the reader on the walkway of the current hexagon, facing along the gallery. */
-    placeAtStart() {
+    /** Places the reader on the walkway of hexagon (cg, cf) (by default the anchor), looking across the shaft. */
+    placeAtStart(cg, cf) {
       const d = this.d;
       const mid = (d.shaftA + d.aIn) / 2;
       this.x = -mid * 0.95; this.y = 0; this.z = 0.0;
       this.yaw = -Math.PI / 2 + 0.55; // looking east across the shaft, towards a wall of books
       this.pitch = -0.08;
-      this.cg = 0; this.cf = 0;
+      this.cg = cg || 0; this.cf = cf || 0;
     }
 
     /* ---------------- input ---------------- */
@@ -69,9 +69,13 @@
       });
       window.addEventListener('keyup', (e) => this.keys.delete(e.code));
       window.addEventListener('blur', () => this.keys.clear());
+      // Some browsers report one large jump just as the pointer is captured; ignore it.
+      document.addEventListener('pointerlockchange', () => { this._settleUntil = performance.now() + 120; });
       document.addEventListener('mousemove', (e) => {
         if (!this.enabled) return;
         if (document.pointerLockElement === this.dom || this._dragging) {
+          if (performance.now() < (this._settleUntil || 0)) return;
+          if (Math.abs(e.movementX) > 300 || Math.abs(e.movementY) > 300) return;
           this.look(e.movementX, e.movementY);
         }
       });
@@ -195,6 +199,50 @@
       return best;
     }
 
+    /** The catalogue the reader is looking at, if within reach: { cellOffset, t }. */
+    pickTerminal() {
+      const d = this.d;
+      if (Math.abs(this.y) > 0.05) return null;
+      this.camera.updateMatrixWorld();
+      const o = this.camera.position, dir = this._ray.d;
+      this.camera.getWorldDirection(dir);
+      let best = null;
+      const hw = d.hallW / 2;
+      for (const off of [0, -1]) {
+        const ox = o.x - off * d.Dx;
+        const box = [d.closetX - d.closetW / 2, 0, hw - 0.02, d.closetX + d.closetW / 2, d.closetH, hw + d.nicheDepth];
+        const t = rayBox(ox, o.y, o.z, dir.x, dir.y, dir.z, box);
+        if (t !== null && t < this.reach && (!best || t < best.t)) best = { cellOffset: off, t };
+      }
+      return best;
+    }
+
+    /**
+     * Stands the reader in front of a book of the hexagon in cell (cg, cf), facing it.
+     */
+    faceBook(cg, cf, wall, shelf, volume) {
+      const d = this.d;
+      const j = d.shelvedSides[wall], phi = (j * Math.PI) / 3;
+      const nx = Math.cos(phi), nz = Math.sin(phi), tx = Math.sin(phi), tz = -Math.cos(phi);
+      let xc = d.rowLen / 2 - (volume + 0.5) * d.bookT;
+      const r = Math.max(d.aIn - 0.6, d.shaftA + 0.07 + this.radius + 0.03);
+      // books near a corner are seen from a little way along the wall
+      let x = 0, z = 0;
+      for (let k = 0; k < 20; k++) {
+        x = nx * r + tx * xc; z = nz * r + tz * xc;
+        if (this.ground(x, z, 0) === 0) break;
+        xc *= 0.85;
+      }
+      this.cg = cg; this.cf = cf; this.x = x; this.y = 0; this.z = z;
+      const bookX = nx * (d.aIn + 0.03) + tx * (d.rowLen / 2 - (volume + 0.5) * d.bookT);
+      const bookZ = nz * (d.aIn + 0.03) + tz * (d.rowLen / 2 - (volume + 0.5) * d.bookT);
+      const bookY = d.base + (d.shelves - 1 - shelf) * d.pitch + d.board + d.bookH / 2;
+      const dx = bookX - x, dz = bookZ - z;
+      this.yaw = Math.atan2(-dx, -dz);
+      this.pitch = Math.atan2(bookY - d.eye, Math.hypot(dx, dz));
+      this._applyCamera(0, 0);
+    }
+
     /** Height on the spiral stair (continuous ramp), choosing the turn nearest to y. */
     _stair(hx, z, y) {
       const d = this.d, r = this.radius;
@@ -311,8 +359,9 @@
       const parts = [];
       if (g) parts.push(`${n(g, 'hexagon', 'hexagons')} ${g > 0 ? 'east' : 'west'}`);
       if (f) parts.push(`${n(f, 'floor', 'floors')} ${f > 0 ? 'up' : 'down'}`);
-      return parts.length ? { short: parts.join(' and ') + ' from where you woke', sentence: 'You are ' + parts.join(' and ') + ' from where you woke.' }
-        : { short: 'The hexagon where you woke', sentence: 'You are in the hexagon where you woke.' };
+      const verb = this.origin || 'woke';
+      return parts.length ? { short: `${parts.join(' and ')} from where you ${verb}`, sentence: `You are ${parts.join(' and ')} from where you ${verb}.` }
+        : { short: `The hexagon where you ${verb}`, sentence: `You are in the hexagon where you ${verb}.` };
     }
   }
 

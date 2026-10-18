@@ -212,5 +212,77 @@ test('a non-power-of-two alphabet and a hexagon size that does not divide the nu
   assert.strictEqual(back.slot, 639);
 });
 
+console.log('\nThe catalogue');
+
+test('texts are prepared as the catalogue searches them', () => {
+  const p = lib.prepareText('Ça va, Señor?\nOui: 42!');
+  assert.strictEqual(p.text, 'CA VA, SENOR? OUI: !');
+  assert.deepStrictEqual(p.dropped.sort(), ['2', '4']);
+  assert.strictEqual(p.recased, true);
+});
+
+test('a text is found in a book exactly where it was put', () => {
+  const q = lib.prepareText('NEEDLE').symbols;
+  const book = new Uint8Array(5000).fill(3);
+  book.set(q, 4321);
+  assert.strictEqual(Library.indexOf(book, q), 4321);
+  book.set(q, 17);
+  assert.strictEqual(Library.indexOf(book, q), 17);
+  assert.strictEqual(Library.indexOf(book.subarray(0, 4325), q), 17);
+  assert.strictEqual(Library.indexOf(new Uint8Array(10), q), -1);
+});
+
+test('distances between hexagons take the shorter way round', () => {
+  const s = lib.wakingLocation(4);
+  for (const [dg, df] of [[0, 0], [1, -1], [-123456789, 987654], [5e15, -3e15]]) {
+    const g = lib.offsetGallery(s.gallery, dg), f = lib.offsetFloor(s.floor, df);
+    const a = lib.galleryDifference(s.gallery, g), b = lib.floorDifference(s.floor, f);
+    assert.strictEqual(a.sign * (lib.magnitude(a.digits).exact || 0), dg);
+    assert.strictEqual(b.sign * (lib.magnitude(b.digits).exact || 0), df);
+  }
+  // across the end of a gallery and of the floors
+  const zeroG = new Uint8Array(lib.galleryDigits), zeroF = new Uint8Array(lib.floorDigits);
+  const a = lib.galleryDifference(zeroG, lib.offsetGallery(zeroG, -7));
+  assert.strictEqual(a.sign, -1); assert.strictEqual(lib.magnitude(a.digits).exact, 7);
+  const b = lib.floorDifference(lib.offsetFloor(zeroF, -3), lib.offsetFloor(zeroF, 2));
+  assert.strictEqual(b.sign, 1); assert.strictEqual(lib.magnitude(b.digits).exact, 5);
+});
+
+test('full addresses can be copied and read back', () => {
+  const s = lib.wakingLocation(5);
+  const back = lib.parseHexagonAddress(lib.hexagonAddressText(s.gallery, s.floor));
+  assert.strictEqual(key(back.gallery), key(s.gallery));
+  assert.strictEqual(key(back.floor), key(s.floor));
+  assert.strictEqual(back.seed, 'borges');
+  assert.throws(() => lib.parseHexagonAddress('Floor: ABC\nGallery: DEF'), /symbols/);
+});
+
+test('the copy that certainly exists contains the text', () => {
+  const q = lib.prepareText('The catalogue of catalogues').symbols;
+  for (const fill of ['random', 'blank']) {
+    const r = lib.findText(q, { fill });
+    assert.strictEqual(Library.indexOf(lib.bookAt(r.location), q), 0);
+  }
+});
+
+test('rarity grows by a factor of the alphabet with each character', () => {
+  const r6 = lib.rarity(6), r7 = lib.rarity(7);
+  assert(Math.abs(r7.log10Books - r6.log10Books - Math.log10(32)) < 0.01);
+  assert(lib.rarity(2).log10Books < 0.01); // nearly every book contains any two letters
+});
+
+test('the nearest copy of a short text is found by reading outwards', () => {
+  // the same reading the catalogue does, without workers: ring 0 is this hexagon
+  const s = lib.wakingLocation(0);
+  const q = lib.prepareText('BABEL').symbols;
+  let found = null;
+  for (let slot = 0; slot < lib.S && !found; slot++) {
+    const i = Library.indexOf(lib.bookAt({ ...s, slot }), q);
+    if (i >= 0) found = { slot, i };
+  }
+  assert(found, 'a five-letter text should be in the hexagon');
+  console.log(`       "BABEL" is in volume ${found.slot % 32 + 1} of slot ${found.slot}, at character ${found.i}`);
+});
+
 console.log(failures ? `\n${failures} test(s) failed` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);
