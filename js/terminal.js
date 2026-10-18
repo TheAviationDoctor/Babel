@@ -230,7 +230,7 @@
       else {
         parts.push(`${fmt(p.symbols.length)} ${p.symbols.length === 1 ? 'character' : 'characters'}.`);
         if (p.recased) parts.push('Letters are searched for as capitals.');
-        if (p.substituted) parts.push('Curly quotation marks and long dashes are read as plain ones.');
+        if (p.substituted) parts.push('Some characters are read as their nearest equivalents in the alphabet, such as straight quotation marks for curly ones.');
         if (p.dropped.length) {
           const shown = p.dropped.slice(0, 12).map((c) => `“${c}”`).join(' ');
           parts.push(`Not in the alphabet, so left out: ${shown}${p.dropped.length > 12 ? ' and others' : ''}.`);
@@ -333,13 +333,19 @@
       $('books-status').textContent = 'The catalogue has forgotten your books. The files themselves are untouched.';
     }
 
-    /** The book set in pages, as the Library would hold it (kept, since it does not depend on the seed). */
+    /**
+     * The book set in pages, as the Library would hold it (kept, since it does not depend
+     * on the seed). Project Gutenberg's licence is left out; the title and author come from
+     * the file name, or else from the e-book's own header.
+     */
     _set(entry) {
       const key = entry.name + '|' + entry.lastModified + '|' + entry.size;
       let t = this.typeset.get(key);
       if (!t) {
-        const meta = describeBook(entry.name);
-        t = { meta, set: this.lib.typeset(entry.text, meta) };
+        const clean = BabelCore.Library.cleanEbook(entry.text);
+        const named = describeBook(entry.name);
+        const meta = named.author || !clean.title ? named : { title: clean.title, author: clean.author, year: named.year };
+        t = { meta, set: this.lib.typeset(clean.text, meta), trimmed: clean.trimmed };
         this.typeset.set(key, t);
       }
       return t;
@@ -379,8 +385,8 @@
     }
 
     findBook(entry) {
-      const { meta, set } = this._set(entry);
-      this.book = { entry, meta, set, found: null };
+      const { meta, set, trimmed } = this._set(entry);
+      this.book = { entry, meta, set, trimmed, found: null };
       this._placeBook();
       this._markCurrent();
       $('book-results').hidden = false;
@@ -400,8 +406,9 @@
       if (n === 1) how.push(`It fills ${fmt(this._pagesOf(set.parts[0]))} of the book's ${fmt(c.pagesPerBook)} pages.`);
       else how.push(`It is too long for one book, so it is set in ${n} parts, each with its own title page.`);
       how.push('Then the catalogue runs the shelving backwards and finds the book that holds exactly those pages. Every possible book stands somewhere, exactly once.');
+      if (b.trimmed) how.push("Project Gutenberg's licence, before and after the text, is left out.");
       if (set.recased) how.push('Letters are set as capitals.');
-      if (set.substituted) how.push('Curly quotation marks and long dashes are set as plain ones.');
+      if (set.substituted) how.push('Some characters are set as their nearest equivalents in the alphabet: -- as —, Æ as AE, ½ as 1/2, curly quotation marks as straight ones, and so on.');
       if (set.dropped.length) {
         const shown = set.dropped.slice(0, 12).map((ch) => (ch === '\t' ? 'tab' : `“${ch}”`)).join(' ');
         how.push(`Not in the alphabet, so left out: ${shown}${set.dropped.length > 12 ? ' and others' : ''}.`);

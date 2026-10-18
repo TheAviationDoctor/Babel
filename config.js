@@ -19,15 +19,21 @@ window.BABEL_CONFIG = {
   // The symbols books are written in, in this order. Each one must appear once, and
   // there may be up to 256 of them.
   //
-  // Here: all 128 characters of ASCII, in the order of their codes, 0 to 127. Besides
-  // the letters in both cases, the digits, punctuation and the space, ASCII has 33
-  // control characters, such as tab and line feed, which have no printed form. Books
-  // show each of them as a small symbol of its own: ␀ ␁ ␂ … ␟ for codes 0 to 31, ␡ for 127.
+  // Here, 64 symbols: the 26 letters, in capitals only (as in Borges's story, the Library
+  // has no lower case), the ten digits, 27 punctuation marks and signs, and the space last.
+  // The marks are those that classic literature uses: period, comma, semicolon, colon,
+  // exclamation and question marks, apostrophe, quotation mark, hyphen, long dash,
+  // parentheses, square brackets, underscore (plain-text editions mark italics with it),
+  // asterisk, ampersand, slash, dollar, percent, pound sterling, degree, dagger, section,
+  // number sign, plus and equals.
   //
-  // Any string of distinct characters works too. For example, 26 capitals, a few
-  // punctuation marks and the space:
-  //   alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + ':,!.?' + ' ',
-  alphabet: Array.from({ length: 128 }, (_, code) => String.fromCharCode(code)).join(''),
+  // When the catalogue sets a text, small letters become capitals, accents are dropped,
+  // -- becomes —, and other characters become their nearest equivalents (Æ becomes AE,
+  // ½ becomes 1/2, curly quotation marks become straight ones) or, failing that, are left out.
+  //
+  // Any string of distinct characters works. For all 128 characters of ASCII, for example:
+  //   alphabet: Array.from({ length: 128 }, (_, code) => String.fromCharCode(code)).join(''),
+  alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + '0123456789' + '.,;:!?\'"-—()[]_*&/$%£°†§#+=' + ' ',
 
   hexagon: {
     wallsWithShelves: 4, // 1 to 4: the other two sides of each hexagon are its doors

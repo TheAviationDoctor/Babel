@@ -216,13 +216,17 @@ test('a non-power-of-two alphabet and a hexagon size that does not divide the nu
 console.log('\nThe catalogue');
 
 test('texts are prepared as the catalogue searches them', () => {
-  const p = lib.prepareText('Ça va, Señor?\nOui: 42! [sic]§→');
-  assert.strictEqual(p.text, 'Ca va, Senor? Oui: 42! [sic]');
-  assert.deepStrictEqual(p.dropped.sort(), ['§', '→']);
-  assert.strictEqual(p.recased, false);
+  assert.strictEqual(lib.N, 64);
+  const p = lib.prepareText('Ça va, Señor?\nOui: 42! [sic]~→');
+  assert.strictEqual(p.text, 'CA VA, SENOR? OUI: 42! [SIC]');
+  assert.deepStrictEqual(p.dropped.sort(), ['~', '→']);
+  assert.strictEqual(p.recased, true);
   const q = lib.prepareText('\u201CQuoted\u201D \u2014 \u2018so\u2019\u2026');
-  assert.strictEqual(q.text, '"Quoted" - \'so\'...');
+  assert.strictEqual(q.text, '"QUOTED" \u2014 \'SO\'...');
   assert.strictEqual(q.substituted, true);
+  const r = lib.prepareText('Cæsar--and Œdipus, ½ ﬁne; 3º N, £5 † ‡ Straße');
+  assert.strictEqual(r.text, 'CAESAR\u2014AND OEDIPUS, 1/2 FINE; 3° N, £5 † †† STRASSE');
+  assert.deepStrictEqual(r.dropped, []);
   // a smaller alphabet: letters are read as capitals
   const caps = new Library({ seed: 'x', alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ,.? ' });
   const c = caps.prepareText('Ça va?');
@@ -231,7 +235,8 @@ test('texts are prepared as the catalogue searches them', () => {
 });
 
 test('control characters are shown as control pictures, and read back from them', () => {
-  assert.strictEqual(lib.N, 128);
+  const ascii = new Library({ seed: 'ascii', alphabet: Array.from({ length: 128 }, (_, c) => String.fromCharCode(c)).join('') });
+  const lib = ascii;
   assert.strictEqual(lib.toText(Uint8Array.from([0, 9, 10, 31, 32, 65, 126, 127])), '␀␉␊␟ A~␡');
   const p = lib.prepareText('␀A\tB␡');
   assert.deepStrictEqual([...p.symbols], [0, 65, 32, 66, 127]);
@@ -301,7 +306,7 @@ test('a whole text is set in pages, with a title page', () => {
   const book = lib.bookAt(lib.findText(part, { fill: 'blank' }).location);
   assert.strictEqual(Library.indexOf(book, part), 0);
   const title = lib.pageLines(book, 0).map((l) => l.trim()).filter(Boolean);
-  assert.deepStrictEqual(title, ['A test', 'Nobody', '2026']);
+  assert.deepStrictEqual(title, ['A TEST', 'NOBODY', '2026']);
   const lines = lib.pageLines(book, 1);
   assert(lines[0].startsWith('   THE LIBRARY'), 'paragraphs are indented');
   assert(lines.every((l) => l.length === c.charactersPerLine));
@@ -325,6 +330,21 @@ test('a text longer than one book is split into parts', () => {
     const r = small.findText(part, { fill: 'blank' });
     assert.strictEqual(Library.indexOf(small.bookAt(r.location), part), 0);
   }
+});
+
+test("Project Gutenberg's licence is left out of a book", () => {
+  const raw = 'The Project Gutenberg eBook of Moby-Dick\r\n\r\nTitle: Moby-Dick; or The\r\n       Whale\r\nAuthor: Herman Melville\r\n\r\n' +
+    '*** START OF THE PROJECT GUTENBERG EBOOK MOBY-DICK ***\r\n\r\nProduced by Someone\r\nand Others\r\n\r\n\r\nCHAPTER 1.\r\n\r\nThe text.\r\n\r\n' +
+    "End of Project Gutenberg's Moby-Dick\r\n\r\n*** END OF THE PROJECT GUTENBERG EBOOK MOBY-DICK ***\r\nThe licence.\r\n";
+  const e = Library.cleanEbook(raw);
+  assert.strictEqual(e.text, 'CHAPTER 1.\n\nThe text.');
+  assert.strictEqual(e.title, 'Moby-Dick; or The Whale');
+  assert.strictEqual(e.author, 'Herman Melville');
+  assert.strictEqual(e.trimmed, true);
+  const plain = Library.cleanEbook('Title: not a header\nJust a text.');
+  assert.strictEqual(plain.trimmed, false);
+  assert.strictEqual(plain.title, '');
+  assert.strictEqual(plain.text, 'Title: not a header\nJust a text.');
 });
 
 console.log(failures ? `\n${failures} test(s) failed` : '\nAll tests passed');

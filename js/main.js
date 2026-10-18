@@ -119,8 +119,8 @@
 
     wake(0);
     bindInterface();
-    fitControlGlyphs();
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitControlGlyphs).catch(() => {});
+    fitGlyphs();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitGlyphs).catch(() => {});
     window.addEventListener('resize', onResize);
     requestAnimationFrame(frame);
     void d;
@@ -399,15 +399,20 @@
     $('next-page').disabled = reading.page === P - 1;
   }
 
-  /** Appends text to an element, setting each control character's picture in a cell of its own. */
+  // Symbols that must be set in a column box of their own: control pictures ('ctl'), and
+  // any symbol the page's typeface lacks, which another font then draws at its own width ('fit').
+  let fitted = new Map();
+
+  /** Appends text to an element, keeping every symbol to one column of the page. */
   function appendText(el, text) {
-    if (!lib.controlGlyphs.size) { el.appendChild(document.createTextNode(text)); return; }
+    if (!fitted.size) { el.appendChild(document.createTextNode(text)); return; }
     let run = '';
     for (const ch of text) {
-      if (!lib.isControlGlyph(ch)) { run += ch; continue; }
+      const cls = fitted.get(ch);
+      if (!cls) { run += ch; continue; }
       if (run) { el.appendChild(document.createTextNode(run)); run = ''; }
       const span = document.createElement('span');
-      span.className = 'ctl';
+      span.className = cls;
       span.textContent = ch;
       el.appendChild(span);
     }
@@ -415,20 +420,29 @@
   }
 
   /**
-   * Control pictures come from whatever font has them, and are often wider than a
-   * typewriter letter. Measure them once, so they can be scaled to fit one column.
+   * Measures every symbol of the alphabet in the page's typeface. Control pictures, and
+   * symbols the typeface lacks, come from other fonts at other widths: they are scaled
+   * to fit one column, so that the page stays a perfect grid.
    */
-  function fitControlGlyphs() {
-    if (!lib.controlGlyphs.size) return;
+  function fitGlyphs() {
+    fitted = new Map();
     try {
       const ctx = document.createElement('canvas').getContext('2d');
       ctx.font = `100px ${getComputedStyle($('page')).fontFamily}`;
       const cell = ctx.measureText('0').width;
-      let widest = 0;
-      for (const g of lib.controlGlyphs) widest = Math.max(widest, ctx.measureText(g).width);
-      const fit = widest > 0 ? Math.min(0.85, (0.95 * cell) / widest) : 0.8;
-      document.documentElement.style.setProperty('--ctl-fit', fit.toFixed(3));
-    } catch (e) { /* keep the default */ }
+      let widestCtl = 0, widestFit = 0;
+      for (const g of lib.glyphs) {
+        const w = ctx.measureText(g).width;
+        if (lib.isControlGlyph(g)) { fitted.set(g, 'ctl'); widestCtl = Math.max(widestCtl, w); }
+        else if (g !== ' ' && Math.abs(w - cell) > cell * 0.03) { fitted.set(g, 'fit'); widestFit = Math.max(widestFit, w); }
+      }
+      const root = document.documentElement.style;
+      if (widestCtl) root.setProperty('--ctl-fit', Math.min(0.85, (0.95 * cell) / widestCtl).toFixed(3));
+      if (widestFit) root.setProperty('--glyph-fit', Math.min(1, (0.98 * cell) / widestFit).toFixed(3));
+    } catch (e) {
+      for (const g of lib.controlGlyphs) fitted.set(g, 'ctl');
+    }
+    if (reading) renderPage();
   }
 
   function turn(delta) { reading.page += delta; renderPage(); }

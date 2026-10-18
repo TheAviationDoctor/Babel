@@ -48,7 +48,7 @@
   const DEFAULT_CONFIG = {
     seed: 'borges',
     book: { pagesPerBook: 512, linesPerPage: 32, charactersPerLine: 64 },
-    alphabet: Array.from({ length: 128 }, (_, code) => String.fromCharCode(code)).join(''), // ASCII
+    alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + '0123456789' + '.,;:!?\'"-\u2014()[]_*&/$%\u00A3\u00B0\u2020\u00A7#+=' + ' ',
     hexagon: { wallsWithShelves: 4, shelvesPerWall: 4, booksPerShelf: 32 },
   };
 
@@ -130,7 +130,6 @@
     return cfg;
   }
 
-  /** Typographic characters and the plain ones that stand for them. */
   /** How a symbol is shown: a control character as its Unicode control picture, anything else as itself. */
   function glyphOf(c) {
     const code = c.codePointAt(0);
@@ -139,11 +138,24 @@
     return c;
   }
 
+  /**
+   * Characters outside the alphabet and what may stand for them, best first: the first
+   * replacement whose characters are all in the alphabet (in either case) is used.
+   */
   const TYPOGRAPHY = {
+    // quotation marks
     '\u201C': '"', '\u201D': '"', '\u201E': '"', '\u201F': '"', '\u00AB': '"', '\u00BB': '"', '\u2033': '"',
-    '\u2018': "'", '\u2019': "'", '\u201A': "'", '\u201B': "'", '\u2032': "'", '`': "'",
-    '\u2014': '-', '\u2013': '-', '\u2012': '-', '\u2015': '-', '\u2212': '-', '\u2010': '-', '\u2011': '-',
-    '\u2026': '...', '\u00A0': ' ', '\u2009': ' ', '\u202F': ' ', '\u2007': ' ',
+    '\u2018': "'", '\u2019': "'", '\u201A': "'", '\u201B': "'", '\u2039': "'", '\u203A': "'", '\u2032': "'", '`': "'", '\u00B4': "'",
+    // dashes
+    '\u2014': '-', '\u2015': ['\u2014', '-'], '\u2E3A': ['\u2014\u2014', '--'], '\u2E3B': ['\u2014\u2014\u2014', '---'],
+    '\u2013': '-', '\u2012': '-', '\u2212': '-', '\u2010': '-', '\u2011': '-',
+    // letters written together, and others
+    '\u00C6': 'AE', '\u00E6': 'ae', '\u0152': 'OE', '\u0153': 'oe', '\u00DF': 'ss', '\u1E9E': 'SS',
+    '\u00D8': 'O', '\u00F8': 'o', '\u0141': 'L', '\u0142': 'l', '\u00D0': 'D', '\u00F0': 'd', '\u00DE': 'Th', '\u00FE': 'th',
+    // fractions, signs
+    '\u00BD': '1/2', '\u00BC': '1/4', '\u00BE': '3/4', '\u2153': '1/3', '\u2154': '2/3', '\u215B': '1/8', '\u2044': '/',
+    '\u00D7': 'x', '\u00BA': ['\u00B0', 'o'], '\u2021': ['\u2020\u2020', '**'], '\u2020': '*',
+    '\u2026': '...', '\u00A0': ' ', '\u2009': ' ', '\u202F': ' ', '\u2007': ' ', '\u2002': ' ', '\u2003': ' ',
   };
 
   /* ------------------------------------------------------------------ *
@@ -599,12 +611,22 @@
      */
     prepareText(raw) {
       const map = this.charIndex;
-      const fits = (str) => Array.from(str).every((c) => map.has(c));
-      // typographic characters become their plain equivalents, if the alphabet has those
+      const has = (c) => map.has(c) || map.has(c.toUpperCase()) || map.has(c.toLowerCase());
+      const fits = (str) => Array.from(str).every(has);
+      let src = String(raw);
+      // two hyphens are how typewriters, and plain-text editions, write a long dash
+      if (map.has('\u2014') && !map.has('\u2013')) src = src.replace(/--/g, '\u2014');
+      // other characters become their nearest equivalents in the alphabet, if it has them
       let text = '', substituted = false;
-      for (const ch of String(raw)) {
-        const sub = TYPOGRAPHY[ch];
-        if (!map.has(ch) && sub !== undefined && fits(sub)) { text += sub; substituted = true; } else text += ch;
+      for (const ch of src) {
+        if (has(ch)) { text += ch; continue; }
+        const subs = TYPOGRAPHY[ch];
+        const sub = subs === undefined ? undefined : [].concat(subs).find(fits);
+        if (sub !== undefined) { text += sub; substituted = true; continue; }
+        // ligatures (ﬁ), fractions, full-width and other compatibility forms
+        const k = ch.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/\u2044/g, '/');
+        if (k !== ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '') && k && fits(k)) { text += k; substituted = true; continue; }
+        text += ch;
       }
       text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\r\n?|\n|\t/g, ' ');
       const out = [], dropped = new Set();
@@ -712,6 +734,38 @@
         parts.push(this.prepareText(str).symbols.subarray(0, this.M));
       }
       return { parts, dropped: [...dropped], recased, substituted, characters };
+    }
+
+    /**
+     * Prepares a plain-text e-book for setting: removes Project Gutenberg's licence, which
+     * comes before and after the text, and the volunteers' credits that often open it, and
+     * reads the title and author from its header. Returns { text, title, author, trimmed }.
+     */
+    static cleanEbook(raw) {
+      let text = String(raw).replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+      let title = '', author = '', trimmed = false;
+      const start = /^\*{3}\s*START OF (?:THE |THIS )?PROJECT GUTENBERG[^\n]*$/mi.exec(text) || /^\*END\*THE SMALL PRINT[^\n]*$/mi.exec(text);
+      if (start) {
+        const head = text.slice(0, start.index);
+        const field = (name) => {
+          const m = new RegExp('^' + name + ':[ \\t]*(.+(?:\\n[ \\t]+\\S.*)*)', 'mi').exec(head);
+          return m ? m[1].replace(/\s+/g, ' ').trim() : '';
+        };
+        title = field('Title');
+        author = field('Author');
+        text = text.slice(start.index + start[0].length);
+        trimmed = true;
+      }
+      const ends = [
+        /^\*{3}\s*END OF (?:THE |THIS )?PROJECT GUTENBERG[^\n]*$/mi,
+        /^[ \t]*End of (?:the )?Project Gutenberg(?:'s)?\b[^\n]*$/mi,
+      ].map((re) => re.exec(text)).filter(Boolean);
+      if (ends.length) {
+        text = text.slice(0, Math.min(...ends.map((m) => m.index)));
+        trimmed = true;
+      }
+      if (trimmed) text = text.replace(/^\s*(?:Produced|Prepared|Transcribed|Scanned|Digiti[sz]ed|E-?text prepared|This e-?book was produced)\b[^\n]*(?:\n[ \t]*\S[^\n]*)*/i, '');
+      return { text: text.trim(), title, author, trimmed };
     }
 
     /** Position of the first occurrence of `query` in `content` (both symbol arrays), or −1. */
