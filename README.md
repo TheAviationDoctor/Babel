@@ -1,10 +1,12 @@
 # Babel
 
-A Web-based walkable rendering of Jorge Luis Borges's short story *The Library of Babel* (1941). The Library is deterministically generated from a seed, and every possible finite book exists exactly once on its shelves somewhere, which makes it finite too (although extremely large). You can wander its galleries, climb its stairs, take down any volume, and read it. You can also use the catalogue to search for specific strings or even locate literature classics, and be teleported to that gallery.
+A Web-based walkable rendering of Jorge Luis Borges's short story *The Library of Babel* (1941). The Library is deterministically generated from a seed, and every possible book no longer than 512 pages exists exactly once on its shelves somewhere, which makes the Library finite too (although extremely large). You can wander its galleries, climb its stairs, take down any volume, and read it. You can also use the catalogue to search for specific strings or even locate literature classics, and be teleported to that gallery.
+
+Every text ever written, including your own life story, as well as every text *never* written, is contained somewhere in the Library.
 
 ## Getting started
 
-Everything is pure HTML/JS/CSS, so nothing needs installing. Just visit the Library online at https://theaviationdoctor.github.io/Babel/ or locally by downloading the repo and opening `index.html` in a recent browser (Chrome, Edge, Firefox, or Safari). You can then even run it offline.
+Everything is pure HTML/JS/CSS, so nothing needs installing. Just visit the Library online at https://theaviationdoctor.github.io/Babel/, or download the repo and open `index.html` locally in a recent browser (Chrome, Edge, Firefox, or Safari). It even runs offline (except for a couple of Google Fonts which will then revert to your browser's defaults).
 
 | | |
 |---|---|
@@ -18,9 +20,41 @@ Everything is pure HTML/JS/CSS, so nothing needs installing. Just visit the Libr
 
 On a phone or tablet, drag on the right of the screen to look, hold and slide on the left to walk, and tap to interact with objects.
 
+## Is the Library infinite?
+
+No. The library is *finite*, meaning it has a fixed number of books (each one unique), hexagons, and floors. But it is *boundless* (it has no hard boundary) because it is *cyclic* in both directions. Walk past the last hexagon of a floor, or take the stairs up or down to the last floor, and you are back at the first, just like an ant walking endlessly on the surface of a torus (which the Library is, topologically speaking).
+
+## So how big is the Library?
+
+With the default settings:
+
+- Each book holds `2^5 = 32` characters per line, `2^6 = 64` lines per page, and `2^9 = 512` pages. That's a total of `2^20 = 1,048,576` characters per book.
+
+- The character set contains `2^6 = 64` symbols (uppercase letters A–Z, digits 0–9, and punctuation marks).
+
+- There are therefore `64^(2^20) = 2^6,291,456 ≈ 9.38 × 10^1,893,916` unique books in the Library (which does not contain duplicates). That's 1 followed by nearly 2 million zeros.
+
+- Each hexagon holds `2^2 = 4` bookshelves of `2^2 = 4` shelves each and `2^5 = 32` books per shelf. That's a total of `2^9 = 512` books per hexagon. So, the Library has `2^6,291,456 / 2^9 = 2^6,291,447 ≈ 1.83× 10^1,893,914` hexagons. Barely two order of magnitude fewer hexagons than books.
+
+- For perspective: there are about `10^80` atoms in the observable universe. Imagine every atom contained an entire universe, each with just as many atoms as ours. Then imagine every atom in that nested universe contained another universe, etc. You would need nearly 24,000 levels of nested universes before the *cumulative* number of atoms reached this the number of books or hexagons in the Library.
+
+- To balance the horizontal and vertical coordinates within the Library, the hexagons are split about evenly along the east-west gallery and vertically across the floors. There are `2^3,145,722 ≈ 4.79 × 10^946,956` hexagons per floor and `2^3,145,725 ≈ 3.83 × 10^946,957` floors.
+
+- Technically, a floor is only 2.61 meters high against 8.83 meters in length per hexagon, but there are 8 times as many floors as hexagons per floor, so the Library is about 2.4 times taller than it is long. Each floor is `4.2 × 10^946,957` meters long from east to west and the Library is `1.0 × 10^946,958` meters tall.
+
+- Conveniently, the doorways line up on one straight east-west axis along each gallery, and the air shafts line up vertically through every floor. So one could shine a laser through both and (ignoring the air medium) measure how long it would take for light to come back around to its starting position. From east to west, that time would be `4.5 × 10^946,941` years, and from top to bottom, `1.1 × 10^946,942` years. At walking pace, traversing one floor takes about `10^946,950` years. For perspective, our universe is only `1.4 × 10^10` years old.
+
+## Is the Library three-dimensional?
+
+At the mesoscopic scale (the human player's), it feels like it is.
+
+At the macroscopic scale (the network of hexagons), however, it is two-dimensional. You can only traverse the gallery east-west and the floors up-down. There is no north–south direction. The whole building is only one hexagon wide, shaped like a vertical sheet a few metres thick but astronomically long and tall.
+
+Note that in the original story, Borges never says which sides of the hexagons are free. If the doorless sides met at 120° instead of 180°, galleries could branch, and the Library could be a 3D honeycomb. That would mean splitting each book’s index into three coordinates instead of two.
+
 ## Configuration
 
-Everything about the Library's size lives in `config.js`, which is read once when the page loads. Once you download the repo, you can edit this file in any text editor to your own preferences, save, and reload the page.
+Everything about the Library's size lives in `config.js`, which is read once when the page loads. Once you download the repo, you can edit this file in any text editor to fit your own preferences, save, and reload the page.
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -28,24 +62,20 @@ Everything about the Library's size lives in `config.js`, which is read once whe
 | `book.pagesPerBook` | 512 | Adapted from Borges' story (410 pages) to be a power of 2. |
 | `book.linesPerPage` | 32 | Adapted from Borges' story (40 lines) to be a power of 2. |
 | `book.charactersPerLine` | 64 | Adapted from Borges' story (80 characters) to be a power of 2. |
-| `alphabet` | 64 symbols: the 26 capitals, ten digits, `. , ; : ! ? ' " - — ( ) [ ] _ * & / $ % £ ° † § # + =` and space | The symbols books are written in, in order. Each must appear once, at most 256 symbols. Any string of distinct characters works. Adapted from Borges' story (25 symbols) to be a power of 2. |
-| `hexagon.wallsWithShelves` | 4 | 1 to 4. The other two sides of every hexagon are its doors. |
+| `alphabet` | 64 symbols: the 26 capital letters from the modern latin alphabet, ten digits, the symbols `. , ; : ! ? ' " - — ( ) [ ] _ * & / $ % £ ° † § # + =`, and space. | These are all the symbols books are written in. Each must appear once; at most 256 symbols. Any string of distinct characters works. Adapted from Borges' story (25 symbols) to be a power of 2 (32 symbols were not sufficient to represent most literature classics, so the next option was 64). |
+| `hexagon.wallsWithShelves` | 4 | 1 to 4. The other two sides of every hexagon are its vestibules. |
 | `hexagon.shelvesPerWall` | 4 | Adapted from Borges' story (5 shelves) to be a power of 2. |
 | `hexagon.booksPerShelf` | 32 | |
 
-A book may hold up to 16,777,216 characters and a hexagon up to 65,536 books. The rooms are built to fit: the number of books per shelf sets the width of each hexagon, and the number of shelves sets the height of its ceiling. If a value is invalid or a setting's name is misspelt, the page says which one and why.
+A book may hold no more than `2^24 = 16,777,216` characters and a hexagon no more `2^16 = 65,536` books. The rooms are built to fit: the number of books per shelf sets the width of each hexagon, and the number of shelves sets the height of its ceiling. If a value is invalid or a setting's name is misspelt, the page says which one and why.
 
 The default alphabet is meant to hold classic literature, so that the catalogue can find the classics on the shelves (see [Your books](#your-books)) while staying a power of two like every other figure. The Library has no lower case, as in Borges's story, which leaves room for every mark that literature uses. In 18 public-domain classics, from Austen to Whitman and the King James Bible (11.7 million characters), the 19 commonest marks make up 99.9% of the punctuation. The other eight slots hold the long dash, written `--` in plain-text editions, and signs found in older books: the pound sterling, the degree, the dagger, the section mark, the number sign, plus and equals.
 
-An alphabet may also contain control characters, for example all 128 characters of ASCII (the line to write is in `config.js`). They have no printed form, so books show each one as its Unicode "control picture", such as ␀, ␉ or ␊, scaled to fit one column of the page.
-
 Any change to these values, the seed included, gives a different Library: an address copied before then no longer leads to the same books.
 
-Borges's own figures would be 410 pages, 40 lines, 80 characters, a 25-symbol alphabet, and 4 walls of 5 shelves of 32 books. They work too.
+Borges's own figures would be 410 pages, 40 lines, 80 characters, a 25-symbol alphabet, and 4 walls of 5 shelves of 32 books. They work too in case you'd like to try them.
 
 ## How the Library is built
-
-With the default configuration a book holds 512 × 32 × 64 = 2²⁰ = 1,048,576 characters from an alphabet of 64 = 2⁶ symbols. There are therefore 64^(2²⁰) = 2^6,291,456 possible books, about 10^1,893,916. Each hexagon holds 4 × 4 × 32 = 2⁹ = 512 of them, so the Library has 2^6,291,447 hexagons, about 10^1,893,914.
 
 **Addresses.** Every shelf position has an index *v* between 0 and *N*^*M* − 1 (*N* symbols, *M* characters per book), written as *M* base-*N* digits. It decomposes as
 
@@ -115,4 +145,4 @@ With Node.js installed, run `node tests/library.test.js`. The tests enumerate ev
 
 ## Credits
 
-The story itself is not reproduced here. 3D rendering uses [three.js](https://threejs.org). Typefaces are Libre Bodoni and Courier Prime, from Google Fonts, under the SIL Open Font License.
+Borge's story itself is not reproduced here for translation copyright reasons. 3D rendering uses [three.js](https://threejs.org). Typefaces are Libre Bodoni and Courier Prime, from Google Fonts, under the SIL Open Font License.
