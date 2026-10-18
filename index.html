@@ -125,21 +125,10 @@
       </form>
 
       <div id="find-results" class="results" hidden>
-        <p class="query">Searching for <span id="find-query"></span></p>
-        <section class="result" aria-labelledby="nearest-title">
-          <h3 id="nearest-title">The nearest copy</h3>
-          <p id="nearest-status" class="status" aria-live="polite"></p>
-          <p id="nearest-where" class="where"></p>
-          <div class="row">
-            <button id="nearest-read" type="button" hidden>Read it here</button>
-            <button id="nearest-go" type="button" class="primary" hidden>Go to it</button>
-            <button id="nearest-stop" type="button" hidden>Stop searching</button>
-            <button id="nearest-start" type="button" hidden>Search nearby anyway</button>
-          </div>
-        </section>
+        <p class="query">Your text: <span id="find-query"></span></p>
         <section class="result" aria-labelledby="certain-title">
-          <h3 id="certain-title">A copy that certainly exists</h3>
-          <p class="status">Found by running the shelving backwards, with the text from the first character of the book onwards.</p>
+          <h3 id="certain-title">Where it stands</h3>
+          <p class="status">The catalogue runs the shelving backwards: it composes the book that begins with your text and finds the shelf it stands on. Every possible book is somewhere in the Library, exactly once.</p>
           <fieldset class="fill">
             <legend>The rest of that book</legend>
             <label><input type="radio" name="fill" value="random" checked> random characters</label>
@@ -205,7 +194,6 @@
 <script src="js/architecture.js"></script>
 <script src="js/world.js"></script>
 <script src="js/player.js"></script>
-<script src="js/catalogue.js"></script>
 <script src="js/terminal.js"></script>
 <script src="js/main.js"></script>
 </body>

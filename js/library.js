@@ -33,8 +33,6 @@
  */
 (function (root, factory) {
   const api = factory();
-  // The same code, as text, so that Web Workers can run it (see js/catalogue.js).
-  api.source = '(' + factory.toString() + ')()';
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.BabelCore = api;
 })(typeof self !== 'undefined' ? self : this, function () {
@@ -591,23 +589,6 @@
         i = content.indexOf(first, i + 1);
       }
       return -1;
-    }
-
-    /**
-     * How rare a text of `length` symbols is: the probability that one given book contains
-     * it somewhere, and the expected number of books read before a copy turns up.
-     * (Overlaps of a text with itself are ignored; they change little.)
-     */
-    rarity(length) {
-      const positions = Math.max(0, this.M - length + 1);
-      const log10PerPosition = -length * Math.log10(this.N);
-      const log10Mean = Math.log10(positions || 1) + log10PerPosition; // expected copies per book
-      const pBook = log10Mean > -12 ? 1 - Math.exp(-Math.pow(10, log10Mean)) : Math.pow(10, log10Mean);
-      const log10Books = pBook > 0 ? -Math.log10(pBook) : Infinity; // log10 of expected books to a copy
-      // Hexagons within walking distance R (along galleries and up or down stairs) number about 2R².
-      const log10Hexagons = log10Books - Math.log10(this.S);
-      const log10Distance = log10Hexagons > 0 ? (log10Hexagons - Math.log10(2)) / 2 : 0;
-      return { pBook, log10Books, log10Hexagons, log10Distance };
     }
 
     /* ---------------- Distances and addresses ---------------- */

@@ -54,7 +54,7 @@ so each hexagon has a floor number and a gallery number, each about half a milli
 
 **Contents.** The book at index *v* is obtained by a permutation of the space of all books, keyed by the seed: a four-round Feistel network on the book's two halves. Each round adds, symbol by symbol and modulo *N*, a pseudorandom stream generated from a hash of the other half. A Feistel network can be run backwards whatever its round functions are, so the map from shelf to contents is a bijection. No two shelves hold the same book and no possible book is missing. Neighbouring books share nothing visible. Opening one takes a few tens of milliseconds, and all the arithmetic on the huge numbers is done digit by digit, without big-integer multiplication.
 
-Because the map can be inverted, any text can be located: `findText` in `js/library.js` returns the hexagon, wall, shelf, volume and page of a book containing any given passage. The catalogue uses it (see below).
+Because the map can be inverted, any text can be located: `findText` in `js/library.js` returns the hexagon, wall, shelf, volume and page of a book containing any given passage. The catalogue in every vestibule uses it (see below).
 
 **Shape.** Both the galleries and the floors wrap around: walk east for 2^2,621,435 hexagons and you are back where you started. The Library is finite, and from inside it has no edge. This is close to the hypothesis the narrator offers at the end of the story. When the number of books is not a multiple of the books per hexagon, as with Borges's figures, the very last hexagon is only partly filled.
 
@@ -76,24 +76,7 @@ The story leaves room for interpretation. This version reads it as follows.
 
 Every vestibule has one. It does two things.
 
-**Find a text.** Type or paste anything into it. Accents are removed, lower-case letters are read as capitals, line breaks become spaces, and characters that are not in the alphabet are left out (the screen lists them). The catalogue then answers in two ways.
-
-- *The nearest copy.* There is no way to calculate where the nearest copy of a text stands, because the shelving is a keyed pseudorandom permutation: the only way to know what a book says is to open it. So the catalogue opens them. It reads every book of the current hexagon, then of the hexagons one step away (along the gallery or up or down a stair), then two steps, and so on, on several processor cores at once. The first copy it finds is a nearest one, and the screen gives its hexagon, wall, shelf, volume, page, line and character. You can read it on the spot, with the passage highlighted, or go to it: you are set down in front of it, and the volume stands a little out of its row.
-- *A copy that certainly exists.* By running the shelving backwards, the catalogue builds a book that begins with your text and finds where it stands. The rest of that book can be random characters or blank. Such a copy is almost always astronomically far away, but you can read it, go there, or copy its address.
-
-Reading outwards only works for short passages, because each extra character makes a copy 32 times rarer. With the default configuration:
-
-| Length of the text | A copy turns up about once in every | The nearest copy is probably |
-|---|---|---|
-| 4 characters or fewer | book or two | in this hexagon |
-| 5 | 33 books | in this hexagon |
-| 6 | 1,000 books | in this hexagon or the next |
-| 7 | 33,000 books | within a few hexagons |
-| 8 | 1 million books | within about 30 hexagons |
-| 10 | 10⁹ books | about 1,000 hexagons away |
-| 30 | 10³⁹ books | about 10¹⁸ hexagons away |
-
-A recent computer reads a few hundred books a second, so the catalogue starts reading by itself only when a copy should turn up within about 200,000 books, which means up to seven characters. For longer texts it says how far the nearest copy probably is, and you can still make it read for as long as you like.
+**Find a text.** Type or paste anything into it. Accents are removed, lower-case letters are read as capitals, line breaks become spaces, and characters that are not in the alphabet are left out (the screen lists them). The catalogue then runs the shelving backwards. It composes the book that begins with your text, with the rest of the book either random characters or blank, and the inverse permutation gives the hexagon, wall, shelf and volume where that book stands. Since every possible book exists exactly once, it is certainly there. It is also almost always astronomically far away, so the screen gives the distance as a power of ten. You can read the book on the spot, with your text highlighted, copy its address, or go there: you are set down in front of it, and the volume stands a little out of its row.
 
 **Go to a hexagon.** Move any number of hexagons east or west and floors up or down. Paste a full address, as copied from the pause menu or the catalogue, to return to a hexagon you have bookmarked, even after closing the page. Or go somewhere at random. After a jump, the corner of the screen counts your steps from where you arrived.
 
@@ -108,7 +91,6 @@ A recent computer reads a few hundred books a second, so the catalogue starts re
 | `js/architecture.js` | Dimensions, geometry and lighting of hexagons, vestibules, stairs and cells |
 | `js/world.js` | Streams the hexagons around the reader and dresses their books |
 | `js/player.js` | Walking, the spiral stair, and picking a book, door or catalogue by gaze |
-| `js/catalogue.js` | The search for the nearest copy of a text, run in parallel Web Workers |
 | `js/terminal.js` | The catalogue's screen: finding texts and going to hexagons |
 | `js/textures.js` | Wood, plaster, stone, floor tiles and leather spines, painted at start-up |
 | `js/main.js` | Start-up, reading, pause menu |

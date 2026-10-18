@@ -265,24 +265,5 @@ test('the copy that certainly exists contains the text', () => {
   }
 });
 
-test('rarity grows by a factor of the alphabet with each character', () => {
-  const r6 = lib.rarity(6), r7 = lib.rarity(7);
-  assert(Math.abs(r7.log10Books - r6.log10Books - Math.log10(32)) < 0.01);
-  assert(lib.rarity(2).log10Books < 0.01); // nearly every book contains any two letters
-});
-
-test('the nearest copy of a short text is found by reading outwards', () => {
-  // the same reading the catalogue does, without workers: ring 0 is this hexagon
-  const s = lib.wakingLocation(0);
-  const q = lib.prepareText('BABEL').symbols;
-  let found = null;
-  for (let slot = 0; slot < lib.S && !found; slot++) {
-    const i = Library.indexOf(lib.bookAt({ ...s, slot }), q);
-    if (i >= 0) found = { slot, i };
-  }
-  assert(found, 'a five-letter text should be in the hexagon');
-  console.log(`       "BABEL" is in volume ${found.slot % 32 + 1} of slot ${found.slot}, at character ${found.i}`);
-});
-
 console.log(failures ? `\n${failures} test(s) failed` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);

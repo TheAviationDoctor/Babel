@@ -1,5 +1,8 @@
 /*
- * The catalogue's screen: finding a text, and going to any hexagon.
+ * The catalogue's screen: finding where a text stands, and going to any hexagon.
+ *
+ * A text is found by running the shelving backwards: the catalogue composes the book
+ * that begins with the text, and the inverse permutation gives the shelf it stands on.
  *
  * It talks to the rest of the game through a small context object (see main.js):
  *   ctx.lib(), ctx.world, ctx.player, ctx.dims, ctx.setMode(mode), ctx.startWalking(),
@@ -21,43 +24,11 @@
     return `about 10<sup>${fmt(Math.floor(m.log10))}</sup> ${many} ${dir}`;
   }
 
-  function relative(dg, df) {
-    const parts = [];
-    if (dg) parts.push(`${fmt(Math.abs(dg))} ${Math.abs(dg) === 1 ? 'hexagon' : 'hexagons'} ${dg > 0 ? 'east' : 'west'}`);
-    if (df) parts.push(`${fmt(Math.abs(df))} ${Math.abs(df) === 1 ? 'floor' : 'floors'} ${df > 0 ? 'up' : 'down'}`);
-    return parts;
-  }
-
-  /** 10^x as a plain number when small, or as a power of ten (HTML). */
-  function count(log10) {
-    if (!isFinite(log10)) return 'never';
-    if (log10 < 3) return fmt(Math.max(1, Math.round(Math.pow(10, log10))));
-    if (log10 < 6) return fmt(Number(Math.pow(10, log10).toPrecision(2)));
-    return `10<sup>${fmt(Math.floor(log10))}</sup>`;
-  }
-
-  function duration(seconds) {
-    if (!isFinite(seconds)) return 'forever';
-    if (seconds < 1.5) return 'a second or so';
-    if (seconds < 90) return `about ${Math.round(seconds)} seconds`;
-    if (seconds < 5400) return `about ${Math.round(seconds / 60)} minutes`;
-    if (seconds < 172800) return `about ${Math.round(seconds / 3600)} hours`;
-    const years = seconds / 31557600;
-    if (years < 2) return `about ${Math.round(seconds / 86400)} days`;
-    if (years < 1e6) return `about ${fmt(Math.round(years))} years`;
-    return `about 10<sup>${fmt(Math.floor(Math.log10(years)))}</sup> years`;
-  }
-
-  const AUTO_SEARCH_BOOKS = 2e5; // read nearby automatically when a copy should turn up within this many books
-
   class Terminal {
     constructor(ctx) {
       this.ctx = ctx;
-      this.search = null;
       this.query = null; // { symbols, text }
-      this.found = null; // nearest result
-      this.certain = null;
-      this.lastProgress = 0;
+      this.certain = null; // { location, content }
       this._bind();
     }
 
@@ -75,9 +46,6 @@
 
     /** Forget everything that depended on the current shelving or anchor. */
     reset() {
-      if (this.search) this.search.stop('silent');
-      this.search = null;
-      this.found = null;
       this.certain = null;
       this.query = null;
       $('find-results').hidden = true;
@@ -96,10 +64,6 @@
       $('find-text').addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); this.find(); }
       });
-      $('nearest-stop').addEventListener('click', () => { if (this.search) this.search.stop('stopped'); });
-      $('nearest-start').addEventListener('click', () => this._startSearch());
-      $('nearest-read').addEventListener('click', () => this._readNearest());
-      $('nearest-go').addEventListener('click', () => this._goNearest());
       for (const r of document.querySelectorAll('input[name="fill"]')) r.addEventListener('change', () => this._certain());
       $('certain-read').addEventListener('click', () => this._readCertain());
       $('certain-go').addEventListener('click', () => this._goCertain());
@@ -162,130 +126,13 @@
     find() {
       const p = this._note();
       if (!p.symbols.length || p.symbols.length > this.lib.M) return;
-      if (this.search) this.search.stop('silent');
-      this.search = null;
-      this.found = null;
       this.query = p;
-      const world = this.ctx.world, player = this.ctx.player;
-      this.center = [player.cg, player.cf];
-      this.anchor = world.anchor;
       $('find-results').hidden = false;
       $('find-query').textContent = p.text.length > 160 ? p.text.slice(0, 160) + '…' : p.text;
-      this.rarity = this.lib.rarity(p.symbols.length);
       this._certain();
-      if (Math.pow(10, this.rarity.log10Books) <= AUTO_SEARCH_BOOKS) this._startSearch();
-      else this._nearestIdle('far');
     }
 
-    _rarityText() {
-      const r = this.rarity;
-      if (r.log10Books < 0.05) return 'Most books hold a text this short.';
-      return `A copy of a text this long turns up about once in every ${count(r.log10Books)} books.`;
-    }
-
-    _nearestIdle(why, progress) {
-      const r = this.rarity;
-      let status = this._rarityText() + ' ';
-      if (why === 'far') {
-        status += `The nearest copy is probably about ${count(r.log10Distance)} hexagons away: too far to find by reading the books in between.`;
-      } else if (why === 'stopped' || why === 'limit') {
-        status = `Stopped after reading ${fmt(progress.books)} books in ${fmt(progress.hexagons)} hexagons; none held the text. ` + this._rarityText();
-      }
-      $('nearest-status').innerHTML = status;
-      $('nearest-where').innerHTML = '';
-      this._buttons({ start: true });
-      $('nearest-start').textContent = why === 'far' ? 'Search nearby anyway' : 'Search further';
-    }
-
-    _buttons(show) {
-      for (const k of ['read', 'go', 'stop', 'start']) $('nearest-' + k).hidden = !show[k];
-    }
-
-    _startSearch() {
-      if (!this.query) return;
-      if (this.search) this.search.stop('silent');
-      const self = this;
-      // when searching further, start again one ring inside where the last search stopped
-      const resumeRing = this.lastStop ? Math.max(0, this.lastStop.ring - 1) : 0;
-      this.lastStop = null;
-      this.searchStart = performance.now();
-      this.search = new Babel.NearestSearch({
-        lib: this.lib,
-        anchor: this.anchor,
-        center: this.center,
-        query: this.query.symbols,
-        maxRing: 100000,
-        startRing: resumeRing,
-        booksBefore: this.lastStop ? this.lastStop.books : 0,
-        hexagonsBefore: this.lastStop ? this.lastStop.hexagons : 0,
-        onProgress: (p) => self._progress(p),
-        onEnd: (reason, best) => self._ended(reason, best),
-      });
-      this._buttons({ stop: true });
-      $('nearest-where').innerHTML = '';
-      $('nearest-status').innerHTML = 'Reading the books around you…';
-      this.search.start();
-    }
-
-    _progress(p) {
-      this.progress = p;
-      const now = performance.now();
-      if (now - this.lastProgress < 120) return;
-      this.lastProgress = now;
-      const expected = Math.pow(10, this.rarity.log10Books);
-      const eta = p.rate > 0 ? expected / p.rate : Infinity;
-      const s = this.search;
-      if (s) { p = Object.assign({}, p, { books: p.books + s.booksBefore, hexagons: p.hexagons + s.hexagonsBefore }); }
-      const where = p.ring === 0
-        ? `Reading the books of this hexagon: ${fmt(p.books)} so far`
-        : `Reading the books around you: ${fmt(p.books)} so far, ${fmt(p.hexagons)} ${p.hexagons === 1 ? 'hexagon' : 'hexagons'} read through, now ${fmt(p.ring)} ${p.ring === 1 ? 'hexagon' : 'hexagons'} away`;
-      $('nearest-status').innerHTML =
-        `${where}, at ${fmt(Math.round(p.rate))} books a second. ${this._rarityText()} At this speed a copy should turn up within ${duration(eta)}.`;
-    }
-
-    _ended(reason, best) {
-      const s = this.search;
-      const progress = { books: s ? s.books + s.booksBefore : 0, hexagons: s ? s.hexagonsDone + s.hexagonsBefore : 0, ring: s ? s.cursor.d : 0 };
-      this.search = null;
-      if (reason === 'found' && best) {
-        this.found = best;
-        this._showFound(progress);
-      } else {
-        this.lastStop = progress;
-        this._nearestIdle(reason, progress);
-      }
-    }
-
-    _showFound(progress) {
-      const b = this.found, lib = this.lib;
-      const { wall, shelf, volume } = lib.slotParts(b.slot);
-      const c = lib.config;
-      const page = Math.floor(b.index / c.charactersPerPage), within = b.index % c.charactersPerPage;
-      const line = Math.floor(within / c.charactersPerLine), col = within % c.charactersPerLine;
-      const rel = relative(b.dg - this.center[0], b.df - this.center[1]);
-      const here = rel.length ? `${rel.join(' and ')} from here` : 'In this very hexagon';
-      $('nearest-status').innerHTML = `Found after reading ${fmt(progress.books)} ${progress.books === 1 ? 'book' : 'books'}` +
-        (rel.length ? ` in ${fmt(progress.hexagons + 1)} hexagons. No nearer hexagon holds the text.` : '.');
-      $('nearest-where').innerHTML =
-        `<strong>${here.charAt(0).toUpperCase() + here.slice(1)}.</strong> Wall ${wall + 1}, shelf ${shelf + 1}, volume ${volume + 1}; page ${fmt(page + 1)}, line ${line + 1}, from character ${col + 1}.`;
-      this._buttons({ read: true, go: true });
-      $('nearest-go').textContent = rel.length ? 'Go to it' : 'Show me the book';
-    }
-
-    _readNearest() {
-      const b = this.found, lib = this.lib, world = this.ctx.world;
-      const location = world.location(b.dg, b.df, b.slot);
-      this.ctx.openBookAt({ location, slot: b.slot, highlight: { start: b.index, length: this.query.symbols.length }, returnTo: 'terminal' });
-    }
-
-    _goNearest() {
-      const b = this.found;
-      const { wall, shelf, volume } = this.lib.slotParts(b.slot);
-      this.ctx.world.setMark({ dg: b.dg, df: b.df, slot: b.slot, start: b.index, length: this.query.symbols.length });
-      this.ctx.goToCell(b.dg, b.df, { wall, shelf, volume });
-    }
-
-    /* ---------------- the copy that certainly exists ---------------- */
+    /* ---------------- where the text stands ---------------- */
 
     _certain() {
       if (!this.query) return;

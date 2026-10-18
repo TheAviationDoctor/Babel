@@ -264,8 +264,7 @@ mark { background: rgba(227, 169, 90, 0.55); color: var(--ink); box-shadow: 0 0 
 .note, .glass .status { color: var(--glow-dim); font-size: 0.85rem; }
 .query { color: var(--glow-dim); font-size: 0.85rem; overflow-wrap: anywhere; }
 .query span { color: var(--glow); background: rgba(168, 214, 196, 0.12); padding: 0 0.25em; white-space: pre-wrap; }
-.results { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.2rem 1.6rem; }
-.results .query { grid-column: 1 / -1; }
+.results { display: grid; gap: 1.2rem; }
 .result { display: grid; gap: 0.6rem; align-content: start; padding-top: 0.9rem; border-top: 1px solid rgba(212, 227, 220, 0.14); }
 .result .where { line-height: 1.55; overflow-wrap: anywhere; }
 .result .where strong { font-weight: 400; color: var(--signal); }
@@ -315,10 +314,6 @@ input[type="range"] { accent-color: var(--lamp); width: 100%; }
 .error-block { max-width: 36rem; display: grid; gap: 1rem; margin-left: clamp(0px, 6vw, 7rem); }
 .error-block h2 { font-size: var(--step-2); }
 #error-message { font-family: var(--type); line-height: 1.5; color: var(--lamp); }
-
-@media (max-width: 720px) {
-  .results { grid-template-columns: minmax(0, 1fr); }
-}
 
 @media (max-width: 640px) {
   #title { align-items: flex-end; background: linear-gradient(0deg, rgba(13, 10, 7, 0.96) 0%, rgba(13, 10, 7, 0.75) 60%, rgba(13, 10, 7, 0.35) 100%); }
