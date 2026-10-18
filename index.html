@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Library of Babel</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="A procedurally generated walk through Borges's Library of Babel, where every possible book stands on exactly one shelf.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=Libre+Bodoni:ital,wght@0,400;0,500;1,400&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="view" aria-label="The Library, seen from the eyes of a librarian"></canvas>
+<div id="vignette" aria-hidden="true"></div>
+
+<section id="title" class="screen" aria-labelledby="title-name">
+  <div id="address-field" aria-hidden="true"></div>
+  <div class="title-block">
+    <h1 id="title-name">The Library of Babel</h1>
+    <p class="after">after Jorge Luis Borges</p>
+    <p class="lede">Every book that could be written in <span data-fact="pages">512</span> pages stands somewhere on these shelves, exactly once. Walk the galleries, climb the stairs, take down a volume and read it.</p>
+    <form id="seed-form" class="seed-form" autocomplete="off">
+      <label for="seed-input">Seed</label>
+      <input id="seed-input" name="seed" type="text" spellcheck="false" maxlength="200">
+      <button id="enter-button" type="submit" class="primary">Enter the Library</button>
+    </form>
+    <p class="note">The seed decides which book stands on which shelf. The same seed always gives the same Library.</p>
+    <p class="facts" id="facts"></p>
+    <p class="controls" id="controls-hint"></p>
+  </div>
+  <p class="address-caption" id="address-caption"></p>
+</section>
+
+<div id="hud" hidden>
+  <div id="crosshair" aria-hidden="true"></div>
+  <div id="gaze" hidden>
+    <p class="spine" id="gaze-title"></p>
+    <p class="where" id="gaze-where"></p>
+    <p class="hint" id="gaze-hint">Press E or click to read</p>
+  </div>
+  <p id="whereabouts"></p>
+  <p id="look-hint" hidden>Click to look around</p>
+  <button id="menu-button" type="button" hidden>Menu</button>
+</div>
+
+<section id="reader" class="screen" hidden aria-labelledby="book-title">
+  <div class="book">
+    <header class="book-head">
+      <h2 id="book-title"></h2>
+      <p id="book-where"></p>
+    </header>
+    <div class="page-wrap">
+      <pre id="page" class="page" tabindex="0" aria-label="Page text"></pre>
+    </div>
+    <nav class="book-nav" aria-label="Turn pages">
+      <button id="prev-page" type="button" aria-label="Previous page">‹</button>
+      <form id="page-form" class="page-form">
+        <label for="page-input">Page</label>
+        <input id="page-input" type="number" min="1" inputmode="numeric">
+        <span id="page-count"></span>
+      </form>
+      <button id="next-page" type="button" aria-label="Next page">›</button>
+      <button id="random-page" type="button">Open at random</button>
+      <button id="copy-page" type="button">Copy page</button>
+      <button id="close-book" type="button" class="primary">Put the book back</button>
+    </nav>
+    <p class="book-keys">Arrow keys turn pages. Esc puts the book back.</p>
+  </div>
+</section>
+
+<section id="pause" class="screen" hidden aria-labelledby="pause-title">
+  <div class="pause-block">
+    <h2 id="pause-title">Paused</h2>
+    <div class="actions">
+      <button id="resume" type="button" class="primary">Resume walking</button>
+      <button id="wake-elsewhere" type="button">Wake in another hexagon</button>
+    </div>
+    <form id="seed-form-2" class="seed-form" autocomplete="off">
+      <label for="seed-input-2">Seed</label>
+      <input id="seed-input-2" type="text" spellcheck="false" maxlength="200">
+      <button type="submit">Change seed</button>
+    </form>
+    <div class="settings">
+      <label for="sensitivity">Look sensitivity <output id="sensitivity-out"></output></label>
+      <input id="sensitivity" type="range" min="0.3" max="2.5" step="0.1">
+      <label for="fov">Field of view <output id="fov-out"></output></label>
+      <input id="fov" type="range" min="50" max="95" step="1">
+    </div>
+    <div class="here">
+      <h3>This hexagon</h3>
+      <p>Floor <span class="addr" id="addr-floor"></span></p>
+      <p>Gallery <span class="addr" id="addr-gallery"></span></p>
+      <p class="small" id="addr-lengths"></p>
+      <button id="copy-address" type="button">Copy the full address</button>
+    </div>
+    <p class="controls" id="controls-hint-2"></p>
+  </div>
+</section>
+
+<p id="toast" role="status" aria-live="polite" hidden></p>
+<section id="error" class="screen" hidden role="alert">
+  <div class="error-block">
+    <h2>The Library could not be built</h2>
+    <p id="error-message"></p>
+    <p class="small">Check the values in config.js, save the file, and reload this page.</p>
+  </div>
+</section>
+
+<script src="lib/three.min.js"></script>
+<script src="lib/Reflector.js"></script>
+<script src="config.js"></script>
+<script src="js/library.js"></script>
+<script src="js/textures.js"></script>
+<script src="js/architecture.js"></script>
+<script src="js/world.js"></script>
+<script src="js/player.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
