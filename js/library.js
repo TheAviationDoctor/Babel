@@ -52,19 +52,53 @@
     hexagon: { wallsWithShelves: 4, shelvesPerWall: 4, booksPerShelf: 32 },
   };
 
+  /*
+   * Setting names are matched loosely, so that a configuration file can say
+   * "pages per book", "pages_per_book" or "pagesPerBook" alike.
+   */
+  const SETTINGS = {
+    '': { seed: 'seed', book: 'book', alphabet: 'alphabet', hexagon: 'hexagon' },
+    book: { pagesPerBook: 'pages per book', linesPerPage: 'lines per page', charactersPerLine: 'characters per line' },
+    hexagon: { wallsWithShelves: 'walls with shelves', shelvesPerWall: 'shelves per wall', booksPerShelf: 'books per shelf' },
+  };
+  const looseKey = (k) => String(k).toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  /** Maps the keys of one section of a configuration onto their canonical names. */
+  function readSection(obj, section) {
+    const names = SETTINGS[section];
+    const where = section ? `under "${section}"` : 'at the top of the configuration';
+    if (obj === undefined || obj === null) return {};
+    if (typeof obj !== 'object' || Array.isArray(obj)) throw new Error(`"${section}" should contain settings, one per line, indented beneath it.`);
+    const byLoose = {};
+    for (const canonical of Object.keys(names)) byLoose[looseKey(canonical)] = canonical;
+    const out = {};
+    for (const [k, v] of Object.entries(obj)) {
+      const canonical = byLoose[looseKey(k)];
+      if (!canonical) {
+        const list = Object.values(names).map((n) => `"${n}"`).join(', ');
+        throw new Error(`"${k}" is not a setting ${where}. The settings there are ${list}.`);
+      }
+      out[canonical] = v;
+    }
+    return out;
+  }
+
   function positiveInt(value, name, max) {
     const n = Number(value);
-    if (!Number.isInteger(n) || n < 1) throw new Error(`${name} must be a whole number of at least 1 (got ${JSON.stringify(value)}).`);
-    if (max !== undefined && n > max) throw new Error(`${name} must be at most ${max} (got ${n}).`);
+    if (value === null || value === '' || typeof value === 'boolean' || !Number.isInteger(n) || n < 1) {
+      throw new Error(`${name} must be a whole number of at least 1 (it is ${JSON.stringify(value)}).`);
+    }
+    if (max !== undefined && n > max) throw new Error(`${name} must be at most ${max} (it is ${n}).`);
     return n;
   }
 
   /** Validates a raw configuration object and returns a normalised copy with derived values. */
-  function normalizeConfig(raw) {
-    raw = raw || {};
-    const book = Object.assign({}, DEFAULT_CONFIG.book, raw.book || {});
-    const hex = Object.assign({}, DEFAULT_CONFIG.hexagon, raw.hexagon || {});
-    const alphabetSource = raw.alphabet !== undefined ? raw.alphabet : DEFAULT_CONFIG.alphabet;
+  function normalizeConfig(rawInput) {
+    const raw = readSection(rawInput || {}, '');
+    const book = Object.assign({}, DEFAULT_CONFIG.book, readSection(raw.book, 'book'));
+    const hex = Object.assign({}, DEFAULT_CONFIG.hexagon, readSection(raw.hexagon, 'hexagon'));
+    const label = (section, key) => `"${SETTINGS[section][key]}" ${section ? `(under "${section}")` : ''}`.trim();
+    const alphabetSource = raw.alphabet !== undefined && raw.alphabet !== null ? raw.alphabet : DEFAULT_CONFIG.alphabet;
     const alphabet = Array.isArray(alphabetSource) ? alphabetSource.map(String) : Array.from(String(alphabetSource));
     if (alphabet.some((c) => Array.from(c).length !== 1)) throw new Error('Every alphabet entry must be exactly one character.');
     if (new Set(alphabet).size !== alphabet.length) {
@@ -75,14 +109,14 @@
     if (alphabet.length > 256) throw new Error('The alphabet may have at most 256 characters.');
 
     const cfg = {
-      seed: String(raw.seed !== undefined ? raw.seed : DEFAULT_CONFIG.seed),
-      pagesPerBook: positiveInt(book.pagesPerBook, 'book.pagesPerBook'),
-      linesPerPage: positiveInt(book.linesPerPage, 'book.linesPerPage'),
-      charactersPerLine: positiveInt(book.charactersPerLine, 'book.charactersPerLine'),
+      seed: String(raw.seed !== undefined && raw.seed !== null ? raw.seed : DEFAULT_CONFIG.seed),
+      pagesPerBook: positiveInt(book.pagesPerBook, label('book', 'pagesPerBook')),
+      linesPerPage: positiveInt(book.linesPerPage, label('book', 'linesPerPage')),
+      charactersPerLine: positiveInt(book.charactersPerLine, label('book', 'charactersPerLine')),
       alphabet,
-      wallsWithShelves: positiveInt(hex.wallsWithShelves, 'hexagon.wallsWithShelves', 4),
-      shelvesPerWall: positiveInt(hex.shelvesPerWall, 'hexagon.shelvesPerWall', 64),
-      booksPerShelf: positiveInt(hex.booksPerShelf, 'hexagon.booksPerShelf', 256),
+      wallsWithShelves: positiveInt(hex.wallsWithShelves, label('hexagon', 'wallsWithShelves'), 4),
+      shelvesPerWall: positiveInt(hex.shelvesPerWall, label('hexagon', 'shelvesPerWall'), 64),
+      booksPerShelf: positiveInt(hex.booksPerShelf, label('hexagon', 'booksPerShelf'), 256),
     };
     cfg.charactersPerPage = cfg.linesPerPage * cfg.charactersPerLine;
     cfg.symbolsPerBook = cfg.pagesPerBook * cfg.charactersPerPage;
@@ -92,6 +126,24 @@
     cfg.booksPerHexagon = cfg.wallsWithShelves * cfg.booksPerWall;
     if (cfg.booksPerHexagon > 65536) throw new Error('A hexagon may hold at most 65,536 books.');
     return cfg;
+  }
+
+  /**
+   * Reads the text of config.yaml with a YAML parser (js-yaml) and returns the raw
+   * configuration object. Syntax errors are reported with their line number.
+   */
+  function configFromYaml(text, yaml) {
+    let data;
+    try {
+      data = yaml.load(text);
+    } catch (e) {
+      const line = e && e.mark ? ` on line ${e.mark.line + 1}` : '';
+      const reason = e && e.reason ? e.reason : String(e && e.message);
+      throw new Error(`config.yaml could not be read${line}: ${reason}.`);
+    }
+    if (data === undefined || data === null) return {};
+    if (typeof data !== 'object' || Array.isArray(data)) throw new Error('config.yaml should contain settings such as "seed: borges", one per line.');
+    return data;
   }
 
   /* ------------------------------------------------------------------ *
@@ -599,6 +651,7 @@
   return {
     Library,
     normalizeConfig,
+    configFromYaml,
     DEFAULT_CONFIG,
     FEISTEL_ROUNDS,
     util: { hashString, hashBytes, sfc32, unit, fmix32, mulSmallAdd, divSmall, addSmall, compareDigits, subDigits, addDigits, significantLength, isZero, log10Pretty },

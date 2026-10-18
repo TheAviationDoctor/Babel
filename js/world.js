@@ -34,11 +34,50 @@
       this._bookLayout = this._layoutBooks();
       this.hover = null;
       this.view = { nearFloors: 1, nearGalleries: 3, farFloors: 6, farGalleries: 1 };
+      this.doors = new Map(); // "dg,df" → { target: 0 or 1, t: 0…1 } for doors that have been touched
+    }
+
+    /* ---------------- doors of the cells ---------------- */
+
+    doorState(dg, df) { return this.doors.get(dg + ',' + df) || null; }
+
+    /** How far open (0 shut … 1 open) the door of the cell beside vestibule (dg, df) is. */
+    doorOpenness(dg, df) {
+      const s = this.doorState(dg, df);
+      return s ? s.t : 0;
+    }
+
+    isDoorOpen(dg, df) { return this.doorOpenness(dg, df) > 0.9; }
+
+    toggleDoor(dg, df) {
+      const key = dg + ',' + df;
+      let s = this.doors.get(key);
+      if (!s) { s = { target: 0, t: 0 }; this.doors.set(key, s); }
+      s.target = s.target ? 0 : 1;
+      return s.target === 1;
+    }
+
+    /** Swings doors towards their target and applies their angles. */
+    tick(dt) {
+      for (const [key, s] of this.doors) {
+        if (s.t === s.target) continue;
+        s.t = s.target ? Math.min(1, s.t + dt / 0.75) : Math.max(0, s.t - dt / 0.75);
+        const cell = this.cells.get(key);
+        if (cell) this._applyDoor(cell);
+        if (s.t === 0 && s.target === 0) this.doors.delete(key);
+      }
+    }
+
+    _applyDoor(cell) {
+      const t = this.doorOpenness(cell.dg, cell.df);
+      const e = t * t * (3 - 2 * t);
+      cell.door.rotation.y = e * Math.PI * 0.5 * 0.97;
     }
 
     /** Sets the waking hexagon (absolute addresses) and clears everything cached. */
     setAnchor(gallery, floor) {
       this.anchor = { gallery, floor };
+      if (this.doors) this.doors.clear();
       this.galleryCache.clear();
       this.floorCache.clear();
       for (const cell of this.cells.values()) this._release(cell);
@@ -116,6 +155,31 @@
       mirror.position.set(d.mirrorX, d.mirrorY0 + d.mirrorH / 2, -d.hallW / 2 + 0.041);
       group.add(mirror);
 
+      // the door of the cell, turning on its hinge
+      const door = new THREE.Group();
+      door.position.set(d.doorPivot[0], 0, d.doorPivot[1]);
+      const leaf = new THREE.Mesh(G.doorLeaf, M.doorWood);
+      // light the leaf as if it stood in its cell, whichever way it has turned
+      leaf.onBeforeRender = () => { M.doorWood.uniforms.uCellMatrix.value.copy(door.matrix); };
+      door.add(leaf);
+      group.add(door);
+
+      // the cell itself, drawn only near the reader
+      const interior = new THREE.Group();
+      interior.add(new THREE.Mesh(G.cellWood, M.cellWood));
+      interior.add(new THREE.Mesh(G.cellSoft, M.cellSoft));
+      interior.add(new THREE.Mesh(G.shade, M.shade));
+      interior.add(new THREE.Mesh(G.bulb, M.bulb));
+      const lampGlow = new THREE.Sprite(M.glow);
+      lampGlow.position.set(d.nightLamp[0], d.nightLamp[1] + 0.25, d.nightLamp[2]);
+      lampGlow.scale.set(0.7, 0.7, 0.7);
+      interior.add(lampGlow);
+      const sinkMirror = new THREE.Mesh(G.sinkMirror, M.mirrorDark);
+      sinkMirror.position.set(d.sinkMirror.x, d.sinkMirror.y0 + d.sinkMirror.h / 2, d.cellZ0 - 0.012);
+      sinkMirror.rotation.y = Math.PI;
+      interior.add(sinkMirror);
+      group.add(interior);
+
       // books
       const S = this.lib.S;
       const base = G.book;
@@ -130,7 +194,7 @@
       const books = new THREE.InstancedMesh(geo, M.books, S);
       books.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       group.add(books);
-      return { group, books, tint, variant, tints: new Float32Array(S * 3), dg: 0, df: 0 };
+      return { group, books, tint, variant, tints: new Float32Array(S * 3), dg: 0, df: 0, door, interior };
     }
 
     _acquire() { return this.pool.pop() || this._createCell(); }
@@ -170,6 +234,7 @@
         cell.books.setMatrixAt(slot, m);
       }
       cell.books.count = count;
+      this._applyDoor(cell);
       cell.books.instanceMatrix.needsUpdate = true;
       cell.tint.needsUpdate = true;
       cell.variant.needsUpdate = true;
@@ -206,6 +271,9 @@
           this.root.add(cell.group);
         }
         cell.group.position.set((dg - pg) * d.Dx, (df - pf) * d.Hf, 0);
+        // cells can only be seen from close by, through their door
+        cell.interior.visible = Math.abs(df - pf) <= 1 && Math.abs(dg - pg) <= 3;
+        cell.door.visible = Math.abs(df - pf) <= 1;
       }
       this._trimCaches(pg, pf);
       this.clearHover();

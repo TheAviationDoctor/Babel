@@ -102,15 +102,18 @@
 <p id="toast" role="status" aria-live="polite" hidden></p>
 <section id="error" class="screen" hidden role="alert">
   <div class="error-block">
-    <h2>The Library could not be built</h2>
+    <h2 id="error-title">The Library could not be built</h2>
     <p id="error-message"></p>
-    <p class="small">Check the values in config.js, save the file, and reload this page.</p>
+    <p class="hint" id="error-hint"></p>
+    <div class="actions" id="error-actions" hidden>
+      <button id="use-defaults" type="button" class="primary">Play with the default settings</button>
+    </div>
   </div>
 </section>
 
 <script src="lib/three.min.js"></script>
 <script src="lib/Reflector.js"></script>
-<script src="config.js"></script>
+<script src="lib/js-yaml.js"></script>
 <script src="js/library.js"></script>
 <script src="js/textures.js"></script>
 <script src="js/architecture.js"></script>

@@ -17,15 +17,20 @@
     try { localStorage.setItem('babel.settings', JSON.stringify(settings)); } catch (e) { /* ignore */ }
   }
 
-  let raw, lib, assets, world, player, renderer, scene, camera, reflector, figure;
+  let raw, lib, assets, world, player, renderer, scene, camera, reflector, sinkReflector, figure;
+  let initialSeed = 'borges';
   let mode = 'title';
   let wakeIndex = 0;
   let gaze = null, gazeKey = '';
   let reading = null;
   let lastCell = '';
 
-  function showError(message) {
+  function showError(message, opts) {
+    opts = opts || {};
+    $('error-title').textContent = opts.title || 'The Library could not be built';
     $('error-message').textContent = message;
+    $('error-hint').innerHTML = opts.hint || 'Correct <code>config.yaml</code>, save it, and reload this page.';
+    $('error-actions').hidden = !opts.offerDefaults;
     $('error').hidden = false;
     $('title').hidden = true;
   }
@@ -42,17 +47,53 @@
   /* ---------------- building ---------------- */
 
   function buildLibrary(seed) {
-    const cfg = Object.assign({}, raw, { seed });
-    return new BabelCore.Library(cfg);
+    return new BabelCore.Library(Object.assign({}, raw, { seed }));
   }
 
-  function boot() {
-    raw = window.BABEL_CONFIG;
-    if (!raw) return showError('The configuration file config.js was not found, or it does not define window.BABEL_CONFIG.');
+  /** Fetches and parses config.yaml. Throws an Error whose `unreadable` flag says the file could not be fetched. */
+  async function readConfig() {
+    let text;
     try {
-      lib = buildLibrary(raw.seed);
+      const res = await fetch('config.yaml', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`the server answered ${res.status}`);
+      text = await res.text();
     } catch (e) {
-      return showError(e.message);
+      const err = new Error(`config.yaml could not be loaded (${e.message}).`);
+      err.unreadable = true;
+      throw err;
+    }
+    return BabelCore.configFromYaml(text, window.jsyaml);
+  }
+
+  async function start() {
+    $('use-defaults').addEventListener('click', () => {
+      $('error').hidden = true;
+      $('title').hidden = false;
+      boot(BabelCore.DEFAULT_CONFIG);
+    });
+    let cfg;
+    try {
+      cfg = await readConfig();
+    } catch (e) {
+      if (e.unreadable && location.protocol === 'file:') {
+        return showError('This page was opened straight from the disk, and browsers do not let such a page read other files, so it cannot read config.yaml.', {
+          title: 'Open the Library with Play.command',
+          hint: 'Double-click <b>Play.command</b> in the Babel folder instead. It opens the Library in your browser through a small local web server, and config.yaml is then read as it should be. Or play now with the default settings.',
+          offerDefaults: true,
+        });
+      }
+      return showError(e.message, { offerDefaults: true });
+    }
+    boot(cfg);
+  }
+
+  function boot(config) {
+    raw = config;
+    try {
+      lib = new BabelCore.Library(raw);
+      initialSeed = lib.seed;
+    } catch (e) {
+      return showError(e.message, { offerDefaults: config !== BabelCore.DEFAULT_CONFIG });
     }
 
     try {
@@ -77,6 +118,7 @@
     player = new Babel.Player(assets.dims, camera, renderer.domElement);
     player.sensitivity = settings.sensitivity;
     player.onTap = () => { if (mode === 'walking') interact(); };
+    player.doorOpen = (off) => world.isDoorOpen(player.cg + off, player.cf);
 
     // The mirror in the nearest vestibule. Its camera sees layer 1, where the reader's own figure lives.
     const d = assets.dims;
@@ -85,6 +127,24 @@
     });
     reflector.camera.layers.enableAll();
     scene.add(reflector);
+    // The small mirror above the sink of the nearest cell.
+    sinkReflector = new THREE.Reflector(assets.geometries.sinkMirror, {
+      textureWidth: 512, textureHeight: 512, color: 0x8d877b, clipBias: 0.002,
+    });
+    sinkReflector.camera.layers.enableAll();
+    sinkReflector.rotation.y = Math.PI;
+    sinkReflector.visible = false;
+    scene.add(sinkReflector);
+    // A mirror seen in a mirror keeps its last picture rather than rendering again.
+    let reflecting = false;
+    for (const r of [reflector, sinkReflector]) {
+      const render = r.onBeforeRender;
+      r.onBeforeRender = function (a, b, c) {
+        if (reflecting) return;
+        reflecting = true;
+        try { render.call(this, a, b, c); } finally { reflecting = false; }
+      };
+    }
     figure = makeFigure();
     figure.traverse((o) => o.layers.set(1));
     scene.add(figure);
@@ -119,6 +179,7 @@
   function sizeMirror() {
     const pr = renderer.getPixelRatio();
     reflector.getRenderTarget().setSize(Math.round(window.innerWidth * pr * 0.6), Math.round(window.innerHeight * pr * 0.6));
+    sinkReflector.getRenderTarget().setSize(Math.round(window.innerWidth * pr * 0.5), Math.round(window.innerHeight * pr * 0.5));
   }
 
   function onResize() {
@@ -141,7 +202,7 @@
   }
 
   function changeSeed(seed) {
-    seed = String(seed || '').trim() || String(raw.seed);
+    seed = String(seed || '').trim() || initialSeed;
     if (seed === lib.seed) return false;
     lib = buildLibrary(seed);
     world.setLibrary(lib);
@@ -162,9 +223,9 @@
   }
 
   function controlsHTML() {
-    if (isTouch) return 'Drag on the right of the screen to look. Hold and slide on the left to walk. Tap a book to read it.';
+    if (isTouch) return 'Drag on the right of the screen to look. Hold and slide on the left to walk. Tap a book to read it, or a door to open it.';
     return 'Look with the mouse. Walk with <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or the arrow keys, and hold <kbd>Shift</kbd> to hurry. ' +
-      'Press <kbd>E</kbd> to take down the book you are looking at, and <kbd>Esc</kbd> to pause.';
+      'Press <kbd>E</kbd> to take down the book you are looking at or to open a door, and <kbd>Esc</kbd> to pause.';
   }
 
   function addressHead(digits, count) {
@@ -236,7 +297,17 @@
   /* ---------------- reading ---------------- */
 
   function interact() {
-    if (gaze) openBook(gaze);
+    if (!gaze) return;
+    if (gaze.kind === 'door') {
+      const dg = player.cg + gaze.cellOffset, df = player.cf;
+      const state = world.doorState(dg, df);
+      const closing = state && state.target === 1;
+      if (closing && player.inDoorway(gaze.cellOffset)) { toast('Step out of the doorway first.'); return; }
+      world.toggleDoor(dg, df);
+      gazeKey = '';
+      return;
+    }
+    openBook(gaze);
   }
 
   function openBook(target) {
@@ -409,6 +480,7 @@
     if (mode === 'title') player.yaw += dt * 0.035;
     player.update(dt);
     world.update(player.cg, player.cf);
+    world.tick(dt);
 
     const cellKey = player.cg + ',' + player.cf;
     if (cellKey !== lastCell) {
@@ -422,6 +494,12 @@
     const d = assets.dims;
     const mx = Math.abs(player.x - d.mirrorX) < Math.abs(player.x - (d.mirrorX - d.Dx)) ? d.mirrorX : d.mirrorX - d.Dx;
     reflector.position.set(mx, d.mirrorY0 + d.mirrorH / 2, -d.hallW / 2 + 0.043);
+    // the sink mirror of the nearest cell, while the reader is in it or at its open door
+    const off = Math.abs(player.x - d.sinkMirror.x) < Math.abs(player.x - (d.sinkMirror.x - d.Dx)) ? 0 : -1;
+    const sx = d.sinkMirror.x + off * d.Dx;
+    const cellShown = world.doorOpenness(player.cg + off, player.cf) > 0.05 || player.z < d.cellZ0;
+    sinkReflector.visible = cellShown && Math.abs(player.y) < 1 && Math.abs(player.x - sx) < 3 && player.z < 0;
+    sinkReflector.position.set(sx, d.sinkMirror.y0 + d.sinkMirror.h / 2, d.cellZ0 - 0.014);
     figure.position.set(player.x, player.y, player.z);
     figure.rotation.y = player.yaw;
 
@@ -430,21 +508,40 @@
   }
 
   function updateGaze() {
-    const target = player.pick(lib);
+    const book = player.pick(lib);
+    const door = player.pickDoor((off) => world.doorOpenness(player.cg + off, player.cf));
+    if (door && (!book || door.t < book.t)) {
+      const dg = player.cg + door.cellOffset, df = player.cf;
+      const state = world.doorState(dg, df);
+      const opening = !(state && state.target === 1);
+      const key = `door,${dg},${df},${opening}`;
+      if (key === gazeKey) return;
+      gazeKey = key;
+      world.clearHover();
+      gaze = { kind: 'door', cellOffset: door.cellOffset };
+      $('gaze-title').hidden = true;
+      $('gaze-where').textContent = opening ? 'A door, shut' : 'A door, open';
+      $('gaze-hint').textContent = `${isTouch ? 'Tap' : 'Press E or click'} to ${opening ? 'open' : 'close'} it`;
+      $('gaze').hidden = false;
+      return;
+    }
+    const target = book;
     const key = target ? `${player.cg + target.off},${player.cf},${target.slot}` : '';
     if (key === gazeKey) return;
     gazeKey = key;
-    gaze = target;
+    gaze = target ? Object.assign({ kind: 'book' }, target) : null;
     if (!target) { world.clearHover(); $('gaze').hidden = true; return; }
     const dg = player.cg + target.off, df = player.cf;
     world.setHover(dg, df, target.slot);
     const cell = world.cell(dg, df);
     if (!cell || target.slot >= cell.count) { $('gaze').hidden = true; gaze = null; return; }
+    $('gaze-title').hidden = false;
     $('gaze-title').textContent = lib.spineTitle(cell.fingerprint, target.slot);
     $('gaze-where').textContent = `Wall ${target.wall + 1}, shelf ${target.shelf + 1}, volume ${target.volume + 1}`;
     $('gaze-hint').textContent = isTouch ? 'Tap to read' : 'Press E or click to read';
     $('gaze').hidden = false;
   }
+
 
   // A handle for testing from the browser console.
   Babel.debug = {
@@ -452,7 +549,7 @@
     get renderer() { return renderer; }, get mode() { return mode; },
     openBook, startWalking, pause, setMode,
   };
-  Babel.boot = boot;
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-  else boot();
+  Babel.start = start;
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
 })();

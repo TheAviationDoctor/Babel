@@ -62,9 +62,30 @@
     d.lampY = d.roomH - 0.3;
 
     // closets, mirror, stairwell (all within the vestibule)
-    d.closetX = d.hallX0 + 0.72;
-    d.closetW = 0.62;
-    d.closetH = Math.min(1.85, d.doorH - 0.1);
+    d.closetW = 0.8;
+    d.closetX = d.hallX0 + 0.32 + d.closetW / 2;
+    d.closetH = Math.min(1.95, d.doorH - 0.05);
+    d.hingeX = d.closetX - d.closetW / 2; // the south door is hung on its west side and opens inwards
+
+    // The cell behind the south door: a bed, a small table with a night lamp, a toilet,
+    // and a sink with a mirror. It sits in the wedge between two hexagons, which widens
+    // away from the vestibule, so it never meets a hexagon.
+    d.cellWall = 0.12;
+    d.cellX0 = d.hingeX - 0.07;
+    d.cellX1 = d.cellX0 + 2.2;
+    d.cellZ0 = -(d.hallW / 2 + d.cellWall); // inside face of its north wall
+    d.cellZ1 = d.cellZ0 - 2.1; // inside face of its south wall
+    d.cellH = Math.min(d.roomH, 2.15);
+    const R = (x0, x1, z0, z1, extra) => Object.assign({ x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1) }, extra);
+    d.bed = R(d.cellX0, d.cellX0 + 1.95, d.cellZ1, d.cellZ1 + 0.92, { h: 0.5 });
+    d.nightTable = R(d.cellX0, d.cellX0 + 0.36, d.cellZ1 + 0.95, d.cellZ1 + 1.29, { h: 0.62 });
+    d.nightLamp = [d.cellX0 + 0.18, d.nightTable.h, (d.nightTable.z0 + d.nightTable.z1) / 2];
+    d.toilet = R(d.cellX1 - 0.66, d.cellX1, d.cellZ0 - 0.53, d.cellZ0 - 0.93, { h: 0.43 });
+    d.sink = R(d.cellX1 - 1.15, d.cellX1 - 0.7, d.cellZ0, d.cellZ0 - 0.38, { h: 0.84 });
+    d.sinkMirror = { x: (d.sink.x0 + d.sink.x1) / 2, w: 0.42, y0: 1.15, h: 0.6 };
+    d.doorPivot = [d.hingeX + 0.02, -(d.hallW / 2) - 0.025]; // hinge axis (x, z)
+    d.cellDoor = R(d.hingeX - 0.005, d.hingeX + 0.05, d.doorPivot[1] - d.closetW, d.cellZ0); // the door, once open
+    d.cellObstacles = [d.bed, d.nightTable, d.toilet, d.sink];
     d.wellR = 1.3;
     d.openW = 1.2;
     d.colR = 0.14;
@@ -100,14 +121,40 @@
     constructor() {
       this.pos = [];
       this.nor = [];
+      this.col = [];
+      this.color = [1, 1, 1];
+      this.coloured = false;
       this.m = new THREE.Matrix4();
       this.r = new THREE.Matrix3();
     }
     setMatrix(m) { this.m.copy(m); this.r.setFromMatrix4(m); return this; }
     reset() { this.m.identity(); this.r.identity(); return this; }
+    /** Colour (multiplies the texture) for the vertices added from now on. */
+    tint(hex) {
+      const c = new THREE.Color(hex);
+      this.color = [c.r, c.g, c.b];
+      this.coloured = true;
+      return this;
+    }
     _push(p, n) {
       this.pos.push(p.x, p.y, p.z);
       this.nor.push(n.x, n.y, n.z);
+      this.col.push(this.color[0], this.color[1], this.color[2]);
+    }
+    /** Vertical solid with an elliptical section (rx along x, rz along z), with optional caps. */
+    ellipse(cx, cz, rx, rz, y0, y1, caps, segs) {
+      segs = segs || 24;
+      caps = caps === undefined ? 'top' : caps;
+      for (let i = 0; i < segs; i++) {
+        const a0 = (2 * Math.PI * i) / segs, a1 = (2 * Math.PI * (i + 1)) / segs;
+        const P = (a, y) => [cx + rx * Math.cos(a), y, cz + rz * Math.sin(a)];
+        const N = (a) => [Math.cos(a) / rx, 0, Math.sin(a) / rz];
+        this.triSmooth(P(a0, y0), P(a1, y0), P(a1, y1), N(a0), N(a1), N(a1));
+        this.triSmooth(P(a0, y0), P(a1, y1), P(a0, y1), N(a0), N(a1), N(a0));
+        if (caps === 'top' || caps === 'both') this.poly([[cx, y1, cz], P(a0, y1), P(a1, y1)], [0, 1, 0]);
+        if (caps === 'bottom' || caps === 'both') this.poly([[cx, y0, cz], P(a0, y0), P(a1, y0)], [0, -1, 0]);
+      }
+      return this;
     }
     /** Convex polygon (array of [x,y,z]) facing `normal` ([x,y,z] in builder space). */
     poly(pts, normal) {
@@ -174,6 +221,7 @@
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
       g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
+      if (this.coloured) g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
       g.computeBoundingSphere();
       return g;
     }
@@ -344,37 +392,46 @@
     // end walls above the doors
     plaster.poly([[x0, d.doorH, -hw], [x0, d.doorH, hw], [x0, H, hw], [x0, H, -hw]], [1, 0, 0]);
     plaster.poly([[x1, d.doorH, -hw], [x1, d.doorH, hw], [x1, H, hw], [x1, H, -hw]], [-1, 0, 0]);
-    // south wall (−z): continuous, carries a closet door and the mirror
-    plaster.poly([[x0, 0, -hw], [x1, 0, -hw], [x1, H, -hw], [x0, H, -hw]], [0, 0, 1]);
+    // south wall (−z): the door of the cell, then the mirror
+    const dx0 = d.hingeX, dx1 = d.hingeX + d.closetW, dH = d.closetH, cz0 = d.cellZ0;
+    plaster.poly([[x0, 0, -hw], [dx0, 0, -hw], [dx0, H, -hw], [x0, H, -hw]], [0, 0, 1]);
+    plaster.poly([[dx1, 0, -hw], [x1, 0, -hw], [x1, H, -hw], [dx1, H, -hw]], [0, 0, 1]);
+    plaster.poly([[dx0, dH, -hw], [dx1, dH, -hw], [dx1, H, -hw], [dx0, H, -hw]], [0, 0, 1]);
+    // the doorway through the thickness of the wall, and its threshold
+    plaster.poly([[dx0, 0, -hw], [dx0, 0, cz0], [dx0, dH, cz0], [dx0, dH, -hw]], [1, 0, 0]);
+    plaster.poly([[dx1, 0, -hw], [dx1, 0, cz0], [dx1, dH, cz0], [dx1, dH, -hw]], [-1, 0, 0]);
+    plaster.poly([[dx0, dH, -hw], [dx1, dH, -hw], [dx1, dH, cz0], [dx0, dH, cz0]], [0, -1, 0]);
+    wood.box(dx0, 0, cz0, dx1, 0.012, -hw, 'YzZ');
     // north wall (+z): opening onto the stair
     plaster.poly([[x0, 0, hw], [ox0, 0, hw], [ox0, H, hw], [x0, H, hw]], [0, 0, -1]);
     plaster.poly([[ox1, 0, hw], [x1, 0, hw], [x1, H, hw], [ox1, H, hw]], [0, 0, -1]);
     plaster.poly([[ox0, d.doorH, hw], [ox1, d.doorH, hw], [ox1, H, hw], [ox0, H, hw]], [0, 0, -1]);
 
     // skirting boards
-    wood.box(x0, 0, -hw, x1, 0.1, -hw + 0.02, 'YZ');
+    wood.box(x0, 0, -hw, dx0 - 0.06, 0.1, -hw + 0.02, 'YZX');
+    wood.box(dx1 + 0.06, 0, -hw, x1, 0.1, -hw + 0.02, 'YZx');
     wood.box(x0, 0, hw - 0.02, ox0 - 0.06, 0.1, hw, 'Yzx');
     wood.box(ox1 + 0.06, 0, hw - 0.02, x1, 0.1, hw, 'YzX');
     // frame around the stair opening
     wood.box(ox0 - 0.06, 0, hw - 0.025, ox0, d.doorH + 0.06, hw, 'xXYz');
     wood.box(ox1, 0, hw - 0.025, ox1 + 0.06, d.doorH + 0.06, hw, 'xXYz');
     wood.box(ox0, d.doorH, hw - 0.025, ox1, d.doorH + 0.06, hw, 'yz');
+    // frame around the door of the cell (its leaf is a separate, moving object)
+    wood.box(dx0 - 0.06, 0, -hw, dx0, dH + 0.06, -hw + 0.045, 'xXYZ');
+    wood.box(dx1, 0, -hw, dx1 + 0.06, dH + 0.06, -hw + 0.045, 'xXYZ');
+    wood.box(dx0, dH, -hw, dx1, dH + 0.06, -hw + 0.045, 'yYZ');
 
-    // the two very small closets, one on each side, doors shut
-    for (const side of [-1, 1]) {
-      const z = side * hw, inward = -side;
-      const cx0 = d.closetX - d.closetW / 2, cx1 = d.closetX + d.closetW / 2;
-      const zf = z + inward * 0.03; // door face
-      const zA = Math.min(z, zf), zB = Math.max(z, zf);
-      wood.box(cx0, 0.02, zA, cx1, d.closetH, zB, side < 0 ? 'xXyYZ' : 'xXyYz');
-      // frame
-      const zF = z + inward * 0.045, fA = Math.min(z, zF), fB = Math.max(z, zF);
-      wood.box(cx0 - 0.06, 0, fA, cx0, d.closetH + 0.06, fB, side < 0 ? 'xXYZ' : 'xXYz');
-      wood.box(cx1, 0, fA, cx1 + 0.06, d.closetH + 0.06, fB, side < 0 ? 'xXYZ' : 'xXYz');
-      wood.box(cx0, d.closetH, fA, cx1, d.closetH + 0.06, fB, side < 0 ? 'yYZ' : 'yYz');
-      // knob
-      const kx = cx1 - 0.08, kz = zf + inward * 0.025;
-      wood.box(kx - 0.02, 1.0, Math.min(zf, kz), kx + 0.02, 1.04, Math.max(zf, kz), 'xXyYzZ');
+    // the closet opposite, its door shut
+    {
+      const z = hw, cx0 = d.closetX - d.closetW / 2, cx1 = d.closetX + d.closetW / 2;
+      wood.box(cx0, 0.02, z - 0.03, cx1, d.closetH, z, 'xXyYz');
+      wood.box(cx0 + 0.08, 0.12, z - 0.04, cx1 - 0.08, d.closetH * 0.42, z - 0.03, 'xXyYz');
+      wood.box(cx0 + 0.08, d.closetH * 0.5, z - 0.04, cx1 - 0.08, d.closetH - 0.1, z - 0.03, 'xXyYz');
+      wood.box(cx0 - 0.06, 0, z - 0.045, cx0, d.closetH + 0.06, z, 'xXYz');
+      wood.box(cx1, 0, z - 0.045, cx1 + 0.06, d.closetH + 0.06, z, 'xXYz');
+      wood.box(cx0, d.closetH, z - 0.045, cx1, d.closetH + 0.06, z, 'yYz');
+      const kx = cx1 - 0.09;
+      wood.box(kx - 0.02, 1.0, z - 0.06, kx + 0.02, 1.04, z - 0.03, 'xXyYz');
     }
 
     // mirror frame on the south wall, facing the stair
@@ -428,6 +485,134 @@
     };
   }
 
+  /** The leaf of the cell's door, in the frame of its hinge (x along the door, z across it). */
+  function buildDoorLeaf(d) {
+    const b = new Builder();
+    const w = d.closetW, h = d.closetH;
+    b.box(-0.018, 0.012, -0.02, w - 0.026, h - 0.006, 0.02);
+    for (const s of [-1, 1]) {
+      const z0 = s * 0.02, z1 = s * 0.03, zA = Math.min(z0, z1), zB = Math.max(z0, z1);
+      const f = s > 0 ? 'xXyYZ' : 'xXyYz';
+      b.box(0.07, 0.12, zA, w - 0.1, h * 0.42, zB, f);
+      b.box(0.07, h * 0.5, zA, w - 0.1, h - 0.1, zB, f);
+      const kx = w - 0.11, k0 = s * 0.02, k1 = s * 0.055;
+      b.box(kx - 0.02, 1.0, Math.min(k0, k1), kx + 0.02, 1.04, Math.max(k0, k1), 'xXyYzZ');
+    }
+    return b.geometry();
+  }
+
+  /** The cell: walls, floor, bed, night table and lamp, toilet, sink and its mirror. */
+  function buildCell(d) {
+    const wood = new Builder(), soft = new Builder();
+    const X0 = d.cellX0, X1 = d.cellX1, Z0 = d.cellZ0, Z1 = d.cellZ1, H = d.cellH;
+    const dx0 = d.hingeX, dx1 = d.hingeX + d.closetW, dH = d.closetH;
+    const LIME = 0xe2d6bb, LINEN = 0xe6dfcf, PILLOW = 0xf0ebdf, WOOL = 0x7b4132, PORCELAIN = 0xf3efe6, METAL = 0x5d564c;
+
+    // walls and ceiling, limewashed
+    soft.tint(LIME);
+    soft.poly([[X0, 0, Z0], [dx0, 0, Z0], [dx0, H, Z0], [X0, H, Z0]], [0, 0, -1]);
+    soft.poly([[dx1, 0, Z0], [X1, 0, Z0], [X1, H, Z0], [dx1, H, Z0]], [0, 0, -1]);
+    soft.poly([[dx0, dH, Z0], [dx1, dH, Z0], [dx1, H, Z0], [dx0, H, Z0]], [0, 0, -1]);
+    soft.poly([[X0, 0, Z1], [X1, 0, Z1], [X1, H, Z1], [X0, H, Z1]], [0, 0, 1]);
+    soft.poly([[X0, 0, Z0], [X0, 0, Z1], [X0, H, Z1], [X0, H, Z0]], [1, 0, 0]);
+    soft.poly([[X1, 0, Z0], [X1, 0, Z1], [X1, H, Z1], [X1, H, Z0]], [-1, 0, 0]);
+    soft.poly([[X0, H, Z0], [X1, H, Z0], [X1, H, Z1], [X0, H, Z1]], [0, -1, 0]);
+
+    // floorboards and skirting
+    wood.tint(0x9a7552);
+    wood.poly([[X0, 0, Z0], [X1, 0, Z0], [X1, 0, Z1], [X0, 0, Z1]], [0, 1, 0]);
+    wood.tint(0x8a6a4c);
+    wood.box(X0, 0, Z1, X1, 0.08, Z1 + 0.015, 'YZ');
+    wood.box(X0, 0, Z1, X0 + 0.015, 0.08, Z0, 'YX');
+    wood.box(X1 - 0.015, 0, Z1, X1, 0.08, Z0, 'Yx');
+    wood.box(X0, 0, Z0 - 0.015, dx0 - 0.06, 0.08, Z0, 'Yz');
+    wood.box(dx1 + 0.06, 0, Z0 - 0.015, X1, 0.08, Z0, 'Yz');
+    // door frame on this side
+    wood.box(dx0 - 0.06, 0, Z0 - 0.035, dx0, dH + 0.06, Z0, 'xXYz');
+    wood.box(dx1, 0, Z0 - 0.035, dx1 + 0.06, dH + 0.06, Z0, 'xXYz');
+    wood.box(dx0, dH, Z0 - 0.035, dx1, dH + 0.06, Z0, 'yYz');
+
+    // the bed: a plain wooden frame, headboard against the west wall
+    const B = d.bed;
+    wood.tint(0x8b6040);
+    for (const [px, pz] of [[B.x0 + 0.05, B.z0 + 0.03], [B.x0 + 0.05, B.z1 - 0.03], [B.x1 - 0.03, B.z0 + 0.03], [B.x1 - 0.03, B.z1 - 0.03]]) {
+      wood.box(px - 0.025, 0, pz - 0.025, px + 0.025, 0.3, pz + 0.025, 'xXzZ');
+    }
+    wood.box(B.x0 + 0.05, 0.16, B.z0 + 0.005, B.x1 - 0.03, 0.3, B.z0 + 0.03, 'yYzZ');
+    wood.box(B.x0 + 0.05, 0.16, B.z1 - 0.03, B.x1 - 0.03, 0.3, B.z1 - 0.005, 'yYzZ');
+    wood.box(B.x0, 0, B.z0, B.x0 + 0.05, 0.95, B.z1, 'xXYzZ');
+    wood.box(B.x1 - 0.05, 0, B.z0, B.x1, 0.6, B.z1, 'xXYzZ');
+    soft.tint(LINEN);
+    soft.box(B.x0 + 0.05, 0.3, B.z0 + 0.035, B.x1 - 0.05, 0.47, B.z1 - 0.035, 'xXYzZ');
+    soft.tint(PILLOW);
+    soft.box(B.x0 + 0.08, 0.47, B.z0 + 0.13, B.x0 + 0.52, 0.565, B.z1 - 0.13, 'xXYzZ');
+    soft.tint(WOOL);
+    soft.box(B.x0 + 0.62, 0.24, B.z0 + 0.022, B.x1 - 0.052, 0.492, B.z1 - 0.022, 'xYzZ');
+
+    // the small table fixed to the wall beside the bed, on a bracket
+    const T = d.nightTable;
+    wood.tint(0x7c5638);
+    wood.box(T.x0, T.h - 0.03, T.z0, T.x1, T.h, T.z1, 'xXyYzZ');
+    const tz = (T.z0 + T.z1) / 2;
+    for (const zz of [tz - 0.01, tz + 0.01]) {
+      wood.poly([[T.x0, T.h - 0.03, zz], [T.x0 + 0.26, T.h - 0.03, zz], [T.x0, T.h - 0.3, zz]], [0, 0, zz < tz ? -1 : 1]);
+    }
+    {
+      const a = [T.x0 + 0.26, T.h - 0.03], b = [T.x0, T.h - 0.3];
+      const n = [b[1] - a[1], -(b[0] - a[0])];
+      const len = Math.hypot(n[0], n[1]);
+      wood.poly([[a[0], a[1], tz - 0.01], [b[0], b[1], tz - 0.01], [b[0], b[1], tz + 0.01], [a[0], a[1], tz + 0.01]], [-n[0] / len, -n[1] / len, 0]);
+    }
+    // the night lamp's foot and stem
+    const L = d.nightLamp;
+    soft.tint(METAL);
+    soft.ellipse(L[0], L[2], 0.06, 0.06, L[1], L[1] + 0.02, 'top', 18);
+    soft.ellipse(L[0], L[2], 0.008, 0.008, L[1] + 0.02, L[1] + 0.2, 'none', 8);
+
+    // the toilet, its cistern against the east wall
+    const W = d.toilet, wz = (W.z0 + W.z1) / 2, bx = X1 - 0.4;
+    soft.tint(PORCELAIN);
+    soft.box(X1 - 0.19, 0.42, W.z0 + 0.02, X1, 0.8, W.z1 - 0.02, 'xyzZ');
+    soft.box(X1 - 0.205, 0.8, W.z0 + 0.01, X1, 0.83, W.z1 - 0.01, 'xyYzZ');
+    soft.ellipse(bx + 0.03, wz, 0.13, 0.11, 0, 0.3, 'none', 20);
+    soft.ellipse(bx, wz, 0.22, 0.17, 0.3, 0.4, 'bottom', 24);
+    wood.tint(0x8f6a4a);
+    wood.ellipse(bx - 0.005, wz, 0.235, 0.18, 0.4, 0.43, 'top', 24);
+    wood.box(X1 - 0.2, 0.4, wz - 0.12, X1 - 0.17, 0.46, wz + 0.12, 'xXYzZ');
+
+    // the sink, fixed to the north wall, with its mirror above
+    const K = d.sink, kx = (K.x0 + K.x1) / 2, top = K.h, bot = K.h - 0.16, rim = 0.035;
+    soft.tint(PORCELAIN);
+    soft.box(K.x0, bot, K.z0, K.x1, top, K.z1, 'xXyz');
+    const ix0 = K.x0 + rim, ix1 = K.x1 - rim, iz0 = K.z0 + rim, iz1 = K.z1 - 0.06, ib = top - 0.12;
+    soft.poly([[K.x0, top, K.z0], [K.x1, top, K.z0], [K.x1, top, iz0], [K.x0, top, iz0]], [0, 1, 0]);
+    soft.poly([[K.x0, top, iz1], [K.x1, top, iz1], [K.x1, top, K.z1], [K.x0, top, K.z1]], [0, 1, 0]);
+    soft.poly([[K.x0, top, iz0], [ix0, top, iz0], [ix0, top, iz1], [K.x0, top, iz1]], [0, 1, 0]);
+    soft.poly([[ix1, top, iz0], [K.x1, top, iz0], [K.x1, top, iz1], [ix1, top, iz1]], [0, 1, 0]);
+    soft.poly([[ix0, ib, iz0], [ix1, ib, iz0], [ix1, ib, iz1], [ix0, ib, iz1]], [0, 1, 0]);
+    soft.poly([[ix0, ib, iz0], [ix1, ib, iz0], [ix1, top, iz0], [ix0, top, iz0]], [0, 0, 1]);
+    soft.poly([[ix0, ib, iz1], [ix1, ib, iz1], [ix1, top, iz1], [ix0, top, iz1]], [0, 0, -1]);
+    soft.poly([[ix0, ib, iz0], [ix0, ib, iz1], [ix0, top, iz1], [ix0, top, iz0]], [1, 0, 0]);
+    soft.poly([[ix1, ib, iz0], [ix1, ib, iz1], [ix1, top, iz1], [ix1, top, iz0]], [-1, 0, 0]);
+    soft.tint(METAL);
+    soft.ellipse(kx, Z0 - 0.1, 0.02, 0.02, 0, bot, 'none', 10);
+    soft.ellipse(kx, Z0 - 0.035, 0.012, 0.012, top, top + 0.15, 'top', 10);
+    soft.box(kx - 0.012, top + 0.125, Z0 - 0.14, kx + 0.012, top + 0.15, Z0 - 0.035, 'xXyYz');
+    const M = d.sinkMirror, mx0 = M.x - M.w / 2, mx1 = M.x + M.w / 2, my0 = M.y0, my1 = M.y0 + M.h;
+    wood.tint(0x6e4c32);
+    wood.box(mx0 - 0.04, my0 - 0.04, Z0 - 0.025, mx1 + 0.04, my0, Z0, 'xXyYz');
+    wood.box(mx0 - 0.04, my1, Z0 - 0.025, mx1 + 0.04, my1 + 0.04, Z0, 'xXyYz');
+    wood.box(mx0 - 0.04, my0, Z0 - 0.025, mx0, my1, Z0, 'xXz');
+    wood.box(mx1, my0, Z0 - 0.025, mx1 + 0.04, my1, Z0, 'xXz');
+
+    // the lamp's fabric shade and bulb, which glow
+    const shade = new THREE.CylinderGeometry(0.075, 0.125, 0.17, 24, 1, true);
+    shade.translate(L[0], L[1] + 0.27, L[2]);
+    const bulb = new THREE.SphereGeometry(0.03, 12, 8);
+    bulb.translate(L[0], L[1] + 0.22, L[2]);
+    return { wood: wood.geometry(), soft: soft.geometry(), shade, bulb };
+  }
+
   /** Book geometry with a part attribute: 2 = spine, 1 = boards, 0 = page edges. */
   function buildBook(d) {
     const g = new THREE.BoxGeometry(d.bookT - 0.005, d.bookH, d.bookD);
@@ -467,11 +652,25 @@
   const ARCH_VERT = `
     varying vec3 vLocal;
     varying vec3 vN;
+    #ifdef USE_COLOR
+      varying vec3 vPaint;
+    #endif
     #include <fog_pars_vertex>
+    #ifdef USE_CELL_MATRIX
+      uniform mat4 uCellMatrix; // places a moving part (a door) in its cell, for lighting
+    #endif
     void main() {
       vec4 local = vec4(position, 1.0);
       vN = normal;
-      vLocal = local.xyz;
+      #ifdef USE_CELL_MATRIX
+        vN = mat3(uCellMatrix) * normal;
+        vLocal = (uCellMatrix * local).xyz;
+      #else
+        vLocal = local.xyz;
+      #endif
+      #ifdef USE_COLOR
+        vPaint = color;
+      #endif
       vec4 mvPosition = modelViewMatrix * local;
       gl_Position = projectionMatrix * mvPosition;
       #include <fog_vertex>
@@ -484,6 +683,9 @@
     uniform vec3 uTint;
     varying vec3 vLocal;
     varying vec3 vN;
+    #ifdef USE_COLOR
+      varying vec3 vPaint;
+    #endif
     ${LIGHTING_GLSL}
     #include <fog_pars_fragment>
     void main() {
@@ -493,6 +695,9 @@
       if (abs(n.y) > 0.6) uv = vLocal.xz;
       else { vec3 t = normalize(vec3(-n.z, 0.0, n.x)); uv = vec2(dot(vLocal, t), vLocal.y); }
       vec3 base = texture2D(map, uv * uScale).rgb * uTint;
+      #ifdef USE_COLOR
+        base *= vPaint;
+      #endif
       vec3 c = expose(base * lampLight(vLocal, n));
       gl_FragColor = vec4(c + dither(gl_FragCoord.xy) / 255.0, 1.0);
       #include <fog_fragment>
@@ -564,7 +769,9 @@
       uScale: { value: new THREE.Vector2(scale[0], scale[1]) },
       uTint: { value: new THREE.Color(tint) },
     });
-    return new THREE.ShaderMaterial({ uniforms, vertexShader: ARCH_VERT, fragmentShader: ARCH_FRAG, fog: true, side: opts.side || THREE.FrontSide });
+    const defines = {};
+    if (opts.cellMatrix) { defines.USE_CELL_MATRIX = ''; uniforms.uCellMatrix = { value: new THREE.Matrix4() }; }
+    return new THREE.ShaderMaterial({ uniforms, defines, vertexShader: ARCH_VERT, fragmentShader: ARCH_FRAG, fog: true, side: opts.side || THREE.FrontSide, vertexColors: !!opts.vertexColors });
   }
 
   function bookMaterial(map, lights, variants) {
@@ -584,6 +791,20 @@
         V(d.wellX, 1.3, d.wellZ, 0.18),
         V(0, 0, 0, 0),
       ],
+      // the night lamp, light from the vestibule through the door, a little fill
+      cell: [
+        V(d.nightLamp[0], d.nightLamp[1] + 0.24, d.nightLamp[2], 1.15),
+        V(d.closetX, 1.5, -d.hallW / 2 + 0.1, 0.24),
+        V((d.cellX0 + d.cellX1) / 2, d.cellH - 0.2, (d.cellZ0 + d.cellZ1) / 2, 0.13),
+        V(0, 0, 0, 0),
+      ],
+      // the door of the cell stands between the vestibule and the cell
+      door: [
+        V(d.nightLamp[0], d.nightLamp[1] + 0.24, d.nightLamp[2], 1.15),
+        V(d.hallX0 - 0.25, 1.8, 0, 0.72),
+        V(d.hallX1 + 0.25, 1.8, 0, 0.72),
+        V((d.cellX0 + d.cellX1) / 2, d.cellH - 0.2, (d.cellZ0 + d.cellZ1) / 2, 0.13),
+      ],
       // light from the vestibules of this floor and the floors above and below, spilling into the stairwell
       well: [
         V(d.wellX, 1.5, d.hallW / 2 - 0.15, 0.95),
@@ -599,6 +820,7 @@
     const L = lightSets(d);
     const hex = buildHexagon(d);
     const ves = buildVestibule(d);
+    const cell = buildCell(d);
     const tileScale = [1 / 0.9, 1 / (0.9 * textures.tilesAspect)];
     const wood = (lights) => archMaterial(textures.wood, [0.9, 2.2], 0xb0845a, lights);
     const materials = {
@@ -610,6 +832,11 @@
       vesTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.vestibule),
       wellPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc4b597, L.well, { side: THREE.DoubleSide, ambient: 0.08 }),
       wellStone: archMaterial(textures.stone, [0.7, 0.7], 0xdccdb0, L.well, { side: THREE.DoubleSide, ambient: 0.08 }),
+      cellWood: archMaterial(textures.wood, [0.9, 2.2], 0xffffff, L.cell, { vertexColors: true, falloff: 1.1, ambient: 0.05 }),
+      doorWood: archMaterial(textures.wood, [0.9, 2.2], 0xb0845a, L.door, { cellMatrix: true }),
+      cellSoft: archMaterial(textures.plaster, [0.4, 0.4], 0xffffff, L.cell, { vertexColors: true, falloff: 1.1, ambient: 0.05 }),
+      shade: new THREE.MeshBasicMaterial({ color: 0xf5c987, side: THREE.DoubleSide, fog: true }),
+      bulb: new THREE.MeshBasicMaterial({ color: 0xfff2d8, fog: true }),
       books: bookMaterial(textures.spines, L.hexagon, Babel.Textures.SPINE_VARIANTS),
       lamp: new THREE.MeshBasicMaterial({ color: 0xffe9c4, fog: true }),
       mirrorDark: new THREE.MeshBasicMaterial({ color: 0x1c1a17, fog: true }),
@@ -622,6 +849,9 @@
       lamps: buildLamps(d),
       book: buildBook(d),
       mirror: new THREE.PlaneGeometry(d.mirrorW, d.mirrorH),
+      doorLeaf: buildDoorLeaf(d),
+      cellWood: cell.wood, cellSoft: cell.soft, shade: cell.shade, bulb: cell.bulb,
+      sinkMirror: new THREE.PlaneGeometry(d.sinkMirror.w, d.sinkMirror.h),
     };
     return { dims: d, materials, geometries, lights: L };
   }

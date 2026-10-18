@@ -11,6 +11,21 @@
   const SQ3 = Math.sqrt(3);
   const TAU = Math.PI * 2;
 
+  /** Distance along a ray to an axis-aligned box [x0,y0,z0,x1,y1,z1], or null. */
+  function rayBox(ox, oy, oz, dx, dy, dz, b) {
+    let tmin = 0, tmax = Infinity;
+    const o = [ox, oy, oz], dir = [dx, dy, dz];
+    for (let i = 0; i < 3; i++) {
+      const lo = b[i], hi = b[i + 3];
+      if (Math.abs(dir[i]) < 1e-9) { if (o[i] < lo || o[i] > hi) return null; continue; }
+      let t1 = (lo - o[i]) / dir[i], t2 = (hi - o[i]) / dir[i];
+      if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+      tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+      if (tmin > tmax) return null;
+    }
+    return tmin;
+  }
+
   function hexDist(x, z) {
     return Math.max(Math.abs(x), Math.abs(x / 2 + (z * SQ3) / 2), Math.abs(x / 2 - (z * SQ3) / 2));
   }
@@ -128,11 +143,56 @@
           if (hx >= d.aIn - r - 0.05 && hx <= d.Dx - d.aIn + r + 0.05 && Math.abs(z) <= d.hallW / 2 - r) return 0;
           // the doorway onto the stair landing
           if (Math.abs(hx - d.wellX) <= d.openW / 2 - r && z >= d.hallW / 2 - r - 0.01 && z <= d.hallW / 2 + 0.5) return 0;
+          // the cell behind the south door
+          if (this._inCell(hx, z, off === 0 ? 0 : -1)) return 0;
         }
         const w = this._stair(hx, z, y);
         if (w !== null) return w;
       }
       return null;
+    }
+
+    /** Whether a reader of this radius fits at (hx, z) in or at the door of a cell. */
+    _inCell(hx, z, cellOffset) {
+      const d = this.d, r = this.radius;
+      const open = this.doorOpen ? this.doorOpen(cellOffset) : false;
+      // the doorway, only while the door stands open
+      if (open && Math.abs(hx - d.closetX) <= d.closetW / 2 - r && z <= -d.hallW / 2 + r + 0.02 && z >= d.cellZ0 - r - 0.02) return true;
+      if (hx < d.cellX0 + r || hx > d.cellX1 - r || z > d.cellZ0 - r || z < d.cellZ1 + r) return false;
+      const blocks = open ? d.cellObstacles.concat([d.cellDoor]) : d.cellObstacles;
+      for (const o of blocks) {
+        const cx = Math.max(o.x0, Math.min(hx, o.x1)), cz = Math.max(o.z0, Math.min(z, o.z1));
+        if ((hx - cx) * (hx - cx) + (z - cz) * (z - cz) < r * r) return false;
+      }
+      return true;
+    }
+
+    /** True if the reader stands where a closing door would sweep. */
+    inDoorway(cellOffset) {
+      const d = this.d, hx = this.x - cellOffset * d.Dx;
+      const dx = hx - d.doorPivot[0], dz = this.z - d.doorPivot[1];
+      return Math.abs(this.y) < 0.35 && Math.hypot(dx, dz) < d.closetW + this.radius + 0.05 && hx > d.hingeX - this.radius && hx < d.hingeX + d.closetW + this.radius && this.z < -d.hallW / 2 + this.radius + 0.05;
+    }
+
+    /** The cell door the reader is looking at, if within reach: { cellOffset, t }. */
+    pickDoor(openness) {
+      const d = this.d;
+      if (Math.abs(this.y) > 0.05) return null;
+      this.camera.updateMatrixWorld();
+      const o = this.camera.position, dir = this._ray.d;
+      this.camera.getWorldDirection(dir);
+      let best = null;
+      for (const off of [0, -1]) {
+        const ox = o.x - off * d.Dx;
+        const t0 = openness(off);
+        const px = d.doorPivot[0], pz = d.doorPivot[1], w = d.closetW;
+        const box = t0 < 0.5
+          ? [d.hingeX, 0, pz - 0.035, d.hingeX + w, d.closetH, pz + 0.04]
+          : [px - 0.04, 0, pz - w, px + 0.04, d.closetH, pz + 0.02];
+        const t = rayBox(ox, o.y, o.z, dir.x, dir.y, dir.z, box);
+        if (t !== null && t < this.reach && (!best || t < best.t)) best = { cellOffset: off, t };
+      }
+      return best;
     }
 
     /** Height on the spiral stair (continuous ramp), choosing the turn nearest to y. */
