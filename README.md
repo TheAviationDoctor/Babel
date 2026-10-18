@@ -28,11 +28,11 @@ No. The library is *finite*, meaning it has a fixed number of books (each one un
 
 With the default settings:
 
-- Each book holds `2^5 = 32` characters per line, `2^6 = 64` lines per page, and `2^9 = 512` pages. That's a total of `2^20 = 1,048,576` characters per book. That's probably about twice the length of a typical English novel.
+- Each book holds `2^5 = 32` characters per line, `2^6 = 64` lines per page, and `2^9 = 512` pages. That's a total of `2^20 = 1,048,576` characters per book. That's probably about twice the length of a typical English novel, which gives plenty of headroom to capture most books ever published.
 
-- The alphabet contains `2^6 = 64` symbols (`26` uppercase letters A–Z, `10` digits 0–9, and `28` punctuation marks). That's exactly half as many symbols as the ASCII set, but empirically tested to represent virtually every one of the 11.7 million characters sampled across 18 public-domain classics from the Gutenberg website.
+- The alphabet contains `2^6 = 64` symbols (`26` uppercase letters A–Z, `10` digits 0–9, and `28` punctuation marks). That's exactly half as many symbols as the ASCII set, but this parsimonious choice was empirically tested and verified to represent virtually every one of the 11.7 million characters sampled across 18 public-domain classics from the Gutenberg website.
 
-- There are therefore `64^(2^20) = 2^6,291,456 ≈ 9.38 × 10^1,893,916` unique books in the Library (which does not contain duplicates). That's one followed by nearly two million zeros.
+- There are therefore `64^(2^20) = 2^6,291,456 ≈ 9.38 × 10^1,893,916` unique books in the Library (which does not contain duplicates). That's one followed by nearly two million zeros. If you kept repeating the word 'trillion' once per second, it would take you nearly 44 hours to verbalize that number.
 
 - Each hexagonal room holds `2^2 = 4` bookshelves of `2^2 = 4` shelves each and `2^5 = 32` books per shelf. That's a total of `2^9 = 512` books per hexagon. So, the Library has `2^6,291,456 / 2^9 = 2^6,291,447 ≈ 1.83× 10^1,893,914` hexagons. Barely two order of magnitude fewer hexagons than books.
 
