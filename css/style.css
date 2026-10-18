@@ -275,6 +275,19 @@ mark { background: rgba(227, 169, 90, 0.55); color: var(--ink); box-shadow: 0 0 
 .glass .addr { color: var(--glow); }
 .glass .error { color: #e8b48a; font-size: 0.85rem; }
 .go { display: grid; gap: 0.6rem; padding-top: 0.9rem; border-top: 1px solid rgba(212, 227, 220, 0.14); }
+.intro { display: grid; gap: 0.7rem; }
+.intro .status { max-width: 46em; }
+.glass code { font-family: var(--type); color: var(--glow); background: rgba(212, 227, 220, 0.08); padding: 0 0.25em; border-radius: 3px; }
+.books { list-style: none; margin: 0; padding: 0; display: grid; }
+.books:empty { display: none; }
+.books li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.4rem 1rem; padding: 0.75rem 0; border-top: 1px solid rgba(212, 227, 220, 0.14); }
+.books li > div { display: grid; gap: 0.1rem; min-width: 0; flex: 1 1 18rem; }
+.books cite { font-family: var(--display); font-size: var(--step-1); color: var(--glow); overflow-wrap: anywhere; }
+.books .by { color: var(--glow); }
+.books li[aria-current="true"] cite { color: var(--signal); }
+.result h3 cite { font-style: normal; }
+.parts { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
+.parts li { display: grid; gap: 0.5rem; }
 .offset label { display: flex; align-items: center; gap: 0.5rem; }
 .offset input { width: 15ch; }
 #go-address { display: grid; gap: 0.5rem; }

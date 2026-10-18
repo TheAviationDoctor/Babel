@@ -17,9 +17,10 @@ window.BABEL_CONFIG = {
   },
 
   // The symbols books are written in, in this order. Each one must appear once.
-  // Here: the 26 letters, then colon, comma, exclamation mark, period, question
-  // mark, and finally a space (the last character between the quotes).
-  alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + ':,!.?' + ' ',
+  // Here: the 26 letters, the ten digits, then colon, comma, exclamation mark,
+  // period, question mark, semicolon, hyphen, opening and closing parentheses,
+  // apostrophe, quotation mark, and finally a space (the last character).
+  alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + '0123456789' + ':,!.?' + ';-()\'"' + ' ',
 
   hexagon: {
     wallsWithShelves: 4, // 1 to 4: the other two sides of each hexagon are its doors

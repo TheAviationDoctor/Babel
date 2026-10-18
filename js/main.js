@@ -322,7 +322,7 @@
     const mark = world.mark && world.isMarked(dg, df, target.slot) ? world.mark : null;
     openBookAt({
       location: world.location(dg, df, target.slot), slot: target.slot,
-      highlight: mark ? { start: mark.start, length: mark.length } : null, returnTo: 'walking',
+      highlight: mark && mark.length ? { start: mark.start, length: mark.length } : null, returnTo: 'walking',
     });
   }
 
@@ -571,7 +571,7 @@
       gaze = { kind: 'terminal', cellOffset: term.cellOffset };
       $('gaze-title').hidden = false;
       $('gaze-title').textContent = 'The catalogue';
-      $('gaze-where').textContent = 'Find any text, or go to any hexagon';
+      $('gaze-where').textContent = 'Find a text or a book, or go to any hexagon';
       $('gaze-hint').textContent = `${isTouch ? 'Tap' : 'Press E or click'} to use it`;
       $('gaze').hidden = false;
       return;
@@ -603,7 +603,7 @@
     if (!cell || target.slot >= cell.count) { $('gaze').hidden = true; gaze = null; return; }
     $('gaze-title').hidden = false;
     $('gaze-title').textContent = lib.spineTitle(cell.fingerprint, target.slot);
-    const sought = world.isMarked(dg, df, target.slot) ? 'The book you sought: ' : '';
+    const sought = world.isMarked(dg, df, target.slot) ? `The book you sought${world.mark.title ? ` (${world.mark.title})` : ''}: ` : '';
     $('gaze-where').textContent = `${sought}Wall ${target.wall + 1}, shelf ${target.shelf + 1}, volume ${target.volume + 1}`;
     $('gaze-hint').textContent = isTouch ? 'Tap to read' : 'Press E or click to read';
     $('gaze').hidden = false;

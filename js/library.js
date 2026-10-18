@@ -48,7 +48,7 @@
   const DEFAULT_CONFIG = {
     seed: 'borges',
     book: { pagesPerBook: 512, linesPerPage: 32, charactersPerLine: 64 },
-    alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + ':,!.?' + ' ',
+    alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + '0123456789' + ':,!.?' + ';-()\'"' + ' ',
     hexagon: { wallsWithShelves: 4, shelvesPerWall: 4, booksPerShelf: 32 },
   };
 
@@ -128,6 +128,14 @@
     return cfg;
   }
 
+  /** Typographic characters and the plain ones that stand for them. */
+  const TYPOGRAPHY = {
+    '\u201C': '"', '\u201D': '"', '\u201E': '"', '\u201F': '"', '\u00AB': '"', '\u00BB': '"', '\u2033': '"',
+    '\u2018': "'", '\u2019': "'", '\u201A': "'", '\u201B': "'", '\u2032': "'", '`': "'",
+    '\u2014': '-', '\u2013': '-', '\u2012': '-', '\u2015': '-', '\u2212': '-', '\u2010': '-', '\u2011': '-',
+    '\u2026': '...', '\u00A0': ' ', '\u2009': ' ', '\u202F': ' ', '\u2007': ' ',
+  };
+
   /* ------------------------------------------------------------------ *
    * Hashing and pseudorandom streams (32-bit integer arithmetic only)
    * ------------------------------------------------------------------ */
@@ -205,9 +213,11 @@
   /** digits := digits × mul + add, in place. Returns the carry that overflowed the array. */
   function mulSmallAdd(digits, mul, add, base) {
     let carry = add;
+    // with small multipliers everything stays within 32-bit integers, which is fast
+    const small = mul * base < 0x40000000 && add < 0x40000000;
     for (let i = 0; i < digits.length; i++) {
       const x = digits[i] * mul + carry;
-      carry = Math.floor(x / base);
+      carry = small ? (x / base) | 0 : Math.floor(x / base);
       digits[i] = x - carry * base;
     }
     return carry;
@@ -216,9 +226,10 @@
   /** digits := floor(digits / div), in place. Returns the remainder. */
   function divSmall(digits, div, base) {
     let rem = 0;
+    const small = div * base < 0x40000000;
     for (let i = digits.length - 1; i >= 0; i--) {
       const x = rem * base + digits[i];
-      const q = Math.floor(x / div);
+      const q = small ? (x / div) | 0 : Math.floor(x / div);
       digits[i] = q;
       rem = x - q * div;
     }
@@ -300,6 +311,7 @@
       // Fast path for power-of-two alphabets (e.g. 32 symbols = 5 bits).
       const N = this.N;
       this.bitsPerSymbol = (N & (N - 1)) === 0 ? Math.round(Math.log2(N)) : 0;
+      this.symbolsPerWord = Math.max(1, Math.floor(32 / Math.log2(N)) - 1);
 
       // Feistel halves (possibly unequal when M is odd).
       this.half1 = Math.floor(this.M / 2);
@@ -363,11 +375,20 @@
           }
         }
       } else {
-        for (let j = 0; j < n; j++) {
-          const s = Math.floor((rng() * N) / 4294967296);
-          let x = sign > 0 ? dst[j] + s : dst[j] - s;
-          if (x >= N) x -= N; else if (x < 0) x += N;
-          dst[j] = x;
+        // Several symbols from each 32-bit word: read w / 2^32 as a fraction and take its
+        // first base-N digits. Taking one digit fewer than fit keeps them uniform to within
+        // a fraction of a percent.
+        const per = this.symbolsPerWord;
+        let j = 0;
+        while (j < n) {
+          let w = rng();
+          for (let t = 0; t < per && j < n; t++, j++) {
+            const s = Math.floor(w * N * 2.3283064365386963e-10);
+            w = Math.imul(w, N) >>> 0;
+            let x = sign > 0 ? dst[j] + s : dst[j] - s;
+            if (x >= N) x -= N; else if (x < 0) x += N;
+            dst[j] = x;
+          }
         }
       }
     }
@@ -559,7 +580,14 @@
      */
     prepareText(raw) {
       const map = new Map(this.alphabet.map((c, i) => [c, i]));
-      const text = String(raw).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\r\n?|\n|\t/g, ' ');
+      const fits = (str) => Array.from(str).every((c) => map.has(c));
+      // typographic characters become their plain equivalents, if the alphabet has those
+      let text = '', substituted = false;
+      for (const ch of String(raw)) {
+        const sub = TYPOGRAPHY[ch];
+        if (!map.has(ch) && sub !== undefined && fits(sub)) { text += sub; substituted = true; } else text += ch;
+      }
+      text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\r\n?|\n|\t/g, ' ');
       const out = [], dropped = new Set();
       let recased = false;
       for (const ch of text) {
@@ -573,7 +601,95 @@
         out.push(v);
       }
       const symbols = Uint8Array.from(out);
-      return { symbols, text: this.toText(symbols), dropped: [...dropped], recased };
+      return { symbols, text: this.toText(symbols), dropped: [...dropped], recased, substituted };
+    }
+
+    /**
+     * Sets a whole text in the Library's page format, as a printer would: a title page,
+     * then the text in lines of exactly `charactersPerLine` characters, broken between
+     * words and padded with spaces, each paragraph indented. A text longer than one book
+     * is split into parts, each with its own title page. Returns { parts: [Uint8Array],
+     * dropped, recased, substituted, characters }.
+     */
+    typeset(rawText, meta) {
+      meta = meta || {};
+      const c = this.config, W = c.charactersPerLine, L = c.linesPerPage, P = c.pagesPerBook;
+      const spaceIndex = this.alphabet.indexOf(' ');
+      const text = String(rawText).replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+      const dropped = new Set();
+      let recased = false, substituted = false;
+      const prep = (t) => {
+        const p = this.prepareText(t);
+        p.dropped.forEach((ch) => dropped.add(ch));
+        recased = recased || p.recased;
+        substituted = substituted || p.substituted;
+        return p.text;
+      };
+      if (spaceIndex < 0) {
+        // without a space there is no layout to speak of: the text runs on
+        const p = this.prepareText(text), symbols = p.symbols;
+        const parts = [];
+        for (let i = 0; i < Math.max(1, symbols.length); i += this.M) parts.push(symbols.subarray(i, i + this.M));
+        return { parts, dropped: p.dropped, recased: p.recased, substituted: p.substituted, characters: symbols.length };
+      }
+      // paragraphs: blank lines separate them if there are any; otherwise each line is one
+      const blocks = /\n[ \t]*\n/.test(text) ? text.split(/\n[ \t]*\n+/) : text.split('\n');
+      const paragraphs = blocks.map((b) => prep(b.replace(/\s+/g, ' ').trim())).filter((b) => b.length);
+      const indent = W >= 24 ? '   ' : '';
+      const lines = [];
+      const pad = (s) => s + ' '.repeat(Math.max(0, W - s.length));
+      for (const para of paragraphs) {
+        let line = indent;
+        for (const word0 of para.split(' ')) {
+          let word = word0;
+          if (!word) continue;
+          while (word.length > W) { // a word longer than a line is cut
+            if (line.trim()) { lines.push(pad(line)); line = ''; }
+            lines.push(word.slice(0, W));
+            word = word.slice(W);
+          }
+          const sep = line.trim() ? ' ' : '';
+          if (line.length + sep.length + word.length > W) { lines.push(pad(line)); line = word; }
+          else line += sep + word;
+        }
+        if (line.trim()) lines.push(pad(line));
+      }
+      const characters = paragraphs.reduce((n, p) => n + p.length, 0);
+      // title pages
+      const centre = (s) => {
+        s = s.slice(0, W);
+        const left = Math.floor((W - s.length) / 2);
+        return pad(' '.repeat(left) + s);
+      };
+      const wrap = (s) => {
+        const out = [];
+        let line = '';
+        for (const w of s.split(' ').filter(Boolean)) {
+          if (line && line.length + 1 + w.length > W) { out.push(line); line = w; } else line = line ? line + ' ' + w : w;
+        }
+        if (line) out.push(line);
+        return out;
+      };
+      const titleLines = wrap(prep(meta.title || ''));
+      const byLines = wrap(prep(meta.author || ''));
+      const bodyPagesPerPart = Math.max(1, P - 1);
+      const linesPerPart = bodyPagesPerPart * L;
+      const partCount = Math.max(1, Math.ceil(lines.length / linesPerPart));
+      const parts = [];
+      for (let k = 0; k < partCount; k++) {
+        const page = [];
+        const top = Math.max(0, Math.floor(L / 3) - 1);
+        for (let i = 0; i < top; i++) page.push(pad(''));
+        for (const t of titleLines) page.push(centre(t));
+        if (byLines.length) { page.push(pad('')); for (const t of byLines) page.push(centre(t)); }
+        if (meta.year) page.push(centre(prep(String(meta.year))));
+        if (partCount > 1) { page.push(pad('')); page.push(centre(prep(`PART ${k + 1} OF ${partCount}`))); }
+        while (page.length < L) page.push(pad(''));
+        const body = lines.slice(k * linesPerPart, (k + 1) * linesPerPart);
+        const str = page.slice(0, L).join('') + body.join('');
+        parts.push(this.prepareText(str).symbols.subarray(0, this.M));
+      }
+      return { parts, dropped: [...dropped], recased, substituted, characters };
     }
 
     /** Position of the first occurrence of `query` in `content` (both symbol arrays), or −1. */

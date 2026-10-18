@@ -147,8 +147,8 @@ test('neighbouring books look unrelated', () => {
   const b = lib.bookAt({ ...start, slot: 1 });
   let same = 0;
   for (let i = 0; i < a.length; i++) if (a[i] === b[i]) same++;
-  const frac = same / a.length; // expect about 1/32
-  assert(Math.abs(frac - 1 / 32) < 0.002, `fraction of equal symbols ${frac}`);
+  const frac = same / a.length; // expect about 1/N
+  assert(Math.abs(frac - 1 / lib.N) < 0.002, `fraction of equal symbols ${frac}`);
 });
 
 test('symbols are evenly distributed', () => {
@@ -158,7 +158,8 @@ test('symbols are evenly distributed', () => {
   const expected = lib.M / lib.N;
   let chi2 = 0;
   for (const c of counts) chi2 += (c - expected) ** 2 / expected;
-  assert(chi2 < 80, `chi-squared ${chi2.toFixed(1)} with 31 degrees of freedom`);
+  const dof = lib.N - 1;
+  assert(chi2 < dof + 6 * Math.sqrt(2 * dof), `chi-squared ${chi2.toFixed(1)} with ${dof} degrees of freedom`);
 });
 
 test('any text can be found, and is on the page it was asked for', () => {
@@ -170,7 +171,7 @@ test('any text can be found, and is on the page it was asked for', () => {
 });
 
 test('the same seed always gives the same Library', () => {
-  const other = new Library({ seed: 'borges' });
+  const other = new Library(sandbox.window.BABEL_CONFIG);
   const loc = lib.wakingLocation(3);
   assert.strictEqual(key(other.bookAt(loc).subarray(0, 4096)), key(lib.bookAt(loc).subarray(0, 4096)));
 });
@@ -215,10 +216,13 @@ test('a non-power-of-two alphabet and a hexagon size that does not divide the nu
 console.log('\nThe catalogue');
 
 test('texts are prepared as the catalogue searches them', () => {
-  const p = lib.prepareText('Ça va, Señor?\nOui: 42!');
-  assert.strictEqual(p.text, 'CA VA, SENOR? OUI: !');
-  assert.deepStrictEqual(p.dropped.sort(), ['2', '4']);
+  const p = lib.prepareText('Ça va, Señor?\nOui: 42! [sic]');
+  assert.strictEqual(p.text, 'CA VA, SENOR? OUI: 42! SIC');
+  assert.deepStrictEqual(p.dropped.sort(), ['[', ']']);
   assert.strictEqual(p.recased, true);
+  const q = lib.prepareText('\u201CQuoted\u201D \u2014 \u2018so\u2019\u2026');
+  assert.strictEqual(q.text, '"QUOTED" - \'SO\'...');
+  assert.strictEqual(q.substituted, true);
 });
 
 test('a text is found in a book exactly where it was put', () => {
@@ -262,6 +266,44 @@ test('the copy that certainly exists contains the text', () => {
   for (const fill of ['random', 'blank']) {
     const r = lib.findText(q, { fill });
     assert.strictEqual(Library.indexOf(lib.bookAt(r.location), q), 0);
+  }
+});
+
+test('a whole text is set in pages, with a title page', () => {
+  const words = [];
+  for (let i = 0; i < 300; i++) words.push(['THE', 'LIBRARY', 'IS', 'UNLIMITED', 'PERIODIC', 'HEXAGON'][i % 6]);
+  const text = words.slice(0, 120).join(' ') + '\n\n' + words.slice(120).join(' ');
+  const t = lib.typeset(text, { title: 'A test', author: 'Nobody', year: 2026 });
+  assert.strictEqual(t.parts.length, 1);
+  const c = lib.config, part = t.parts[0];
+  assert.strictEqual(part.length % c.charactersPerLine, 0);
+  // the book that holds it, with the rest of its pages blank, is read back from its shelf
+  const book = lib.bookAt(lib.findText(part, { fill: 'blank' }).location);
+  assert.strictEqual(Library.indexOf(book, part), 0);
+  const title = lib.pageLines(book, 0).map((l) => l.trim()).filter(Boolean);
+  assert.deepStrictEqual(title, ['A TEST', 'NOBODY', '2026']);
+  const lines = lib.pageLines(book, 1);
+  assert(lines[0].startsWith('   THE LIBRARY'), 'paragraphs are indented');
+  assert(lines.every((l) => l.length === c.charactersPerLine));
+  const pages = Math.ceil(part.length / (c.charactersPerLine * c.linesPerPage));
+  const body = [];
+  for (let p = 1; p < pages; p++) body.push(...lib.pageLines(book, p));
+  const found = body.join(' ').split(/\s+/).filter(Boolean);
+  // every word is there, in order, and none is broken across two lines
+  assert.deepStrictEqual(found, words);
+  const second = body.findIndex((l, i) => i > 0 && l.startsWith('   '));
+  assert(second > 0, 'the second paragraph starts on a new, indented line');
+});
+
+test('a text longer than one book is split into parts', () => {
+  const small = new Library({ seed: 's', book: { pagesPerBook: 3, linesPerPage: 4, charactersPerLine: 24 } });
+  const text = Array.from({ length: 60 }, (_, i) => 'WORD' + i).join(' ');
+  const t = small.typeset(text, { title: 'Long' });
+  assert(t.parts.length > 1, 'expected several parts');
+  for (const [k, part] of t.parts.entries()) {
+    assert(small.pageLines(part, 0).join('').includes(`PART ${k + 1} OF ${t.parts.length}`));
+    const r = small.findText(part, { fill: 'blank' });
+    assert.strictEqual(Library.indexOf(small.bookAt(r.location), part), 0);
   }
 });
 

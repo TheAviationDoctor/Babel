@@ -106,6 +106,7 @@
       <h2 id="terminal-title">The catalogue</h2>
       <div class="tabs" role="tablist" aria-label="What to do">
         <button id="tab-find" type="button" role="tab" aria-selected="true" aria-controls="panel-find">Find a text</button>
+        <button id="tab-books" type="button" role="tab" aria-selected="false" aria-controls="panel-books">Find a book</button>
         <button id="tab-go" type="button" role="tab" aria-selected="false" aria-controls="panel-go">Go to a hexagon</button>
       </div>
       <button id="terminal-close" type="button" class="quiet">Step away</button>
@@ -140,6 +141,34 @@
             <button id="certain-go" type="button" class="primary">Go there</button>
             <button id="certain-copy" type="button">Copy its address</button>
           </div>
+        </section>
+      </div>
+    </div>
+
+    <div id="panel-books" class="panel" role="tabpanel" aria-labelledby="tab-books" hidden>
+      <section class="intro">
+        <p class="status">The catalogue can find any of your own books in the Library: the plain-text files (<code>.txt</code>) in the <code>books</code> folder beside <code>index.html</code>. A page opened straight from your computer cannot look into a folder by itself, so show it the folder once. Your browser may ask whether to “upload” the files: they are only read by this page, and nothing leaves your computer.</p>
+        <div class="row">
+          <button id="books-folder" type="button" class="primary">Open the books folder</button>
+          <button id="books-files" type="button">Choose book files</button>
+          <button id="books-forget" type="button" class="quiet" hidden>Forget these books</button>
+        </div>
+        <input id="books-folder-input" type="file" webkitdirectory multiple hidden>
+        <input id="books-files-input" type="file" accept=".txt,text/plain" multiple hidden>
+        <p id="books-status" class="note" role="status"></p>
+      </section>
+      <ul id="books-list" class="books" aria-label="Your books"></ul>
+
+      <div id="book-results" class="results" hidden>
+        <section class="result" aria-labelledby="book-found-title">
+          <h3 id="book-found-title"></h3>
+          <p id="book-how" class="status"></p>
+          <fieldset class="fill">
+            <legend>The rest of the book</legend>
+            <label><input type="radio" name="book-fill" value="blank" checked> blank pages</label>
+            <label><input type="radio" name="book-fill" value="random"> random characters</label>
+          </fieldset>
+          <ol id="book-parts" class="parts"></ol>
         </section>
       </div>
     </div>
