@@ -199,6 +199,35 @@
       return best;
     }
 
+    /**
+     * The night lamp the reader is looking at, if within reach: { cellOffset, t }. It can
+     * be seen from inside its cell, or from outside through the doorway while the door is open.
+     */
+    pickLamp(openness) {
+      const d = this.d;
+      if (Math.abs(this.y) > 0.05) return null;
+      this.camera.updateMatrixWorld();
+      const o = this.camera.position, dir = this._ray.d;
+      this.camera.getWorldDirection(dir);
+      const L = d.nightLamp;
+      const box = [L[0] - 0.14, L[1], L[2] - 0.14, L[0] + 0.14, L[1] + 0.38, L[2] + 0.14];
+      let best = null;
+      for (const off of [0, -1]) {
+        const ox = o.x - off * d.Dx;
+        const t = rayBox(ox, o.y, o.z, dir.x, dir.y, dir.z, box);
+        if (t === null || t >= this.reach || (best && t >= best.t)) continue;
+        const inside = ox > d.cellX0 && ox < d.cellX1 && o.z < d.cellZ0 && o.z > d.cellZ1;
+        if (!inside) {
+          if (openness(off) < 0.5 || dir.z >= -1e-6) continue;
+          const tw = (d.cellZ0 - o.z) / dir.z; // where the gaze passes through the cell's wall
+          const wx = ox + dir.x * tw, wy = o.y + dir.y * tw;
+          if (tw < 0 || tw > t || wx < d.hingeX || wx > d.hingeX + d.closetW || wy > d.closetH) continue;
+        }
+        best = { cellOffset: off, t };
+      }
+      return best;
+    }
+
     /** The catalogue the reader is looking at, if within reach: { cellOffset, t }. */
     pickTerminal() {
       const d = this.d;

@@ -13,12 +13,13 @@ Open `index.html` in a recent browser (Chrome, Edge, Firefox or Safari). Double-
 | Hurry | hold `Shift` |
 | Take down the book you are looking at | `E` or click |
 | Open or close the door you are looking at | `E` or click |
+| Turn the night lamp in the cell off or on | `E` or click |
 | Use the catalogue (the screen in the niche opposite the cell) | `E` or click |
 | Turn pages | `←` `→`, `Page Up` `Page Down`, `Home` `End` |
 | Put the book back | `Esc` or `E` |
 | Pause | `Esc` or `P` |
 
-On a phone or tablet, drag on the right of the screen to look, hold and slide on the left to walk, and tap a book, a door or the catalogue.
+On a phone or tablet, drag on the right of the screen to look, hold and slide on the left to walk, and tap a book, a door, the lamp or the catalogue.
 
 The two typefaces load from Google Fonts. Without an internet connection the game still runs, with system fonts.
 
@@ -69,7 +70,7 @@ The story leaves room for interpretation. This version reads it as follows.
 - The hexagons are identical. Four sides carry shelves floor to ceiling, and the ceiling is a little above a librarian's head.
 - The two free sides are opposite each other, so every floor is a single straight gallery of hexagons running east and west.
 - Each free side opens onto a narrow vestibule leading to the next hexagon. It has a door on each side, a mirror, and a spiral stair that climbs and descends through every floor.
-- Borges gives the vestibule two very small closets, one to sleep in standing up and one for bodily needs. Here the south door opens into a single cell of 2.2 × 2.1 m that serves both purposes. It holds a single bed, a small table fixed to the wall with a night lamp, a toilet, and a sink with a mirror. The north door stays shut. The cell sits in the wedge of space between two neighbouring hexagons. That wedge is about 4 m wide beside the vestibule and widens further away, so the cell fits whatever the size of the hexagons.
+- Borges gives the vestibule two very small closets, one to sleep in standing up and one for bodily needs. Here the south door opens into a single cell of 2.2 × 2.1 m that serves both purposes. It holds a single bed, a small table fixed to the wall with a night lamp, a toilet, and a sink with a mirror. The lamp can be turned off. The cell is then dark, apart from what light comes in through the open door, and the lampshade keeps only a faint glow. The north door stays shut. The cell sits in the wedge of space between two neighbouring hexagons. That wedge is about 4 m wide beside the vestibule and widens further away, so the cell fits whatever the size of the hexagons.
 - Opposite the cell, the north door now gives onto a shallow niche holding a touchscreen: the catalogue (see below). It is the one thing in the Library that Borges did not put there, and it glows with a cooler light than the lamps.
 - In the middle of each hexagon an air shaft, with a very low railing, shows the floors above and below.
 - Two spherical lamps hang in each hexagon, placed across the gallery. They are the only light.

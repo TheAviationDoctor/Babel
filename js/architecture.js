@@ -652,6 +652,7 @@
   const LIGHTING_GLSL = `
     uniform vec4 uLights[4];
     uniform vec3 uLightColors[4];
+    uniform float uGain[4]; // per light, for lights that can be dimmed or shut off
     uniform float uAmbient;
     uniform float uFalloff;
     uniform float uExposure;
@@ -662,7 +663,7 @@
         float d2 = max(dot(L, L), 0.01);
         float ndl = dot(n, L) * inversesqrt(d2);
         float wrap = clamp((ndl + 0.25) / 1.25, 0.0, 1.0);
-        sum += uLightColors[i] * (uLights[i].w * wrap / (1.0 + d2 * uFalloff));
+        sum += uLightColors[i] * (uLights[i].w * uGain[i] * wrap / (1.0 + d2 * uFalloff));
       }
       return sum;
     }
@@ -779,6 +780,7 @@
     return {
       uLights: { value: lights },
       uLightColors: { value: [0, 1, 2, 3].map((i) => (opts.colors && opts.colors[i]) || LAMP.clone()) },
+      uGain: { value: [1, 1, 1, 1] },
       uAmbient: { value: opts.ambient !== undefined ? opts.ambient : 0.05 },
       uFalloff: { value: opts.falloff !== undefined ? opts.falloff : 0.55 },
       uExposure: { value: opts.exposure !== undefined ? opts.exposure : 1.35 },

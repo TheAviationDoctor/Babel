@@ -17,7 +17,7 @@
     try { localStorage.setItem('babel.settings', JSON.stringify(settings)); } catch (e) { /* ignore */ }
   }
 
-  let raw, lib, assets, world, player, renderer, scene, camera, reflector, sinkReflector, figure, terminal;
+  let raw, lib, assets, world, player, renderer, scene, camera, reflector, sinkReflector, figure, figureLight, terminal;
   let initialSeed = 'borges';
   let mode = 'title';
   let wakeIndex = 0;
@@ -108,7 +108,8 @@
     figure = makeFigure();
     figure.traverse((o) => o.layers.set(1));
     scene.add(figure);
-    scene.add(new THREE.HemisphereLight(0xb08a5e, 0x140e09, 1.1));
+    figureLight = new THREE.HemisphereLight(0xb08a5e, 0x140e09, 1.1);
+    scene.add(figureLight);
     sizeMirror();
 
     terminal = new Babel.Terminal({
@@ -313,6 +314,11 @@
       return;
     }
     if (gaze.kind === 'terminal') { terminal.open(); return; }
+    if (gaze.kind === 'lamp') {
+      world.toggleLamp(player.cg + gaze.cellOffset, player.cf);
+      gazeKey = '';
+      return;
+    }
     openBook(gaze);
   }
 
@@ -520,6 +526,20 @@
     }
   }
 
+  /** How well lit the reader is (1 in the galleries), for their reflection in the mirrors. */
+  function lightOnReader() {
+    const d = assets.dims;
+    for (const off of [0, -1]) {
+      const hx = player.x - off * d.Dx;
+      if (hx > d.cellX0 - 0.1 && hx < d.cellX1 + 0.1 && player.z < -d.hallW / 2 && player.z > d.cellZ1 - 0.1) {
+        const dg = player.cg + off, df = player.cf;
+        const b = world.lampBrightness(dg, df), t = world.doorOpenness(dg, df);
+        return b + (1 - b) * (0.03 + 0.2 * t * t * (3 - 2 * t));
+      }
+    }
+    return 1;
+  }
+
   let last = performance.now();
   function frame(now) {
     const rawDt = (now - last) / 1000;
@@ -530,6 +550,7 @@
     player.update(dt);
     world.update(player.cg, player.cf);
     world.tick(dt);
+    figureLight.intensity = 1.1 * lightOnReader();
 
     const cellKey = player.cg + ',' + player.cf;
     if (cellKey !== lastCell) {
@@ -563,6 +584,21 @@
     const book = player.pick(lib);
     const door = player.pickDoor((off) => world.doorOpenness(player.cg + off, player.cf));
     const term = player.pickTerminal();
+    const lamp = player.pickLamp((off) => world.doorOpenness(player.cg + off, player.cf));
+    if (lamp && (!book || lamp.t < book.t) && (!door || lamp.t < door.t)) {
+      const dg = player.cg + lamp.cellOffset, df = player.cf;
+      const on = world.isLampOn(dg, df);
+      const key = `lamp,${dg},${df},${on}`;
+      if (key === gazeKey) return;
+      gazeKey = key;
+      world.clearHover();
+      gaze = { kind: 'lamp', cellOffset: lamp.cellOffset };
+      $('gaze-title').hidden = true;
+      $('gaze-where').textContent = on ? 'A night lamp, lit' : 'A night lamp, out';
+      $('gaze-hint').textContent = `${isTouch ? 'Tap' : 'Press E or click'} to turn it ${on ? 'off' : 'on'}`;
+      $('gaze').hidden = false;
+      return;
+    }
     if (term && (!book || term.t < book.t) && (!door || term.t < door.t)) {
       const key = `terminal,${player.cg + term.cellOffset},${player.cf}`;
       if (key === gazeKey) return;

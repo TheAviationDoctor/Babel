@@ -18,6 +18,9 @@
     [0.55, 0.42, 0.25], [0.4, 0.12, 0.1],
   ];
 
+  const SHADE_OUT = new THREE.Color(0.085, 0.05, 0.022);
+  const BULB_OUT = new THREE.Color(0.1, 0.04, 0.014);
+
   class World {
     constructor(scene, assets, library) {
       this.scene = scene;
@@ -35,6 +38,7 @@
       this.hover = null;
       this.view = { nearFloors: 1, nearGalleries: 3, farFloors: 6, farGalleries: 1 };
       this.doors = new Map(); // "dg,df" → { target: 0 or 1, t: 0…1 } for doors that have been touched
+      this.lamps = new Map(); // "dg,df" → { target: 0 or 1, t: 0…1 } for night lamps that have been switched
     }
 
     /* ---------------- doors of the cells ---------------- */
@@ -76,14 +80,43 @@
       return s.target === 1;
     }
 
-    /** Swings doors towards their target and applies their angles. */
+    /* ---------------- night lamps of the cells ---------------- */
+
+    /** Whether the night lamp of the cell beside vestibule (dg, df) is on (or turning on). Lamps start lit. */
+    isLampOn(dg, df) {
+      const s = this.lamps.get(dg + ',' + df);
+      return s ? s.target === 1 : true;
+    }
+
+    toggleLamp(dg, df) {
+      const key = dg + ',' + df;
+      let s = this.lamps.get(key);
+      if (!s) { s = { target: 1, t: 1 }; this.lamps.set(key, s); }
+      s.target = s.target ? 0 : 1;
+      return s.target === 1;
+    }
+
+    /** How brightly (0 … 1) the night lamp of that cell shines. */
+    lampBrightness(dg, df) {
+      const s = this.lamps.get(dg + ',' + df);
+      return s ? s.t * s.t : 1; // a filament dims quickly, then glows out
+    }
+
+    /** Swings doors and dims lamps towards their targets. */
     tick(dt) {
       for (const [key, s] of this.doors) {
         if (s.t === s.target) continue;
         s.t = s.target ? Math.min(1, s.t + dt / 0.75) : Math.max(0, s.t - dt / 0.75);
         const cell = this.cells.get(key);
-        if (cell) this._applyDoor(cell);
+        if (cell) { this._applyDoor(cell); this._applyLight(cell); }
         if (s.t === 0 && s.target === 0) this.doors.delete(key);
+      }
+      for (const [key, s] of this.lamps) {
+        if (s.t === s.target) continue;
+        s.t = s.target ? Math.min(1, s.t + dt / 0.12) : Math.max(0, s.t - dt / 0.4);
+        const cell = this.cells.get(key);
+        if (cell) this._applyLight(cell);
+        if (s.t === 1 && s.target === 1) this.lamps.delete(key);
       }
     }
 
@@ -93,10 +126,36 @@
       cell.door.rotation.y = e * Math.PI * 0.5 * 0.97;
     }
 
+    /**
+     * Lights a cell's interior for its lamp and its door. With the lamp out, the only
+     * light is what comes in from the vestibule through the doorway, and the shade
+     * keeps a faint glow.
+     */
+    _applyLight(cell) {
+      const b = this.lampBrightness(cell.dg, cell.df);
+      const t = this.doorOpenness(cell.dg, cell.df), e = t * t * (3 - 2 * t);
+      const L = cell.light, dark = 1 - b;
+      const spill = 0.05 + 0.95 * e; // the vestibule's light, through the doorway
+      const fill = b + dark * 0.3 * e; // light bouncing about the cell
+      for (const m of [L.wood, L.soft]) {
+        const g = m.uniforms.uGain.value;
+        g[0] = b; g[1] = spill; g[2] = fill;
+        m.uniforms.uAmbient.value = 0.05 * b + dark * (0.004 + 0.012 * e);
+      }
+      const g = L.door.uniforms.uGain.value;
+      g[0] = b; g[3] = fill;
+      L.door.uniforms.uAmbient.value = 0.05 * b + dark * 0.02;
+      // out, the shade and bulb keep the faintest warm glow, enough to make out the lamp's outline
+      L.shade.color.copy(SHADE_OUT).lerp(L.shadeColor, b);
+      L.bulb.color.copy(BULB_OUT).lerp(L.bulbColor, b);
+      L.glow.opacity = 0.9 * b + 0.04 * dark;
+    }
+
     /** Sets the waking hexagon (absolute addresses) and clears everything cached. */
     setAnchor(gallery, floor) {
       this.anchor = { gallery, floor };
       if (this.doors) this.doors.clear();
+      if (this.lamps) this.lamps.clear();
       this.mark = null;
       this.galleryCache.clear();
       this.floorCache.clear();
@@ -176,11 +235,25 @@
       group.add(mirror);
 
       // the door of the cell, turning on its hinge
+      // each cell has its own lamp, so its interior and its door have their own materials
+      const own = (m) => {
+        const c = m.clone();
+        if (c.uniforms && c.uniforms.map) c.uniforms.map.value = m.uniforms.map.value; // share the texture
+        return c;
+      };
+      const light = {
+        wood: own(M.cellWood), soft: own(M.cellSoft), door: own(M.doorWood),
+        shade: M.shade.clone(), bulb: M.bulb.clone(), glow: M.glow.clone(),
+        shadeColor: M.shade.color.clone(), bulbColor: M.bulb.color.clone(),
+      };
       const door = new THREE.Group();
       door.position.set(d.doorPivot[0], 0, d.doorPivot[1]);
-      const leaf = new THREE.Mesh(G.doorLeaf, M.doorWood);
+      const leaf = new THREE.Mesh(G.doorLeaf, light.door);
       // light the leaf as if it stood in its cell, whichever way it has turned
-      leaf.onBeforeRender = () => { M.doorWood.uniforms.uCellMatrix.value.copy(door.matrix); };
+      leaf.onBeforeRender = () => {
+        light.door.uniforms.uCellMatrix.value.copy(door.matrix);
+        light.door.uniformsNeedUpdate = true;
+      };
       door.add(leaf);
       group.add(door);
 
@@ -195,11 +268,11 @@
 
       // the cell itself, drawn only near the reader
       const interior = new THREE.Group();
-      interior.add(new THREE.Mesh(G.cellWood, M.cellWood));
-      interior.add(new THREE.Mesh(G.cellSoft, M.cellSoft));
-      interior.add(new THREE.Mesh(G.shade, M.shade));
-      interior.add(new THREE.Mesh(G.bulb, M.bulb));
-      const lampGlow = new THREE.Sprite(M.glow);
+      interior.add(new THREE.Mesh(G.cellWood, light.wood));
+      interior.add(new THREE.Mesh(G.cellSoft, light.soft));
+      interior.add(new THREE.Mesh(G.shade, light.shade));
+      interior.add(new THREE.Mesh(G.bulb, light.bulb));
+      const lampGlow = new THREE.Sprite(light.glow);
       lampGlow.position.set(d.nightLamp[0], d.nightLamp[1] + 0.25, d.nightLamp[2]);
       lampGlow.scale.set(0.7, 0.7, 0.7);
       interior.add(lampGlow);
@@ -223,7 +296,7 @@
       const books = new THREE.InstancedMesh(geo, M.books, S);
       books.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       group.add(books);
-      return { group, books, tint, variant, tints: new Float32Array(S * 3), dg: 0, df: 0, door, interior, niche };
+      return { group, books, tint, variant, tints: new Float32Array(S * 3), dg: 0, df: 0, door, interior, niche, light };
     }
 
     _acquire() { return this.pool.pop() || this._createCell(); }
@@ -277,6 +350,7 @@
       }
       cell.books.count = count;
       this._applyDoor(cell);
+      this._applyLight(cell);
       cell.books.instanceMatrix.needsUpdate = true;
       cell.tint.needsUpdate = true;
       cell.variant.needsUpdate = true;
