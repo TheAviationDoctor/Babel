@@ -119,6 +119,8 @@
 
     wake(0);
     bindInterface();
+    fitControlGlyphs();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitControlGlyphs).catch(() => {});
     window.addEventListener('resize', onResize);
     requestAnimationFrame(frame);
     void d;
@@ -233,7 +235,7 @@
   }
 
   function addressHead(digits, count) {
-    const a = lib.alphabet, n = digits.length;
+    const a = lib.glyphs, n = digits.length;
     let s = '';
     for (let i = n - 1; i >= Math.max(0, n - count); i--) s += a[digits[i]];
     return s;
@@ -374,23 +376,20 @@
     const c = lib.config, lines = lib.pageLines(reading.content, reading.page);
     const h = reading.highlight;
     pre.textContent = '';
-    if (!h) pre.textContent = lines.join('\n');
-    else {
-      // mark the passage the catalogue found, wherever it falls on this page
-      const base = reading.page * c.charactersPerPage;
-      lines.forEach((line, i) => {
-        const s0 = base + i * c.charactersPerLine;
-        const a = Math.max(h.start, s0) - s0, b = Math.min(h.start + h.length, s0 + c.charactersPerLine) - s0;
-        if (b > a) {
-          if (a > 0) pre.appendChild(document.createTextNode(line.slice(0, a)));
-          const m = document.createElement('mark');
-          m.textContent = line.slice(a, b);
-          pre.appendChild(m);
-          if (b < line.length) pre.appendChild(document.createTextNode(line.slice(b)));
-        } else pre.appendChild(document.createTextNode(line));
-        if (i < lines.length - 1) pre.appendChild(document.createTextNode('\n'));
-      });
-    }
+    // mark the passage the catalogue found, wherever it falls on this page
+    const base = reading.page * c.charactersPerPage;
+    lines.forEach((line, i) => {
+      const s0 = base + i * c.charactersPerLine;
+      const a = h ? Math.max(h.start, s0) - s0 : 0, b = h ? Math.min(h.start + h.length, s0 + c.charactersPerLine) - s0 : 0;
+      if (b > a) {
+        if (a > 0) appendText(pre, line.slice(0, a));
+        const m = document.createElement('mark');
+        appendText(m, line.slice(a, b));
+        pre.appendChild(m);
+        if (b < line.length) appendText(pre, line.slice(b));
+      } else appendText(pre, line);
+      if (i < lines.length - 1) pre.appendChild(document.createTextNode('\n'));
+    });
     const folio = document.createElement('span');
     folio.className = 'folio';
     folio.textContent = String(reading.page + 1);
@@ -398,6 +397,38 @@
     $('page-input').value = reading.page + 1;
     $('prev-page').disabled = reading.page === 0;
     $('next-page').disabled = reading.page === P - 1;
+  }
+
+  /** Appends text to an element, setting each control character's picture in a cell of its own. */
+  function appendText(el, text) {
+    if (!lib.controlGlyphs.size) { el.appendChild(document.createTextNode(text)); return; }
+    let run = '';
+    for (const ch of text) {
+      if (!lib.isControlGlyph(ch)) { run += ch; continue; }
+      if (run) { el.appendChild(document.createTextNode(run)); run = ''; }
+      const span = document.createElement('span');
+      span.className = 'ctl';
+      span.textContent = ch;
+      el.appendChild(span);
+    }
+    if (run) el.appendChild(document.createTextNode(run));
+  }
+
+  /**
+   * Control pictures come from whatever font has them, and are often wider than a
+   * typewriter letter. Measure them once, so they can be scaled to fit one column.
+   */
+  function fitControlGlyphs() {
+    if (!lib.controlGlyphs.size) return;
+    try {
+      const ctx = document.createElement('canvas').getContext('2d');
+      ctx.font = `100px ${getComputedStyle($('page')).fontFamily}`;
+      const cell = ctx.measureText('0').width;
+      let widest = 0;
+      for (const g of lib.controlGlyphs) widest = Math.max(widest, ctx.measureText(g).width);
+      const fit = widest > 0 ? Math.min(0.85, (0.95 * cell) / widest) : 0.8;
+      document.documentElement.style.setProperty('--ctl-fit', fit.toFixed(3));
+    } catch (e) { /* keep the default */ }
   }
 
   function turn(delta) { reading.page += delta; renderPage(); }

@@ -216,13 +216,33 @@ test('a non-power-of-two alphabet and a hexagon size that does not divide the nu
 console.log('\nThe catalogue');
 
 test('texts are prepared as the catalogue searches them', () => {
-  const p = lib.prepareText('Ça va, Señor?\nOui: 42! [sic]');
-  assert.strictEqual(p.text, 'CA VA, SENOR? OUI: 42! SIC');
-  assert.deepStrictEqual(p.dropped.sort(), ['[', ']']);
-  assert.strictEqual(p.recased, true);
+  const p = lib.prepareText('Ça va, Señor?\nOui: 42! [sic]§→');
+  assert.strictEqual(p.text, 'Ca va, Senor? Oui: 42! [sic]');
+  assert.deepStrictEqual(p.dropped.sort(), ['§', '→']);
+  assert.strictEqual(p.recased, false);
   const q = lib.prepareText('\u201CQuoted\u201D \u2014 \u2018so\u2019\u2026');
-  assert.strictEqual(q.text, '"QUOTED" - \'SO\'...');
+  assert.strictEqual(q.text, '"Quoted" - \'so\'...');
   assert.strictEqual(q.substituted, true);
+  // a smaller alphabet: letters are read as capitals
+  const caps = new Library({ seed: 'x', alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ,.? ' });
+  const c = caps.prepareText('Ça va?');
+  assert.strictEqual(c.text, 'CA VA?');
+  assert.strictEqual(c.recased, true);
+});
+
+test('control characters are shown as control pictures, and read back from them', () => {
+  assert.strictEqual(lib.N, 128);
+  assert.strictEqual(lib.toText(Uint8Array.from([0, 9, 10, 31, 32, 65, 126, 127])), '␀␉␊␟ A~␡');
+  const p = lib.prepareText('␀A\tB␡');
+  assert.deepStrictEqual([...p.symbols], [0, 65, 32, 66, 127]);
+  assert.strictEqual(lib.isControlGlyph('␊'), true);
+  assert.strictEqual(lib.isControlGlyph('A'), false);
+  // a page that is copied and pasted back is found again, control characters and all
+  const r = lib.findText(lib.prepareText('x').symbols, { fill: 'random' });
+  const page = lib.pageLines(lib.bookAt(r.location), 0).join('');
+  assert.strictEqual(lib.prepareText(page).symbols.length, lib.config.charactersPerPage);
+  assert.strictEqual(Library.indexOf(r.content, lib.prepareText(page).symbols), 0);
+  assert.throws(() => new Library({ alphabet: 'AB\u0000\u2400' }), /control character/);
 });
 
 test('a text is found in a book exactly where it was put', () => {
@@ -281,7 +301,7 @@ test('a whole text is set in pages, with a title page', () => {
   const book = lib.bookAt(lib.findText(part, { fill: 'blank' }).location);
   assert.strictEqual(Library.indexOf(book, part), 0);
   const title = lib.pageLines(book, 0).map((l) => l.trim()).filter(Boolean);
-  assert.deepStrictEqual(title, ['A TEST', 'NOBODY', '2026']);
+  assert.deepStrictEqual(title, ['A test', 'Nobody', '2026']);
   const lines = lib.pageLines(book, 1);
   assert(lines[0].startsWith('   THE LIBRARY'), 'paragraphs are indented');
   assert(lines.every((l) => l.length === c.charactersPerLine));
@@ -301,7 +321,7 @@ test('a text longer than one book is split into parts', () => {
   const t = small.typeset(text, { title: 'Long' });
   assert(t.parts.length > 1, 'expected several parts');
   for (const [k, part] of t.parts.entries()) {
-    assert(small.pageLines(part, 0).join('').includes(`PART ${k + 1} OF ${t.parts.length}`));
+    assert(small.pageLines(part, 0).join('').toUpperCase().includes(`PART ${k + 1} OF ${t.parts.length}`));
     const r = small.findText(part, { fill: 'blank' });
     assert.strictEqual(Library.indexOf(small.bookAt(r.location), part), 0);
   }

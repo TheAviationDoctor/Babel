@@ -104,16 +104,24 @@
     return e;
   };
 
-  /** "the letters, the ten digits, : , ! . ? and space" */
+  /** "the 26 letters, the ten digits, : , ! . ? and space", or the like, for any alphabet. */
   function alphabetWords(lib) {
-    const a = lib.alphabet;
-    const letters = a.filter((c) => /\p{L}/u.test(c)), digits = a.filter((c) => /\p{Nd}/u.test(c));
-    const rest = a.filter((c) => !letters.includes(c) && !digits.includes(c) && c !== ' ');
+    const a = lib.alphabet, shown = lib.glyphs;
+    const controls = shown.filter((g, i) => g !== a[i]);
+    const plain = a.filter((c, i) => shown[i] === c);
+    const letters = plain.filter((c) => /\p{L}/u.test(c)), digits = plain.filter((c) => /\p{Nd}/u.test(c));
+    const upper = letters.filter((c) => /\p{Lu}/u.test(c)), lower = letters.filter((c) => /\p{Ll}/u.test(c));
+    const rest = plain.filter((c) => !letters.includes(c) && !digits.includes(c) && c !== ' ');
     const words = [];
-    if (letters.length) words.push(letters.length === 26 ? 'the 26 letters' : `${letters.length} letters`);
+    if (upper.length === 26 && lower.length === 26 && letters.length === 52) words.push('the 26 letters, in capitals and in small letters');
+    else if (letters.length) words.push(letters.length === 26 ? 'the 26 letters' : `${letters.length} letters`);
     if (digits.length) words.push(digits.length === 10 ? 'the ten digits' : `the digits ${digits.join(' ')}`);
     if (rest.length) words.push(rest.join(' '));
     if (a.includes(' ')) words.push('space');
+    if (controls.length) {
+      const list = controls.length > 3 ? `${controls[0]} ${controls[1]} … ${controls[controls.length - 1]}` : controls.join(' ');
+      words.push(`${controls.length === 1 ? 'one control character' : `${controls.length} control characters`}, which books show as ${list}`);
+    }
     return words.length > 1 ? words.slice(0, -1).join(', ') + ' and ' + words[words.length - 1] : words.join('');
   }
 

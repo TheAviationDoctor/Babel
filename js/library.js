@@ -48,7 +48,7 @@
   const DEFAULT_CONFIG = {
     seed: 'borges',
     book: { pagesPerBook: 512, linesPerPage: 32, charactersPerLine: 64 },
-    alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + '0123456789' + ':,!.?' + ';-()\'"' + ' ',
+    alphabet: Array.from({ length: 128 }, (_, code) => String.fromCharCode(code)).join(''), // ASCII
     hexagon: { wallsWithShelves: 4, shelvesPerWall: 4, booksPerShelf: 32 },
   };
 
@@ -105,6 +105,8 @@
       const dup = alphabet.find((c, i) => alphabet.indexOf(c) !== i);
       throw new Error(`The alphabet lists the character ${JSON.stringify(dup)} more than once.`);
     }
+    const shown = alphabet.map(glyphOf);
+    if (new Set(shown).size !== shown.length) throw new Error('The alphabet lists both a control character and the symbol that shows it in books (such as ␀ for NUL). Keep only one of them.');
     if (alphabet.length < 2) throw new Error('The alphabet needs at least 2 characters.');
     if (alphabet.length > 256) throw new Error('The alphabet may have at most 256 characters.');
 
@@ -129,6 +131,14 @@
   }
 
   /** Typographic characters and the plain ones that stand for them. */
+  /** How a symbol is shown: a control character as its Unicode control picture, anything else as itself. */
+  function glyphOf(c) {
+    const code = c.codePointAt(0);
+    if (code < 0x20) return String.fromCharCode(0x2400 + code);
+    if (code === 0x7f) return '\u2421';
+    return c;
+  }
+
   const TYPOGRAPHY = {
     '\u201C': '"', '\u201D': '"', '\u201E': '"', '\u201F': '"', '\u00AB': '"', '\u00BB': '"', '\u2033': '"',
     '\u2018': "'", '\u2019': "'", '\u201A': "'", '\u201B': "'", '\u2032': "'", '`': "'",
@@ -304,6 +314,13 @@
       this.config = cfg;
       this.alphabet = cfg.alphabet;
       this.N = cfg.alphabet.length;
+      // Control characters (tab, line feed…) have no printed form: they are shown as the
+      // Unicode "control pictures" ␀ ␁ … ␟ and ␡, which are also read back as them.
+      this.glyphs = this.alphabet.map(glyphOf);
+      this.controlGlyphs = new Set(this.glyphs.filter((g, i) => g !== this.alphabet[i]));
+      this.charIndex = new Map();
+      this.alphabet.forEach((c, i) => { this.charIndex.set(c, i); });
+      this.glyphs.forEach((g, i) => { if (!this.charIndex.has(g)) this.charIndex.set(g, i); });
       this.M = cfg.symbolsPerBook;
       this.S = cfg.booksPerHexagon;
       this.seed = cfg.seed;
@@ -556,7 +573,8 @@
     /** The letters on a book's spine: they do not indicate what the pages say. */
     spineTitle(fingerprint, slot) {
       const rng = this.bookRng(fingerprint, slot);
-      let letters = this.alphabet.filter((c) => /\p{L}/u.test(c));
+      let letters = this.alphabet.filter((c) => /\p{Lu}/u.test(c)); // capitals, as on old spines
+      if (letters.length === 0) letters = this.alphabet.filter((c) => /\p{L}/u.test(c));
       if (letters.length === 0) letters = this.alphabet.filter((c) => c.trim() !== '');
       if (letters.length === 0) letters = this.alphabet;
       const words = 1 + Math.floor(unit(rng) * 3);
@@ -576,10 +594,11 @@
     /**
      * Turns any text into symbols of the alphabet, as a catalogue would: accents are
      * removed, letters change case if only the other case is in the alphabet, line breaks
-     * and tabs become spaces, and anything else is left out (and reported).
+     * and tabs become spaces, control pictures (␀ ␉ …) stand for their control characters,
+     * and anything else is left out (and reported).
      */
     prepareText(raw) {
-      const map = new Map(this.alphabet.map((c, i) => [c, i]));
+      const map = this.charIndex;
       const fits = (str) => Array.from(str).every((c) => map.has(c));
       // typographic characters become their plain equivalents, if the alphabet has those
       let text = '', substituted = false;
@@ -603,6 +622,9 @@
       const symbols = Uint8Array.from(out);
       return { symbols, text: this.toText(symbols), dropped: [...dropped], recased, substituted };
     }
+
+    /** Whether a character stands for a control character of the alphabet when shown. */
+    isControlGlyph(ch) { return this.controlGlyphs.has(ch); }
 
     /**
      * Sets a whole text in the Library's page format, as a printer would: a title page,
@@ -683,7 +705,7 @@
         for (const t of titleLines) page.push(centre(t));
         if (byLines.length) { page.push(pad('')); for (const t of byLines) page.push(centre(t)); }
         if (meta.year) page.push(centre(prep(String(meta.year))));
-        if (partCount > 1) { page.push(pad('')); page.push(centre(prep(`PART ${k + 1} OF ${partCount}`))); }
+        if (partCount > 1) { page.push(pad('')); page.push(centre(prep(`Part ${k + 1} of ${partCount}`))); }
         while (page.length < L) page.push(pad(''));
         const body = lines.slice(k * linesPerPart, (k + 1) * linesPerPart);
         const str = page.slice(0, L).join('') + body.join('');
@@ -758,7 +780,7 @@
 
     /** Reads an address written in the alphabet (most significant symbol first) into digits. */
     parseAddress(text, length, what) {
-      const map = new Map(this.alphabet.map((c, i) => [c, i]));
+      const map = this.charIndex;
       const chars = Array.from(text);
       if (chars.length !== length) {
         throw new Error(`A ${what} address has ${length.toLocaleString('en')} symbols; this one has ${chars.length.toLocaleString('en')}. A space at its start or end may have been lost.`);
@@ -801,9 +823,9 @@
 
     /* ---------------- Text ---------------- */
 
-    /** Converts symbol values to a string. */
+    /** Converts symbol values to a string, as shown (control characters as control pictures). */
     toText(symbols, start, end) {
-      const a = this.alphabet;
+      const a = this.glyphs;
       let s = '';
       for (let i = start || 0, e = end === undefined ? symbols.length : end; i < e; i++) s += a[symbols[i]];
       return s;
@@ -823,7 +845,7 @@
 
     /** Writes an address (digit array) in the Library's own alphabet, most significant symbol first. */
     addressText(digits, maxLength) {
-      const a = this.alphabet;
+      const a = this.glyphs;
       const n = digits.length;
       if (!maxLength || n <= maxLength) {
         let s = '';
@@ -840,7 +862,7 @@
 
     /** Converts a text to symbol values; characters not in the alphabet are reported. */
     encode(text) {
-      const map = new Map(this.alphabet.map((c, i) => [c, i]));
+      const map = this.charIndex;
       const chars = Array.from(text);
       const out = new Uint8Array(chars.length);
       const unknown = new Set();
