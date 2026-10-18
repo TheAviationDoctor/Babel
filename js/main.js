@@ -25,12 +25,8 @@
   let reading = null;
   let lastCell = '';
 
-  function showError(message, opts) {
-    opts = opts || {};
-    $('error-title').textContent = opts.title || 'The Library could not be built';
+  function showError(message) {
     $('error-message').textContent = message;
-    $('error-hint').innerHTML = opts.hint || 'Correct <code>config.yaml</code>, save it, and reload this page.';
-    $('error-actions').hidden = !opts.offerDefaults;
     $('error').hidden = false;
     $('title').hidden = true;
   }
@@ -50,50 +46,14 @@
     return new BabelCore.Library(Object.assign({}, raw, { seed }));
   }
 
-  /** Fetches and parses config.yaml. Throws an Error whose `unreadable` flag says the file could not be fetched. */
-  async function readConfig() {
-    let text;
-    try {
-      const res = await fetch('config.yaml', { cache: 'no-store' });
-      if (!res.ok) throw new Error(`the server answered ${res.status}`);
-      text = await res.text();
-    } catch (e) {
-      const err = new Error(`config.yaml could not be loaded (${e.message}).`);
-      err.unreadable = true;
-      throw err;
-    }
-    return BabelCore.configFromYaml(text, window.jsyaml);
-  }
-
-  async function start() {
-    $('use-defaults').addEventListener('click', () => {
-      $('error').hidden = true;
-      $('title').hidden = false;
-      boot(BabelCore.DEFAULT_CONFIG);
-    });
-    let cfg;
-    try {
-      cfg = await readConfig();
-    } catch (e) {
-      if (e.unreadable && location.protocol === 'file:') {
-        return showError('This page was opened straight from the disk, and browsers do not let such a page read other files, so it cannot read config.yaml.', {
-          title: 'Open the Library with Play.command',
-          hint: 'Double-click <b>Play.command</b> in the Babel folder instead. It opens the Library in your browser through a small local web server, and config.yaml is then read as it should be. Or play now with the default settings.',
-          offerDefaults: true,
-        });
-      }
-      return showError(e.message, { offerDefaults: true });
-    }
-    boot(cfg);
-  }
-
-  function boot(config) {
-    raw = config;
+  function boot() {
+    raw = window.BABEL_CONFIG;
+    if (!raw) return showError('The configuration file config.js was not found, or it does not define window.BABEL_CONFIG.');
     try {
       lib = new BabelCore.Library(raw);
       initialSeed = lib.seed;
     } catch (e) {
-      return showError(e.message, { offerDefaults: config !== BabelCore.DEFAULT_CONFIG });
+      return showError(e.message);
     }
 
     try {
@@ -549,7 +509,7 @@
     get renderer() { return renderer; }, get mode() { return mode; },
     openBook, startWalking, pause, setMode,
   };
-  Babel.start = start;
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
-  else start();
+  Babel.boot = boot;
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
 })();

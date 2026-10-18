@@ -61,23 +61,14 @@ function exhaustive(raw) {
 
 console.log('Reading the configuration');
 
-test('settings can be written with spaces, underscores or capitals', () => {
+test('misspelt settings are reported, and names ignore case and punctuation', () => {
   const { normalizeConfig } = require('../js/library.js');
-  const a = normalizeConfig({ book: { 'pages per book': 3, lines_per_page: 2, CharactersPerLine: 4 }, hexagon: { 'Books per shelf': 5 } });
+  const a = normalizeConfig({ book: { pagesPerBook: 3, lines_per_page: 2, CharactersPerLine: 4 }, hexagon: { booksPerShelf: 5 } });
   assert.strictEqual(a.symbolsPerBook, 24);
   assert.strictEqual(a.booksPerShelf, 5);
   assert.throws(() => normalizeConfig({ book: { pages: 3 } }), /is not a setting/);
-  assert.throws(() => normalizeConfig({ hexagon: { 'walls with shelves': 5 } }), /at most 4/);
+  assert.throws(() => normalizeConfig({ hexagon: { wallsWithShelves: 5 } }), /at most 4/);
   assert.throws(() => normalizeConfig({ alphabet: 'ABA' }), /more than once/);
-});
-
-test('config.yaml is valid and describes the configured Library', () => {
-  const fs = require('fs'), path = require('path');
-  const yaml = require('../lib/js-yaml.js');
-  const { configFromYaml, normalizeConfig } = require('../js/library.js');
-  const c = normalizeConfig(configFromYaml(fs.readFileSync(path.join(__dirname, '..', 'config.yaml'), 'utf8'), yaml));
-  console.log(`       seed "${c.seed}", ${c.pagesPerBook} pages of ${c.linesPerPage} lines of ${c.charactersPerLine} characters, ${c.alphabet.length} symbols, ${c.booksPerHexagon} books per hexagon`);
-  assert.throws(() => configFromYaml('seed: [unclosed', yaml), /could not be read on line \d+/);
 });
 
 console.log('\nSmall libraries, checked exhaustively');
@@ -127,13 +118,13 @@ test('floor arithmetic wraps around the number of floors', () => {
   assert.strictEqual(key(lib.offsetFloor(zero, -floorsCount * 2 - 1)), key(top));
 });
 
-console.log('\nThe Library described by config.yaml');
+console.log('\nThe Library described by config.js');
 
 // Read the real configuration file, as the browser does.
-const fs = require('fs'), path = require('path');
-const yaml = require('../lib/js-yaml.js');
-const { configFromYaml } = require('../js/library.js');
-const lib = new Library(configFromYaml(fs.readFileSync(path.join(__dirname, '..', 'config.yaml'), 'utf8'), yaml));
+const fs = require('fs'), path = require('path'), vm = require('vm');
+const sandbox = { window: {} };
+vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'config.js'), 'utf8'), sandbox);
+const lib = new Library(sandbox.window.BABEL_CONFIG);
 console.log(`       ${lib.M.toLocaleString('en')} symbols per book; about 10^${util.log10Pretty(lib.stats.log10Books)} books;`);
 console.log(`       gallery addresses ${lib.galleryDigits.toLocaleString('en')} symbols, floor addresses ${lib.floorDigits.toLocaleString('en')} symbols`);
 

@@ -53,13 +53,13 @@
   };
 
   /*
-   * Setting names are matched loosely, so that a configuration file can say
-   * "pages per book", "pages_per_book" or "pagesPerBook" alike.
+   * The settings config.js may contain. A misspelt name is reported rather than
+   * silently ignored. Names are matched without regard to case or punctuation.
    */
   const SETTINGS = {
     '': { seed: 'seed', book: 'book', alphabet: 'alphabet', hexagon: 'hexagon' },
-    book: { pagesPerBook: 'pages per book', linesPerPage: 'lines per page', charactersPerLine: 'characters per line' },
-    hexagon: { wallsWithShelves: 'walls with shelves', shelvesPerWall: 'shelves per wall', booksPerShelf: 'books per shelf' },
+    book: { pagesPerBook: 'pagesPerBook', linesPerPage: 'linesPerPage', charactersPerLine: 'charactersPerLine' },
+    hexagon: { wallsWithShelves: 'wallsWithShelves', shelvesPerWall: 'shelvesPerWall', booksPerShelf: 'booksPerShelf' },
   };
   const looseKey = (k) => String(k).toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -68,7 +68,7 @@
     const names = SETTINGS[section];
     const where = section ? `under "${section}"` : 'at the top of the configuration';
     if (obj === undefined || obj === null) return {};
-    if (typeof obj !== 'object' || Array.isArray(obj)) throw new Error(`"${section}" should contain settings, one per line, indented beneath it.`);
+    if (typeof obj !== 'object' || Array.isArray(obj)) throw new Error(`"${section}" should be a group of settings in braces, like { ${Object.keys(names).map((n) => n + ': …').join(', ')} }.`);
     const byLoose = {};
     for (const canonical of Object.keys(names)) byLoose[looseKey(canonical)] = canonical;
     const out = {};
@@ -126,24 +126,6 @@
     cfg.booksPerHexagon = cfg.wallsWithShelves * cfg.booksPerWall;
     if (cfg.booksPerHexagon > 65536) throw new Error('A hexagon may hold at most 65,536 books.');
     return cfg;
-  }
-
-  /**
-   * Reads the text of config.yaml with a YAML parser (js-yaml) and returns the raw
-   * configuration object. Syntax errors are reported with their line number.
-   */
-  function configFromYaml(text, yaml) {
-    let data;
-    try {
-      data = yaml.load(text);
-    } catch (e) {
-      const line = e && e.mark ? ` on line ${e.mark.line + 1}` : '';
-      const reason = e && e.reason ? e.reason : String(e && e.message);
-      throw new Error(`config.yaml could not be read${line}: ${reason}.`);
-    }
-    if (data === undefined || data === null) return {};
-    if (typeof data !== 'object' || Array.isArray(data)) throw new Error('config.yaml should contain settings such as "seed: borges", one per line.');
-    return data;
   }
 
   /* ------------------------------------------------------------------ *
@@ -651,7 +633,6 @@
   return {
     Library,
     normalizeConfig,
-    configFromYaml,
     DEFAULT_CONFIG,
     FEISTEL_ROUNDS,
     util: { hashString, hashBytes, sfc32, unit, fmix32, mulSmallAdd, divSmall, addSmall, compareDigits, subDigits, addDigits, significantLength, isZero, log10Pretty },

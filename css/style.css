@@ -241,8 +241,6 @@ input[type="range"] { accent-color: var(--lamp); width: 100%; }
 .error-block { max-width: 36rem; display: grid; gap: 1rem; margin-left: clamp(0px, 6vw, 7rem); }
 .error-block h2 { font-size: var(--step-2); }
 #error-message { font-family: var(--type); line-height: 1.5; color: var(--lamp); }
-.error-block .hint { line-height: 1.55; color: var(--vellum); max-width: 34em; }
-.error-block code { font-family: var(--type); font-size: 0.95em; }
 
 @media (max-width: 640px) {
   #title { align-items: flex-end; background: linear-gradient(0deg, rgba(13, 10, 7, 0.96) 0%, rgba(13, 10, 7, 0.75) 60%, rgba(13, 10, 7, 0.35) 100%); }
