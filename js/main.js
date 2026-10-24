@@ -15,10 +15,18 @@
   let reading = null;
   let lastCell = '';
 
-  function showError(message) {
+  function showError(message, hint) {
+    Babel.failed = true;
     $('error-message').textContent = message;
+    if (hint) $('error-hint').textContent = hint;
     $('error').hidden = false;
   }
+
+  // Anything that goes wrong while the Library is being built is shown, not left as a black screen.
+  const RELOAD = 'Reload the page while holding Shift, so that the browser fetches every file again. If that does not help, the browser may be too old for the Library.';
+  window.addEventListener('error', (e) => {
+    if (!Babel.started && !Babel.failed) showError(`Something went wrong while the Library was being built: ${e.message}`, RELOAD);
+  });
 
   let toastTimer = 0;
   function toast(text, ms) {
@@ -52,7 +60,7 @@
     const soot = new THREE.Color(0x0d0a07);
     scene.background = soot;
     scene.fog = new THREE.FogExp2(soot, 0.082);
-    camera = new THREE.PerspectiveCamera(lib.config.fieldOfView, window.innerWidth / window.innerHeight, 0.05, 90);
+    camera = new THREE.PerspectiveCamera(lib.config.fieldOfView || 72, window.innerWidth / window.innerHeight, 0.05, 90);
 
     const textures = Babel.Textures.create();
     const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
@@ -60,7 +68,7 @@
     assets = Babel.Architecture.createAssets(lib.config, textures);
     world = new Babel.World(scene, assets, lib);
     player = new Babel.Player(assets.dims, camera, renderer.domElement);
-    player.sensitivity = lib.config.lookSensitivity;
+    player.sensitivity = lib.config.lookSensitivity || 1;
     player.onTap = () => { if (mode === 'walking') interact(); };
     player.doorOpen = (off) => world.isDoorOpen(player.cg + off, player.cf);
 
@@ -107,6 +115,7 @@
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitGlyphs).catch(() => {});
     window.addEventListener('resize', onResize);
     requestAnimationFrame(frame);
+    Babel.started = true;
     void d;
   }
 

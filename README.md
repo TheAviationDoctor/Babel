@@ -6,7 +6,7 @@ Every text ever written, including your own life story, as well as every text *n
 
 ## Getting started
 
-Everything is pure HTML/JS/CSS, so nothing needs installing. Just visit the Library online at https://babel.pellegr.in/, or download the repo and open `index.html` locally in a recent browser (Chrome, Edge, Firefox, or Safari). It even runs offline (except for a couple of Google Fonts which will then revert to your browser's defaults). There is no title screen: you wake in a hexagon of the Library. Click once to look around with the mouse.
+Everything is pure HTML/JS/CSS, so nothing needs installing. Just visit the Library online at https://babel.pellegr.in/, or download the repo and open `index.html` locally in a recent browser (Chrome, Edge, Firefox, or Safari). It even runs offline (except for a couple of Google Fonts which will then revert to your browser's defaults). There is no title screen: you wake in a hexagon of the Library. Click once to look around with the mouse. If, just after an update, the page stays black or says that the Library did not start, reload it while holding Shift, so that the browser fetches every file again.
 
 | | |
 |---|---|
@@ -154,6 +154,8 @@ To add a book, save it as a plain-text file (`.txt`, preferably UTF-8) in the `b
 A page opened straight from your computer is not allowed to look into folders by itself, so the first time, press **Open the books folder** in the catalogue and choose the `books` folder. Browsers word this as "uploading" the files, but they are only read by the page and never leave your computer. The catalogue then remembers the books in this browser, even after the page is closed, until you press **Forget these books**. After adding or changing a book, open the folder again. On a phone or tablet, use **Choose book files** instead.
 
 ## Files
+
+In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-24.2`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
 
 | Path | Contents |
 |---|---|
