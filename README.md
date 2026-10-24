@@ -13,12 +13,13 @@ Everything is pure HTML/JS/CSS, so nothing needs installing. Just visit the Libr
 | Look | mouse (click once to capture it) |
 | Walk | `W` `A` `S` `D` or the arrow keys |
 | Hurry | hold `Shift` |
-| Interact with objects (books, catalogue, doors, lamps) | `E` or click |
+| Interact with objects (books, catalogue, doors, lamps, beds) | `E` or click |
 | Turn pages | `←` `→`, `Page Up` `Page Down`, `Home` `End` |
 | Put the book back | `Esc` or `E` |
 | Pause | `Esc` or `P` |
+| Wake from a dream | click or `Esc` |
 
-On a phone or tablet, drag on the right of the screen to look, hold and slide on the left to walk, and tap to interact with objects.
+On a phone or tablet, drag on the right of the screen to look, hold and slide on the left to walk, and tap to interact with objects. Tap again to wake from a dream.
 
 ## Is the Library infinite?
 
@@ -71,12 +72,14 @@ Everything about the Library's size lives in `config.js`, which is read once whe
 | `hexagon.booksPerShelf` | 32 | |
 | `view.lookSensitivity` | 1 | How fast the view turns with the mouse, from 0.1 to 5. |
 | `view.fieldOfView` | 72 | How wide the view is, in degrees, from 30 to 120. |
+| `dreams.quoteDuration` | 10 | How long each sentence of a dream stays, in seconds, once it has faded in, from 1 to 600. See [Dreams](#dreams). |
+| `dreams.quoteInterval` | 5 | How long after a sentence has faded out the next one begins to fade in, in seconds, from 0 to 600. |
 
 A book may hold no more than `2^24 = 16,777,216` characters and a hexagon no more `2^16 = 65,536` books. The rooms are built to fit: the number of books per shelf sets the width of each hexagon, and the number of shelves sets the height of its ceiling. If a value is invalid or a setting's name is misspelt, the page says which one and why.
 
 The default alphabet is meant to hold classic literature, so that the catalogue can find the classics on the shelves (see [Your books](#your-books)) while staying a power of two like every other figure. The Library has no lower case, as in Borges's story, which leaves room for every mark that literature uses. In 18 public-domain classics, from Austen to Whitman and the King James Bible (11.7 million characters), the 19 commonest marks make up 99.9% of the punctuation. The other eight slots hold the long dash, written `--` in plain-text editions, and signs found in older books: the pound sterling, the degree, the dagger, the section mark, the number sign, plus and equals.
 
-Any change to these values, the seed included, gives a different Library: an address copied before then no longer leads to the same books.
+Any change to these values, the seed included (but not `website`, `view` or `dreams`), gives a different Library: an address copied before then no longer leads to the same books.
 
 Borges's own figures would be 410 pages, 40 lines, 80 characters, a 25-symbol alphabet, and 4 walls of 5 shelves of 32 books. They work too in case you'd like to try them.
 
@@ -104,7 +107,7 @@ The story leaves room for interpretation. This version reads it as follows.
 - The hexagons are identical. Four sides carry shelves floor to ceiling, and the ceiling is a little above a librarian's head.
 - The two free sides are opposite each other, so every floor is a single straight gallery of hexagons running east and west.
 - Each free side opens onto a narrow vestibule leading to the next hexagon. It has a door on each side, a mirror, and a spiral stair that climbs and descends through every floor.
-- Borges gives the vestibule two very small closets, one to sleep in standing up and one for bodily needs. Here the south door opens into a single cell of 2.2 × 2.1 m that serves both purposes. It holds a single bed, a small table fixed to the wall with a night lamp, a toilet, and a sink with a mirror. The lamp can be turned off. The cell is then dark, apart from what light comes in through the open door, and the lampshade keeps only a faint glow. The north door stays shut. The cell sits in the wedge of space between two neighbouring hexagons. That wedge is about 4 m wide beside the vestibule and widens further away, so the cell fits whatever the size of the hexagons.
+- Borges gives the vestibule two very small closets, one to sleep in standing up and one for bodily needs. Here the south door opens into a single cell of 2.2 × 2.1 m that serves both purposes. It holds a single bed, a small table fixed to the wall with a night lamp, a toilet, and a sink with a mirror. The bed can be slept in (see [Dreams](#dreams)), and the lamp can be turned off. The cell is then dark, apart from what light comes in through the open door, and the lampshade keeps only a faint glow. The north door stays shut. The cell sits in the wedge of space between two neighbouring hexagons. That wedge is about 4 m wide beside the vestibule and widens further away, so the cell fits whatever the size of the hexagons.
 - Opposite the cell, the north door now gives onto a shallow niche holding a touchscreen: the catalogue (see below). It is the one thing in the Library that Borges did not put there, and it glows with a cooler light than the lamps.
 - Over the doorway at each end of the vestibule, a wooden lintel bears a small sign in gilt capitals: EAST over the doorway to the next hexagon east, WEST over the one to the west. Walking along a vestibule, one always faces the name of the way one is heading.
 - In the middle of each hexagon an air shaft, with a very low railing, shows the floors above and below.
@@ -153,22 +156,32 @@ To add a book, save it as a plain-text file (`.txt`, preferably UTF-8) in the `b
 
 A page opened straight from your computer is not allowed to look into folders by itself, so the first time, press **Open the books folder** in the catalogue and choose the `books` folder. Browsers word this as "uploading" the files, but they are only read by the page and never leave your computer. The catalogue then remembers the books in this browser, even after the page is closed, until you press **Forget these books**. After adding or changing a book, open the folder again. On a phone or tablet, use **Choose book files** instead.
 
+## Dreams
+
+Lie down on the bed of a cell (look at it and press `E`, click or tap) to sleep. The Library fades to black, and a dream comes out of the black: shapes like smoke seen through a kaleidoscope, now and then with the ghost of the Library's hexagons, of rings or of a spiral, in muted colours. Sentences fade in over it, one after another. Each one stays for `dreams.quoteDuration` seconds, then fades out, and the next one begins to fade in `dreams.quoteInterval` seconds later, while the dream melts into its next scene. Click, tap or press `Esc` to wake.
+
+Everything in a dream comes from the address of the hexagon you sleep in (its gallery and floor numbers). The same hexagon always dreams the same dream, in the same order, and every other hexagon dreams another.
+
+The sentences are grammatical but not necessarily sensible, like surreal poetry: *Every hill inhales a chimera; every chimera keeps a hill.* A small English grammar (verbs agreeing with their subjects, *a* and *an*, plurals, tenses, relative clauses) builds them from some 450 single words drawn from the lexical fields of Algernon Blackwood, Jorge Luis Borges, Italo Calvino, Ted Chiang, Julio Cortázar, Brian Evenson, Thomas Ligotti, H. P. Lovecraft, Arthur Machen, Guy de Maupassant, China Miéville, Edgar Allan Poe, Clark Ashton Smith and Jeff VanderMeer: labyrinths and mirrors, spores and lighthouses, puppets, crypts, willows, clockwork and salt. No phrase, name or invented place of theirs is used.
+
 ## Files
 
-In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-24.2`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
+In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-24.3`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
 
 | Path | Contents |
 |---|---|
 | `index.html` | The page |
 | `config.js` | The configuration |
-| `css/style.css` | Title screen, reading view and menus |
+| `css/style.css` | Reading view, catalogue, menus and dreams |
 | `js/library.js` | The mathematics: addresses, the bijection, text search, setting books in pages. No graphics. |
 | `js/architecture.js` | Dimensions, geometry and lighting of hexagons, vestibules, stairs and cells |
 | `js/world.js` | Streams the hexagons around the reader and dresses their books |
-| `js/player.js` | Walking, the spiral stair, and picking a book, door or catalogue by gaze |
+| `js/player.js` | Walking, the spiral stair, and picking a book, door, lamp, bed or catalogue by gaze |
 | `js/terminal.js` | The catalogue's screen: finding texts and books, and going to hexagons |
 | `js/textures.js` | Wood, plaster, stone, floor tiles and leather spines, painted at start-up |
-| `js/main.js` | Start-up, reading, pause menu |
+| `js/quotes.js` | The sentences of dreams: a small English grammar and its vocabulary |
+| `js/dream.js` | The moving picture of dreams, drawn by one shader |
+| `js/main.js` | Start-up, reading, pause menu, sleep |
 | `lib/` | three.js r147 and its `Reflector` (MIT licence, see `lib/three.LICENSE`) |
 | `tests/library.test.js` | Tests of the mathematics |
 | `obsidian/publish.js` | For an Obsidian Publish site: a link under every note to its book in the Library |
@@ -176,7 +189,7 @@ In `index.html`, every file name is followed by `?v=` and a version, such as `js
 
 ## Tests
 
-With Node.js installed, run `node tests/library.test.js`. The tests enumerate every shelf of three small libraries and check that each holds a different book and that the inverse map finds every book again. They then check round trips, text search and timing on the Library described by `config.js`, and on Borges's own figures, and finally the catalogue: preparing texts, setting whole books in pages and splitting long ones into parts, leaving out Project Gutenberg's licence, finding them in books, distances that wrap around the Library, reading back copied addresses, and making and reading links to books.
+With Node.js installed, run `node tests/library.test.js`. The tests enumerate every shelf of three small libraries and check that each holds a different book and that the inverse map finds every book again. They then check round trips, text search and timing on the Library described by `config.js`, and on Borges's own figures, and finally the catalogue: preparing texts, setting whole books in pages and splitting long ones into parts, leaving out Project Gutenberg's licence, finding them in books, distances that wrap around the Library, reading back copied addresses, and making and reading links to books. They also check the sentences of dreams: grammatical, varied, and always the same for the same hexagon.
 
 ## Credits
 

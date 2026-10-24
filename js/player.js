@@ -204,13 +204,26 @@
      * be seen from inside its cell, or from outside through the doorway while the door is open.
      */
     pickLamp(openness) {
+      const L = this.d.nightLamp;
+      return this._pickInCell([L[0] - 0.14, L[1], L[2] - 0.14, L[0] + 0.14, L[1] + 0.38, L[2] + 0.14], openness);
+    }
+
+    /** The bed of the nearest cell, if the reader is looking at it within reach: { cellOffset, t }. */
+    pickBed(openness) {
+      const B = this.d.bed;
+      return this._pickInCell([B.x0, 0, B.z0, B.x1, 0.62, B.z1], openness);
+    }
+
+    /**
+     * Something in a cell (a box [x0, y0, z0, x1, y1, z1] in the coordinates of the cell
+     * beside gallery 0), seen from inside the cell or through its open door.
+     */
+    _pickInCell(box, openness) {
       const d = this.d;
       if (Math.abs(this.y) > 0.05) return null;
       this.camera.updateMatrixWorld();
       const o = this.camera.position, dir = this._ray.d;
       this.camera.getWorldDirection(dir);
-      const L = d.nightLamp;
-      const box = [L[0] - 0.14, L[1], L[2] - 0.14, L[0] + 0.14, L[1] + 0.38, L[2] + 0.14];
       let best = null;
       for (const off of [0, -1]) {
         const ox = o.x - off * d.Dx;

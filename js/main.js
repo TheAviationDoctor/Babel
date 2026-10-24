@@ -1,6 +1,6 @@
 /*
- * Start-up and the screens around the walk: reading, pause. There is no title screen:
- * the reader wakes in the Library straight away (or before the book a link leads to).
+ * Start-up and the screens around the walk: reading, pause, sleep. There is no title
+ * screen: the reader wakes in the Library straight away (or before the book a link leads to).
  */
 (function () {
   'use strict';
@@ -223,9 +223,9 @@
   const fmt = (n) => n.toLocaleString('en');
 
   function controlsHTML() {
-    if (isTouch) return 'Drag on the right of the screen to look. Hold and slide on the left to walk. Tap a book to read it, a door to open it, or the catalogue to use it.';
+    if (isTouch) return 'Drag on the right of the screen to look. Hold and slide on the left to walk. Tap a book to read it, a door to open it, the catalogue to use it, or a bed to sleep.';
     return 'Look with the mouse. Walk with <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or the arrow keys, and hold <kbd>Shift</kbd> to hurry. ' +
-      'Press <kbd>E</kbd> to take down the book you are looking at, open a door or use the catalogue, and <kbd>Esc</kbd> to pause.';
+      'Press <kbd>E</kbd> to take down the book you are looking at, open a door, use the catalogue or lie down on a bed, and <kbd>Esc</kbd> to pause.';
   }
 
 
@@ -248,13 +248,15 @@
   }
 
   function setMode(next) {
+    if (sleep && next !== 'sleeping' && sleep.phase !== 'waking') endSleep();
     mode = next;
     $('hud').hidden = next !== 'walking';
     $('reader').hidden = next !== 'reading';
     $('pause').hidden = next !== 'paused';
     $('terminal').hidden = next !== 'terminal';
+    $('sleep').hidden = next !== 'sleeping';
     player.enabled = next === 'walking';
-    if ((next === 'terminal' || next === 'reading') && document.pointerLockElement) document.exitPointerLock();
+    if ((next === 'terminal' || next === 'reading' || next === 'sleeping') && document.pointerLockElement) document.exitPointerLock();
     if (next !== 'walking') { world.clearHover(); gaze = null; gazeKey = ''; $('gaze').hidden = true; }
     if (next === 'paused') renderHere();
     updateMenuButton();
@@ -296,6 +298,7 @@
       gazeKey = '';
       return;
     }
+    if (gaze.kind === 'bed') { fallAsleep(player.cg + gaze.cellOffset, player.cf); return; }
     openBook(gaze);
   }
 
@@ -429,6 +432,149 @@
     else startWalking();
   }
 
+  /* ---------------- sleep ---------------- */
+
+  // How sleep unfolds, in seconds: the Library fades to black, the dream comes out of the
+  // black, and sentences come and go over it; on waking, the dream fades to black and the
+  // Library comes back. How long each sentence stays, and the pause before the next, are
+  // set in config.js.
+  const SLEEP = { fall: 1.6, reveal: 3, firstWords: 1, fade: 2, wakeOut: 0.9, wakeIn: 1.4, deaf: 0.5 };
+  let dream = null; // the dream's shader, made the first time the reader sleeps
+  let sleep = null; // the state of the sleep under way, if any
+
+  /** Four unsigned 32-bit integers from a hexagon's address (its gallery and floor numbers). */
+  function hexagonSeed(dg, df) {
+    const hash = BabelCore.util.hashBytes;
+    const g = world.gallery(dg).digits, f = world.floor(df).digits;
+    const a = hash(g, 0x6472656d, 0x6865780a); // the address alone, whatever the Library's seed
+    const b = hash(f, a[0], a[1]);
+    const c = hash(g, b[0] ^ 0x51ee9, b[1]);
+    return [b[0], b[1], c[0], c[1]];
+  }
+
+  /** Lies down on the bed of the cell beside gallery dg of floor df. */
+  function fallAsleep(dg, df) {
+    if (sleep || mode !== 'walking') return;
+    if (!dream) {
+      try { dream = new Babel.Dream(); } catch (e) { toast('This browser cannot dream.'); return; }
+    }
+    const now = performance.now() / 1000;
+    sleep = {
+      phase: 'falling', start: now, seed: hexagonSeed(dg, df), quote: -1,
+      duration: lib.config.quoteDuration || 10, interval: lib.config.quoteInterval === undefined ? 5 : lib.config.quoteInterval,
+      pixelRatio: renderer.getPixelRatio(), dreaming: false,
+    };
+    dream.begin(sleep.seed);
+    $('dream-quote').textContent = '';
+    $('dream-quote').style.opacity = 0;
+    $('sleep-hint').textContent = isTouch ? 'Tap to wake' : 'Click or press Esc to wake';
+    $('sleep-hint').style.opacity = 0;
+    $('sleep-black').style.opacity = 0;
+    $('sleep-black').hidden = false;
+    setMode('sleeping');
+  }
+
+  /** Leaves the dream. With `look`, takes the mouse back to look around once awake. */
+  function wakeUp(look) {
+    if (!sleep || sleep.phase === 'waking') return;
+    const now = performance.now() / 1000;
+    if (now - sleep.start < SLEEP.deaf) return; // the click or tap that lay down, not one to wake
+    sleep.phase = 'waking';
+    sleep.wake = now;
+    sleep.fromDream = sleep.dreaming;
+    sleep.black = Number($('sleep-black').style.opacity) || 0;
+    if (look) lockPointer(); // asked for now, while the click still counts
+  }
+
+  const clamp01 = (x) => Math.max(0, Math.min(1, x));
+  const ease = (x) => { x = clamp01(x); return x * x * (3 - 2 * x); };
+
+  /**
+   * Moves sleep on to time `now` (seconds): the black, the sentence and the hint, and which
+   * scene of the dream shows. Returns what to draw: null for the Library, or the dream's
+   * time, its scene and how far that scene has melted into the next.
+   */
+  function updateSleep(now) {
+    const S = SLEEP, z = sleep;
+    const dreamStart = z.start + S.fall;
+    const wordsStart = dreamStart + S.reveal + S.firstWords;
+    const hold = z.duration, gap = z.interval;
+    const period = 2 * S.fade + hold + gap;
+    const t = now - dreamStart;
+    let black;
+
+    if (z.phase === 'falling') {
+      black = ease((now - z.start) / S.fall);
+      if (t >= 0) z.phase = 'dreaming';
+    }
+    if (z.phase === 'dreaming') {
+      black = 1 - ease(t / S.reveal);
+    } else if (z.phase === 'waking') {
+      const since = now - z.wake;
+      if (z.fromDream && since < S.wakeOut) {
+        // the black comes back over the dream…
+        black = z.black + (1 - z.black) * ease(since / S.wakeOut);
+      } else {
+        // …and lifts from the Library (or, woken before the dream came, lifts from where it was)
+        if (mode === 'sleeping') leaveDream();
+        const lift = z.fromDream ? (since - S.wakeOut) / S.wakeIn : since / Math.max(0.05, S.wakeIn * z.black);
+        black = (z.fromDream ? 1 : z.black) * (1 - ease(lift));
+        if (lift >= 1) {
+          $('sleep-black').hidden = true;
+          sleep = null;
+          return null;
+        }
+      }
+    }
+    if (z.phase === 'dreaming' && !z.dreaming) {
+      z.dreaming = true;
+      // the dream is soft: one pixel of the screen per pixel drawn is plenty
+      if (z.pixelRatio > 1) { renderer.setPixelRatio(1); onResize(); }
+    }
+
+    let words = 0, hint = 0, picture = null;
+    if (z.dreaming) {
+      // sentence k fades in at wordsStart + k × period, stays, and fades out
+      const w = now - wordsStart;
+      if (w >= 0) {
+        const k = Math.floor(w / period), u = w - k * period;
+        if (k !== z.quote) { z.quote = k; $('dream-quote').textContent = BabelQuotes.quote(z.seed, k); }
+        words = u < S.fade ? ease(u / S.fade) : u < S.fade + hold ? 1 : ease(1 - (u - S.fade - hold) / S.fade);
+      }
+      // scene n melts into scene n + 1 while one sentence fades out and the next fades in
+      const melt = 2 * S.fade + gap, m = w - (S.fade + hold);
+      let n = 0, mix = 0;
+      if (m >= 0) {
+        const k = Math.floor(m / period), v = m - k * period;
+        if (v < melt) { n = k; mix = v / melt; } else n = k + 1;
+      }
+      picture = { t, n, mix };
+      // how to wake, said once, softly, until the first sentence has come
+      hint = 0.5 * ease((t - 1) / 1.5) * ease(1 - (now - (wordsStart + S.fade + 3)) / 1.5);
+    }
+    $('sleep-black').style.opacity = black.toFixed(3);
+    $('dream-quote').style.opacity = words.toFixed(3);
+    $('sleep-hint').style.opacity = hint.toFixed(3);
+    return picture;
+  }
+
+  /** Back from the dream to the Library (still under the black, which then lifts). */
+  function leaveDream() {
+    const z = sleep;
+    if (z.dreaming) {
+      z.dreaming = false;
+      if (renderer.getPixelRatio() !== z.pixelRatio) { renderer.setPixelRatio(z.pixelRatio); onResize(); }
+    }
+    if (mode === 'sleeping') setMode('walking');
+  }
+
+  /** Ends sleep at once (when something else takes the reader away from the bed). */
+  function endSleep() {
+    if (renderer.getPixelRatio() !== sleep.pixelRatio) { renderer.setPixelRatio(sleep.pixelRatio); onResize(); }
+    $('sleep-black').hidden = true;
+    sleep = null;
+  }
+
   /* ---------------- interface wiring ---------------- */
 
   function bindInterface() {
@@ -462,6 +608,9 @@
     $('page-form').addEventListener('submit', (e) => { e.preventDefault(); reading.page = Number($('page-input').value) - 1; renderPage(); $('page').focus(); });
     $('page-input').addEventListener('change', () => { reading.page = Number($('page-input').value) - 1; renderPage(); });
 
+    // waking from a dream
+    $('sleep').addEventListener('click', () => wakeUp(!isTouch));
+
     const canvas = renderer.domElement;
     canvas.addEventListener('click', () => {
       if (mode !== 'walking' || isTouch) return;
@@ -490,6 +639,8 @@
         if (e.code === 'Escape' && !inField) startWalking();
       } else if (mode === 'terminal') {
         if (e.code === 'Escape') { e.preventDefault(); terminal.close(); }
+      } else if (mode === 'sleeping') {
+        if (e.code === 'Escape') { e.preventDefault(); wakeUp(false); }
       }
     });
 
@@ -577,9 +728,12 @@
     figure.position.set(player.x, player.y, player.z);
     figure.rotation.y = player.yaw;
 
+    // asleep, the dream is drawn instead of the Library, and the Library while it fades
+    const picture = sleep ? updateSleep(now / 1000) : null;
     // behind the catalogue, a book or the pause menu, the Library only needs drawing now and then
     frameCount++;
-    if (mode === 'walking' || frameCount % 4 === 0) renderer.render(scene, camera);
+    if (picture) dream.render(renderer, picture.t, picture.n, picture.mix);
+    else if (mode === 'walking' || sleep || frameCount % 4 === 0) renderer.render(scene, camera);
     requestAnimationFrame(frame);
   }
   let frameCount = 0;
@@ -589,6 +743,21 @@
     const door = player.pickDoor((off) => world.doorOpenness(player.cg + off, player.cf));
     const term = player.pickTerminal();
     const lamp = player.pickLamp((off) => world.doorOpenness(player.cg + off, player.cf));
+    const bed = player.pickBed((off) => world.doorOpenness(player.cg + off, player.cf));
+    const nearest = (hit, ...others) => hit && others.every((o) => !o || hit.t < o.t);
+    if (nearest(bed, book, door, lamp, term)) {
+      const dg = player.cg + bed.cellOffset, df = player.cf;
+      const key = `bed,${dg},${df}`;
+      if (key === gazeKey) return;
+      gazeKey = key;
+      world.clearHover();
+      gaze = { kind: 'bed', cellOffset: bed.cellOffset };
+      $('gaze-title').hidden = true;
+      $('gaze-where').textContent = 'A narrow bed';
+      $('gaze-hint').textContent = `${isTouch ? 'Tap' : 'Press E or click'} to sleep`;
+      $('gaze').hidden = false;
+      return;
+    }
     if (lamp && (!book || lamp.t < book.t) && (!door || lamp.t < door.t)) {
       const dg = player.cg + lamp.cellOffset, df = player.cf;
       const on = world.isLampOn(dg, df);
@@ -653,8 +822,8 @@
   // A handle for testing from the browser console.
   Babel.debug = {
     get lib() { return lib; }, get world() { return world; }, get player() { return player; },
-    get renderer() { return renderer; }, get mode() { return mode; },
-    openBook, openBookAt, startWalking, pause, setMode, goToCell, goToAddress,
+    get renderer() { return renderer; }, get mode() { return mode; }, get sleep() { return sleep; },
+    openBook, openBookAt, startWalking, pause, setMode, goToCell, goToAddress, fallAsleep, wakeUp, hexagonSeed,
     get terminal() { return terminal; },
   };
   Babel.boot = boot;

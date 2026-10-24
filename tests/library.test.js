@@ -347,6 +347,41 @@ test("Project Gutenberg's licence is left out of a book", () => {
   assert.strictEqual(plain.text, 'Title: not a header\nJust a text.');
 });
 
+test('the timing of dreams is checked', () => {
+  const d = new Library({}).config;
+  assert.strictEqual(d.quoteDuration, 10);
+  assert.strictEqual(d.quoteInterval, 5);
+  const c = new Library({ dreams: { quoteDuration: 4, quoteInterval: 0 } }).config;
+  assert.strictEqual(c.quoteDuration, 4);
+  assert.strictEqual(c.quoteInterval, 0);
+  assert.throws(() => new Library({ dreams: { quoteDuration: 0 } }), /quoteDuration/);
+  assert.throws(() => new Library({ dreams: { quoteInterval: -1 } }), /quoteInterval/);
+  assert.throws(() => new Library({ dreams: { quoteLength: 3 } }), /not a setting/);
+});
+
+test('the sentences of dreams are grammatical and always the same for a hexagon', () => {
+  const Quotes = require('../js/quotes.js');
+  const seed = [0x12345678, 0x9abcdef0, 0x0badcafe, 0xdeadbeef];
+  assert.strictEqual(Quotes.quote(seed, 3), Quotes.quote(seed.slice(), 3));
+  assert.notStrictEqual(Quotes.quote(seed, 0), Quotes.quote([seed[0] ^ 1, seed[1], seed[2], seed[3]], 0));
+  const seen = new Set();
+  const N = 4000;
+  for (let i = 0; i < N; i++) {
+    const q = Quotes.quote([Math.imul(i, 0x9e3779b1) >>> 0, i, (i * 7919) >>> 0, 42], i % 16);
+    seen.add(q);
+    const words = q.split(' ');
+    assert.ok(words.length >= 5 && words.length <= 22, `${words.length} words: ${q}`);
+    assert.ok(/^[A-Z]/.test(q) && /[.?]$/.test(q), `capital and full stop: ${q}`);
+    assert.ok(!/\s[,.;?]|\s\s|\b(\w+) \1\b/i.test(q), `spacing or a repeated word: ${q}`);
+    for (const m of q.matchAll(/\b(a|an) (\w+)/gi)) {
+      const w = m[2].toLowerCase();
+      const an = /^(hour|honest|heir|honou?r)/.test(w) || (/^[aeiou]/.test(w) && !/^(uni|use|usu|eu|one|ou?ija)/.test(w));
+      assert.strictEqual(m[1].toLowerCase(), an ? 'an' : 'a', `article: ${q}`);
+    }
+  }
+  assert.ok(seen.size > N * 0.99, `only ${seen.size} different sentences in ${N}`);
+});
+
 // Links to books are made and read asynchronously (compression streams).
 (async () => {
   async function testAsync(name, fn) {

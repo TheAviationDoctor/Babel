@@ -51,6 +51,7 @@
     alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + '0123456789' + '.,;:!?\'"-\u2014()[]_*&/$%\u00A3\u00B0\u2020\u00A7#+=' + ' ',
     hexagon: { wallsWithShelves: 4, shelvesPerWall: 4, booksPerShelf: 32 },
     view: { lookSensitivity: 1, fieldOfView: 72 },
+    dreams: { quoteDuration: 10, quoteInterval: 5 },
   };
 
   /*
@@ -58,8 +59,9 @@
    * silently ignored. Names are matched without regard to case or punctuation.
    */
   const SETTINGS = {
-    '': { seed: 'seed', book: 'book', alphabet: 'alphabet', hexagon: 'hexagon', website: 'website', view: 'view' },
+    '': { seed: 'seed', book: 'book', alphabet: 'alphabet', hexagon: 'hexagon', website: 'website', view: 'view', dreams: 'dreams' },
     view: { lookSensitivity: 'lookSensitivity', fieldOfView: 'fieldOfView' },
+    dreams: { quoteDuration: 'quoteDuration', quoteInterval: 'quoteInterval' },
     book: { pagesPerBook: 'pagesPerBook', linesPerPage: 'linesPerPage', charactersPerLine: 'charactersPerLine' },
     hexagon: { wallsWithShelves: 'wallsWithShelves', shelvesPerWall: 'shelvesPerWall', booksPerShelf: 'booksPerShelf' },
   };
@@ -108,6 +110,7 @@
     const book = Object.assign({}, DEFAULT_CONFIG.book, readSection(raw.book, 'book'));
     const hex = Object.assign({}, DEFAULT_CONFIG.hexagon, readSection(raw.hexagon, 'hexagon'));
     const view = Object.assign({}, DEFAULT_CONFIG.view, readSection(raw.view, 'view'));
+    const dreams = Object.assign({}, DEFAULT_CONFIG.dreams, readSection(raw.dreams, 'dreams'));
     const label = (section, key) => `"${SETTINGS[section][key]}" ${section ? `(under "${section}")` : ''}`.trim();
     const alphabetSource = raw.alphabet !== undefined && raw.alphabet !== null ? raw.alphabet : DEFAULT_CONFIG.alphabet;
     const alphabet = Array.isArray(alphabetSource) ? alphabetSource.map(String) : Array.from(String(alphabetSource));
@@ -135,6 +138,8 @@
       booksPerShelf: positiveInt(hex.booksPerShelf, label('hexagon', 'booksPerShelf'), 256),
       lookSensitivity: numberBetween(view.lookSensitivity, label('view', 'lookSensitivity'), 0.1, 5),
       fieldOfView: numberBetween(view.fieldOfView, label('view', 'fieldOfView'), 30, 120),
+      quoteDuration: numberBetween(dreams.quoteDuration, label('dreams', 'quoteDuration'), 1, 600),
+      quoteInterval: numberBetween(dreams.quoteInterval, label('dreams', 'quoteInterval'), 0, 600),
     };
     cfg.charactersPerPage = cfg.linesPerPage * cfg.charactersPerLine;
     cfg.symbolsPerBook = cfg.pagesPerBook * cfg.charactersPerPage;

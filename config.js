@@ -50,4 +50,11 @@ window.BABEL_CONFIG = {
     lookSensitivity: 1, // how fast the view turns with the mouse, from 0.1 to 5
     fieldOfView: 72, // how wide the view is, in degrees, from 30 to 120
   },
+
+  // What the reader dreams when they lie down on the bed of a cell: words that fade in
+  // over the dream, one sentence after another.
+  dreams: {
+    quoteDuration: 10, // how long each sentence stays, in seconds, from 1 to 600
+    quoteInterval: 5, // how long until the next one, in seconds, from 0 to 600
+  },
 };
