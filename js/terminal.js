@@ -101,8 +101,9 @@
   };
 
   /*
-   * The Library's own collection of books, shelved beside it in books/ by the download
-   * script: books/index.js lists them, and books/shelf/<id>.js holds each one's text,
+   * The Library's own collection of books, shelved in books/ by the download script from
+   * the plain-text files in books/uncompressed/: books/index.js lists them, and
+   * books/compressed/<id>.js holds each one's text,
    * deflated and in base64. They are scripts because a page opened by double-click may
    * load scripts but not read files; so the collection works there as on the web.
    */
@@ -133,7 +134,7 @@
     async text(book) {
       const packed = await new Promise((resolve, reject) => {
         this._arrived.set(book.shelf, resolve);
-        this._script(`books/shelf/${book.shelf}.js`).then(() => {
+        this._script(`books/compressed/${book.shelf}.js`).then(() => {
           if (this._arrived.delete(book.shelf)) reject(new Error('its file on the shelf is not what was expected'));
         }, (e) => { this._arrived.delete(book.shelf); reject(e); });
       });
@@ -512,7 +513,7 @@
       $('shelf-status').textContent = 'Opening the shelves…';
       const books = await collection.load();
       if (!books.length) {
-        $('shelf-intro').textContent = 'This Library has no collection of books yet. To give it one, put plain-text files (.txt) in its books folder and run download_gutenberg_top1024.py there with --shelve-only. Meanwhile, you can show the catalogue your own books below.';
+        $('shelf-intro').textContent = 'This Library has no collection of books yet. To give it one, put plain-text files (.txt) in its books/uncompressed folder and run books/download_gutenberg_top1024.py --output books --shelve-only. Meanwhile, you can show the catalogue your own books below.';
         $('shelf-status').textContent = '';
         $('shelf-list').hidden = true;
         document.querySelector('#panel-books .shelf-tools').hidden = true;

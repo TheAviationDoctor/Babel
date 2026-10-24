@@ -156,16 +156,16 @@ Obsidian Publish runs `publish.js` only on sites with a custom domain. The setti
 
 ## Your books
 
-The Library has a collection of books for the catalogue's **Find a book**: the plain-text files (`.txt`) in the `books` folder. For now, they are 957 of the 1,024 most read books of [Project Gutenberg](https://www.gutenberg.org), downloaded by `books/download_gutenberg_top1024.py`.
+The Library has a collection of books for the catalogue's **Find a book**: the plain-text files (`.txt`) in the `books/uncompressed` folder. For now, they are 957 of the 1,024 most read books of [Project Gutenberg](https://www.gutenberg.org), downloaded by `books/download_gutenberg_top1024.py`.
 
 A web page is not allowed to look inside a folder, and a page opened by double-click cannot even read a file beside it, but it can load scripts. So after downloading, the script also *shelves* the books:
 
 - `books/index.js` lists them: title, author, language, length, and rank by downloads (about 180 KB);
-- `books/shelf/` holds one small script per book, its text compressed (about half the size of the `.txt` file; 402 MB for the 957 books).
+- `books/compressed/` holds one small script per book, its text compressed (about half the size of the `.txt` file; 402 MB for the 957 books).
 
-The catalogue loads the list when **Find a book** is first opened, and a book's text only when you choose it, so the collection works the same whether the Library is opened by double-click or online. Commit `books/index.js` and `books/shelf/` to publish the collection with the Library. The `.txt` files, the script and its manifest stay out of the repository (see `.gitignore`). GitHub Pages allows a site of up to 1 GB, which leaves room for roughly as many books again.
+The catalogue loads the list when **Find a book** is first opened, and a book's text only when you choose it, so the collection works the same whether the Library is opened by double-click or online. Commit `books/index.js` and `books/compressed/` to publish the collection with the Library. The `.txt` files in `books/uncompressed`, the script and its manifest stay out of the repository (see `.gitignore`). GitHub Pages allows a site of up to 1 GB, which leaves room for roughly as many books again.
 
-To add a book of your own to the collection, save it as a plain-text file (preferably UTF-8) in the `books` folder, named `Author — Title (Year).txt`, and shelve the books again without downloading anything:
+To add a book of your own to the collection, save it as a plain-text file (preferably UTF-8) in the `books/uncompressed` folder, named `Author — Title (Year).txt`, and shelve the books again without downloading anything:
 
 ```
 python3 books/download_gutenberg_top1024.py --output books --shelve-only
@@ -185,7 +185,7 @@ The sentences are grammatical but not necessarily sensible, like surreal poetry:
 
 ## Files
 
-In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-24.7`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
+In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-24.8`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
 
 | Path | Contents |
 |---|---|
@@ -204,7 +204,7 @@ In `index.html`, every file name is followed by `?v=` and a version, such as `js
 | `lib/` | three.js r147 and its `Reflector` (MIT licence, see `lib/three.LICENSE`) |
 | `tests/library.test.js` | Tests of the mathematics |
 | `obsidian/publish.js` | For an Obsidian Publish site: a link under every note to its book in the Library |
-| `books/index.js`, `books/shelf/` | The collection, as the catalogue reads it, written by `books/download_gutenberg_top1024.py` from the `.txt` files beside it (which are not published) |
+| `books/index.js`, `books/compressed/` | The collection, as the catalogue reads it, written by `books/download_gutenberg_top1024.py` from the `.txt` files in `books/uncompressed/` (which are not published) |
 
 ## Tests
 
