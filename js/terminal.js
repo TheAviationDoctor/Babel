@@ -213,7 +213,7 @@
     return words.length > 1 ? words.slice(0, -1).join(', ') + ' and ' + words[words.length - 1] : words.join('');
   }
 
-  const TABS = [['tab-here', 'panel-here'], ['tab-find', 'panel-find'], ['tab-books', 'panel-books'], ['tab-go', 'panel-go']];
+  const TABS = [['tab-here', 'panel-here'], ['tab-find', 'panel-find'], ['tab-books', 'panel-books'], ['tab-go', 'panel-go'], ['tab-about', 'panel-about']];
 
   class Terminal {
     constructor(ctx) {
@@ -238,7 +238,8 @@
       if (this.book) this._placeBook();
       const tab = TABS.find(([t]) => $(t).getAttribute('aria-selected') === 'true')[0];
       if (tab === 'tab-books') this._openShelf();
-      const active = { 'tab-here': $('panel-here'), 'tab-find': $('find-text'), 'tab-books': $('shelf-filter'), 'tab-go': $('go-east') }[tab];
+      if (tab === 'tab-about') this._renderAbout();
+      const active = { 'tab-here': $('panel-here'), 'tab-find': $('find-text'), 'tab-books': $('shelf-filter'), 'tab-go': $('go-east'), 'tab-about': $('panel-about') }[tab];
       setTimeout(() => active.focus({ preventScroll: true }), 0);
     }
 
@@ -293,6 +294,44 @@
         $(p).hidden = p !== panel;
       }
       if (tab === 'tab-books') this._openShelf();
+      if (tab === 'tab-about') this._renderAbout();
+    }
+
+    /** The About tab: the Markdown of about.js, read the first time the tab is shown. */
+    _renderAbout() {
+      if (this._aboutShown) return;
+      this._aboutShown = true;
+      const box = $('about-text');
+      const source = typeof window.BABEL_ABOUT === 'function' ? String(window.BABEL_ABOUT) : '';
+      const m = /\/\*[ \t]*START[^\n]*\n([\s\S]*?)\n?[ \t]*END[ \t]*\*\/\s*\}\s*$/.exec(source);
+      if (!m || !window.BabelMarkdown) {
+        box.textContent = source
+          ? 'The text of about.js could not be found between its lines START and END.'
+          : 'The file about.js, which holds the text of this tab, could not be read. Check that it is beside index.html, and that its text holds no star followed straight away by a slash.';
+        return;
+      }
+      box.innerHTML = window.BabelMarkdown.render(m[1]);
+      // headings take ids as on GitHub, so that links such as [Dreams](#dreams) lead to them
+      const used = new Map();
+      for (const h of box.querySelectorAll('h1, h2, h3, h4, h5, h6')) {
+        const base = h.textContent.trim().toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, '').replace(/\s/g, '-');
+        const n = used.get(base) || 0;
+        used.set(base, n + 1);
+        h.dataset.anchor = n ? `${base}-${n}` : base;
+      }
+      for (const a of box.querySelectorAll('a[href]')) {
+        const href = a.getAttribute('href');
+        if (href.startsWith('#')) {
+          a.addEventListener('click', (e) => {
+            e.preventDefault(); // the address bar keeps its own #… (it may be a link to a book)
+            const target = [...box.querySelectorAll('[data-anchor]')].find((h) => h.dataset.anchor === decodeURIComponent(href.slice(1)));
+            if (target) target.scrollIntoView({ block: 'start' });
+          });
+        } else {
+          a.target = '_blank';
+          a.rel = 'noopener';
+        }
+      }
     }
 
     async _paste() {
