@@ -321,7 +321,19 @@
       }
       for (const a of box.querySelectorAll('a[href]')) {
         const href = a.getAttribute('href');
-        if (href.startsWith('#')) {
+        const book = href.indexOf('#book=');
+        if (book !== -1) {
+          // A link to a book, however it is written (#book=…, /#book=… or the Library's full
+          // address), leads to the book in this same Library, whether it was opened from the
+          // computer or on the web.
+          const hash = href.slice(book);
+          a.setAttribute('href', hash);
+          a.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (location.hash === hash) window.dispatchEvent(new HashChangeEvent('hashchange'));
+            else location.hash = hash; // main.js follows the link when the address changes
+          });
+        } else if (href.startsWith('#')) {
           a.addEventListener('click', (e) => {
             e.preventDefault(); // the address bar keeps its own #… (it may be a link to a book)
             const target = [...box.querySelectorAll('[data-anchor]')].find((h) => h.dataset.anchor === decodeURIComponent(href.slice(1)));

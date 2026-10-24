@@ -127,7 +127,7 @@ Every vestibule has one. There is no menu in the Library, so the catalogue is al
 
 **Go to a hexagon.** Move any number of hexagons east or west and floors up or down. Paste a full address, as copied from the Current position tab, to return to a hexagon you have bookmarked, even after closing the page. An address copied from a Library with another seed is refused, since its books stand elsewhere. Or go somewhere at random. After a jump, the Current position tab counts your steps from where you arrived.
 
-A fifth tab, **About**, tells the reader about the Library. Its text is in `js/about.js`, written in Markdown like this README (of which it is, to begin with, a copy), and can be edited like `config.js`: in any text editor, then save and reload the page.
+A fifth tab, **About**, tells the reader about the Library. Its text is in `js/about.js`, written in Markdown like this README (of which it is, to begin with, a copy), and can be edited like `config.js`: in any text editor, then save and reload the page. A link to a book in that text, such as `[a book](#book=:eNpc…)`, leads to the book in the same Library, whether the Library was opened from your computer or on the web: it may be written `#book=…`, `/#book=…` or with the Library's full address.
 
 ## Links to books
 
@@ -187,7 +187,7 @@ The sentences are grammatical but not necessarily sensible, like surreal poetry:
 
 ## Files
 
-In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-24.11`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
+In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-24.12`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
 
 | Path | Contents |
 |---|---|
