@@ -3,5 +3,5 @@
 # which books/download_gutenberg_top1024.py writes (see "Your books" in README.md).
 books/*
 !books/index.js
-!books/shelf/
-books/shelf/*.partial
+!books/compressed/
+books/compressed/*.partial
