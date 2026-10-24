@@ -376,10 +376,6 @@ test('positions are measured from the seam, as a fraction of the way round', () 
   }
   const last = small.position(new Uint8Array(small.galleryDigits).fill(2), small.floorMax);
   assert.ok(Math.abs(last.east.fraction - (galleries - 1) / galleries) < 1e-12);
-  // the setting that shows positions
-  assert.strictEqual(lib.config.showPosition, true);
-  assert.strictEqual(new Library({ view: { showPosition: false } }).config.showPosition, false);
-  assert.throws(() => new Library({ view: { showPosition: 'yes' } }), /showPosition/);
 });
 
 test('the timing of dreams is checked', () => {

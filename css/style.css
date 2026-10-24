@@ -103,30 +103,10 @@ input[type="text"]:focus, input[type="number"]:focus { outline: none; border-bot
 #gaze .spine { font-style: italic; font-size: var(--step-2); letter-spacing: 0.04em; }
 #gaze .where { font-size: var(--step-0); }
 #gaze .hint { font-size: var(--step--1); color: var(--ash); }
-#corner {
-  position: absolute;
-  left: max(18px, env(safe-area-inset-left, 0px)); bottom: max(16px, env(safe-area-inset-bottom, 0px));
-  max-width: calc(100% - 36px);
-  display: grid; gap: 0.2rem;
-  font-style: italic; font-size: var(--step--1); color: var(--ash);
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
-}
-#corner p { margin: 0; }
-#corner sup { font-size: 0.72em; line-height: 0; }
-#position, #travel { opacity: 0.78; }
-#position:empty { display: none; }
-#travel { transition: opacity 2.5s ease; }
-#travel.fading { opacity: 0; }
-
 #look-hint {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, 1.4rem);
   font-style: italic; font-size: var(--step--1); color: var(--ash);
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
-}
-#menu-button {
-  position: absolute; pointer-events: auto;
-  top: max(14px, env(safe-area-inset-top, 0px)); right: max(14px, env(safe-area-inset-right, 0px));
-  background: rgba(13, 10, 7, 0.6);
 }
 
 /* ---------- reading ---------- */
@@ -217,8 +197,8 @@ mark { background: rgba(227, 169, 90, 0.55); color: var(--ink); box-shadow: 0 0 
 .glass button.primary:hover { background: #e6f1ec; }
 .glass button:disabled { opacity: 0.4; cursor: default; }
 .glass button.quiet { border-color: transparent; color: var(--glow-dim); }
-.tabs { display: flex; gap: 0.3rem; order: 3; width: 100%; border-bottom: 1px solid rgba(212, 227, 220, 0.14); }
-.tabs button { border: 0; border-radius: 0; padding: 0.5em 0.9em; color: var(--glow-dim); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 0 0.3rem; order: 3; width: 100%; border-bottom: 1px solid rgba(212, 227, 220, 0.14); }
+.tabs button { border: 0; border-radius: 0; padding: 0.5em 0.9em; color: var(--glow-dim); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
 .tabs button[aria-selected="true"] { color: var(--glow); border-bottom-color: var(--signal); background: transparent; }
 .panel { display: grid; gap: 1.4rem; }
 .glass label { color: var(--glow-dim); }
@@ -249,6 +229,23 @@ mark { background: rgba(227, 169, 90, 0.55); color: var(--ink); box-shadow: 0 0 
 .go { display: grid; gap: 0.6rem; padding-top: 0.9rem; border-top: 1px solid rgba(212, 227, 220, 0.14); }
 .intro { display: grid; gap: 0.7rem; }
 .intro .status { max-width: 46em; }
+
+/* the first tab: where the reader is */
+#panel-here:focus { outline: none; }
+.here-now { display: grid; gap: 0.6rem; }
+.here-now .lead { font-size: 1.02rem; line-height: 1.6; max-width: 46em; overflow-wrap: anywhere; }
+.here-now .note { max-width: 46em; }
+.seam { display: flex; flex-wrap: wrap; gap: 1rem 1.6rem; align-items: flex-start; }
+.seam .note { flex: 1 1 22rem; max-width: 46em; }
+.seam-map {
+  position: relative; flex: none; box-sizing: border-box; margin: 0.3rem 0.4rem;
+  border: 1px dashed rgba(212, 227, 220, 0.5); background: rgba(212, 227, 220, 0.04);
+}
+.seam-here, .seam-was { position: absolute; width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box; transform: translate(-50%, 50%); }
+.seam-here { background: var(--signal); box-shadow: 0 0 10px var(--signal); }
+.seam-was { border: 1px solid var(--glow-dim); }
+.glass .controls { color: var(--glow-dim); max-width: 46em; }
+.glass .controls kbd { color: var(--glow); }
 .glass code { font-family: var(--type); color: var(--glow); background: rgba(212, 227, 220, 0.08); padding: 0 0.25em; border-radius: 3px; }
 .books { list-style: none; margin: 0; padding: 0; display: grid; }
 .books:empty { display: none; }
@@ -264,25 +261,9 @@ mark { background: rgba(227, 169, 90, 0.55); color: var(--ink); box-shadow: 0 0 
 .offset input { width: 15ch; }
 #go-address { display: grid; gap: 0.5rem; }
 
-/* ---------- pause ---------- */
+/* ---------- addresses ---------- */
 
-#pause {
-  background: linear-gradient(90deg, rgba(13, 10, 7, 0.95) 0%, rgba(13, 10, 7, 0.82) 50%, rgba(13, 10, 7, 0.55) 100%);
-  overflow: auto;
-  display: flex; align-items: center;
-}
-.pause-block {
-  max-width: 34rem; display: grid; gap: 1.6rem;
-  margin-left: clamp(0px, 6vw, 7rem);
-}
-#pause-title { font-size: clamp(2.2rem, 4.5vw, 3.4rem); }
-.actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
-input[type="range"] { accent-color: var(--lamp); width: 100%; }
-.here { display: grid; gap: 0.45rem; }
-.here h3 { font-size: var(--step-1); font-style: italic; }
-.here p { font-size: var(--step--1); }
 .addr { font-family: var(--type); color: var(--vellum); letter-spacing: 0.04em; word-break: break-all; }
-.here button { justify-self: start; margin-top: 0.3rem; }
 
 /* ---------- messages ---------- */
 
@@ -321,7 +302,8 @@ input[type="range"] { accent-color: var(--lamp); width: 100%; }
 #error-message { font-family: var(--type); line-height: 1.5; color: var(--lamp); }
 
 @media (max-width: 640px) {
-  .pause-block, .error-block { margin-left: 0; }
+  .error-block { margin-left: 0; }
+  .tabs button { padding: 0.45em 0.55em; }
 }
 
 @media (prefers-reduced-motion: reduce) {

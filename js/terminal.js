@@ -1,6 +1,6 @@
 /*
- * The catalogue's screen: finding where a text or a whole book stands, and going to
- * any hexagon.
+ * The catalogue's screen: where the reader is, finding where a text or a whole book
+ * stands, and going to any hexagon.
  *
  * A text is found by running the shelving backwards: the catalogue composes the book
  * that begins with the text, and the inverse permutation gives the shelf it stands on.
@@ -11,7 +11,8 @@
  * It talks to the rest of the game through a small context object (see main.js):
  *   ctx.lib(), ctx.world, ctx.player, ctx.dims, ctx.setMode(mode), ctx.startWalking(),
  *   ctx.openBookAt(options), ctx.goToCell(dg, df, face), ctx.goToAddress(gallery, floor, face),
- *   ctx.goToRandom(), ctx.toast(text), ctx.copyText(text, done), ctx.linkBase()
+ *   ctx.goToRandom(), ctx.toast(text), ctx.copyText(text, done), ctx.linkBase(),
+ *   ctx.lastJourney() (how far the last jump through the catalogue went, or null)
  */
 (function () {
   'use strict';
@@ -26,6 +27,22 @@
     const m = lib.magnitude(diff.digits), dir = diff.sign > 0 ? pos : neg;
     if (m.exact !== null) return `${fmt(m.exact)} ${m.exact === 1 ? one : many} ${dir}`;
     return `about 10<sup>${fmt(Math.floor(m.log10))}</sup> ${many} ${dir}`;
+  }
+
+  /** A count of hexagons or floors, exactly if it is small, else to two figures: "4.8 × 10^946,956" (HTML). */
+  function amount(m) {
+    if (m.exact !== null && m.exact < 1e9) return fmt(m.exact);
+    let e = Math.floor(m.log10), mantissa = Math.pow(10, m.log10 - e);
+    if (mantissa >= 9.95) { mantissa = 1; e++; }
+    return `${mantissa.toFixed(1)}&#8239;×&#8239;10<sup>${fmt(e)}</sup>`;
+  }
+
+  /** A fraction of the way round, as a percentage with one decimal. */
+  function percent(x) {
+    if (x <= 0) return '0%';
+    if (x < 0.001) return 'under 0.1%';
+    if (x > 0.999) return 'over 99.9%';
+    return `${(100 * x).toFixed(1)}%`;
   }
 
   /* ---------------- the reader's own books ---------------- */
@@ -126,7 +143,7 @@
     return words.length > 1 ? words.slice(0, -1).join(', ') + ' and ' + words[words.length - 1] : words.join('');
   }
 
-  const TABS = [['tab-find', 'panel-find'], ['tab-books', 'panel-books'], ['tab-go', 'panel-go']];
+  const TABS = [['tab-here', 'panel-here'], ['tab-find', 'panel-find'], ['tab-books', 'panel-books'], ['tab-go', 'panel-go']];
 
   class Terminal {
     constructor(ctx) {
@@ -150,7 +167,7 @@
       if (this.query) this._certain();
       if (this.book) this._placeBook();
       const tab = TABS.find(([t]) => $(t).getAttribute('aria-selected') === 'true')[0];
-      const active = { 'tab-find': $('find-text'), 'tab-books': $('books-folder'), 'tab-go': $('go-east') }[tab];
+      const active = { 'tab-here': $('panel-here'), 'tab-find': $('find-text'), 'tab-books': $('books-folder'), 'tab-go': $('go-east') }[tab];
       setTimeout(() => active.focus({ preventScroll: true }), 0);
     }
 
@@ -516,11 +533,46 @@
       this.ctx.goToAddress(a.gallery, a.floor, null);
     }
 
+    /** The first tab: where the reader is, from where they woke and from the seam, and the address. */
     _renderHere() {
       const w = this.ctx.world, p = this.ctx.player, lib = this.lib;
-      $('term-floor').textContent = lib.addressText(w.floor(p.cf).digits, 16);
-      $('term-gallery').textContent = lib.addressText(w.gallery(p.cg).digits, 16);
+      const g = w.gallery(p.cg).digits, f = w.floor(p.cf).digits;
+      const n = (m, one, many) => `${amount(m)} ${m.exact === 1 ? one : many}`;
+      $('here-whereabouts').textContent = p.whereabouts().sentence;
+      const pos = lib.position(g, f);
+      $('here-seam').innerHTML = `This hexagon lies ${n(pos.east, 'hexagon', 'hexagons')} east of the seam (${percent(pos.east.fraction)} of the way round)` +
+        ` and ${n(pos.up, 'floor', 'floors')} above it (${percent(pos.up.fraction)} of the way up).`;
+
+      // the last jump through the catalogue, measured the shorter way round
+      const j = this.ctx.lastJourney ? this.ctx.lastJourney() : null;
+      const part = (d, one, many, pos, neg) => (d.sign === 0 ? '' : `${n(lib.magnitude(d.digits), one, many)} ${d.sign > 0 ? pos : neg}`);
+      const parts = j ? [part(j.dg, 'hexagon', 'hexagons', 'east', 'west'), part(j.df, 'floor', 'floors', 'up', 'down')].filter(Boolean) : [];
+      // a short hop is too small to show on the map, and has no shorter way round to speak of
+      const far = parts.length && (Math.abs(j.from.east - pos.east.fraction) > 0.02 || Math.abs(j.from.up - pos.up.fraction) > 0.02);
+      const huge = j && [j.dg, j.df].some((d) => d.sign !== 0 && lib.magnitude(d.digits).exact === null);
+      $('here-journey').hidden = !parts.length;
+      if (parts.length) {
+        $('here-journey').innerHTML = `Your last journey through the catalogue took you ${parts.join(' and ')}${huge ? ', the shorter way round' : ''}.` +
+          (far ? ' The ring on the map is where it began.' : '');
+      }
+
+      // the map of the whole Library, drawn to its proportions (within reason)
+      const d = this.ctx.dims;
+      const log10Ratio = lib.stats.log10Floors - lib.stats.log10GalleriesPerFloor + Math.log10(d.Hf / d.Dx);
+      const ratio = Math.min(3, Math.max(1 / 3, Math.pow(10, log10Ratio))); // height ÷ width
+      const map = $('seam-map');
+      map.style.width = `${ratio >= 1 ? 9 / ratio : 9}rem`;
+      map.style.height = `${ratio >= 1 ? 9 : 9 * ratio}rem`;
+      const place = (el, at) => { el.style.left = `${100 * at.east}%`; el.style.bottom = `${100 * at.up}%`; };
+      place($('seam-here'), { east: pos.east.fraction, up: pos.up.fraction });
+      $('seam-was').hidden = !far;
+      if (far) place($('seam-was'), j.from);
+
       $('term-seed').textContent = lib.seed;
+      $('term-floor').textContent = lib.addressText(f, 28);
+      $('term-gallery').textContent = lib.addressText(g, 28);
+      $('term-lengths').textContent = `The full address is ${fmt(f.length)} symbols for the floor and ${fmt(g.length)} for the gallery. ` +
+        'Copy it to come back here later from "Go to a hexagon", even after closing the page.';
     }
   }
 

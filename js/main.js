@@ -1,6 +1,7 @@
 /*
- * Start-up and the screens around the walk: reading, pause, sleep. There is no title
- * screen: the reader wakes in the Library straight away (or before the book a link leads to).
+ * Start-up and the screens around the walk: reading and sleep. There is no title screen and
+ * no menu: the reader wakes in the Library straight away (or before the book a link leads
+ * to), and the catalogue in every vestibule tells them where they are.
  */
 (function () {
   'use strict';
@@ -10,10 +11,9 @@
 
   let raw, lib, assets, world, player, renderer, scene, camera, reflector, sinkReflector, figure, figureLight, terminal;
   let mode = 'walking';
-  let wakeIndex = 0;
   let gaze = null, gazeKey = '';
   let reading = null;
-  let lastCell = '';
+  let lastJourney = null; // how far the last jump through the catalogue went
 
   function showError(message, hint) {
     Babel.failed = true;
@@ -111,6 +111,7 @@
       goToCell: (...a) => journey(() => goToCell(...a)),
       goToAddress: (...a) => journey(() => goToAddress(...a)),
       goToRandom: () => journey(goToRandom),
+      lastJourney: () => lastJourney,
     });
 
     wake(0);
@@ -157,14 +158,12 @@
 
   /** Puts the reader in waking hexagon number n of the current seed. */
   function wake(n) {
-    wakeIndex = n;
     const loc = lib.wakingLocation(n);
     world.setAnchor(loc.gallery, loc.floor);
     if (terminal) terminal.reset();
     player.origin = 'woke';
     player.placeAtStart();
     world.update(0, 0);
-    lastCell = '';
   }
 
   /** Goes to hexagon (dg, df) relative to the anchor; with `face`, stands before that book. */
@@ -172,7 +171,6 @@
     if (face) player.faceBook(dg, df, face.wall, face.shelf, face.volume);
     else player.placeAtStart(dg, df);
     world.update(player.cg, player.cf);
-    lastCell = '';
     startWalking();
   }
 
@@ -230,81 +228,26 @@
   function controlsHTML() {
     if (isTouch) return 'Drag on the right of the screen to look. Hold and slide on the left to walk. Tap a book to read it, a door to open it, the catalogue to use it, or a bed to sleep.';
     return 'Look with the mouse. Walk with <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or the arrow keys, and hold <kbd>Shift</kbd> to hurry (or turn on <kbd>Caps Lock</kbd> to hurry until you turn it off). ' +
-      'Press <kbd>E</kbd> to take down the book you are looking at, open a door, use the catalogue or lie down on a bed, and <kbd>Esc</kbd> to pause.';
+      'Press <kbd>E</kbd> to take down the book you are looking at, open a door, use the catalogue or lie down on a bed. <kbd>Esc</kbd> lets go of the mouse; click to take it back.';
   }
 
 
-  function renderHere() {
-    const g = world.gallery(player.cg).digits, f = world.floor(player.cf).digits;
-    $('addr-floor').textContent = lib.addressText(f, 28);
-    $('addr-gallery').textContent = lib.addressText(g, 28);
-    let text = `The full address is ${fmt(f.length)} symbols for the floor and ${fmt(g.length)} for the gallery. ${player.whereabouts().sentence}`;
-    if (lib.config.showPosition !== false) {
-      const p = lib.position(g, f);
-      text += ` The hexagon lies ${amount(p.east)} ${p.east.exact === 1 ? 'hexagon' : 'hexagons'} east of the seam (${percent(p.east.fraction)} of the way round)` +
-        ` and ${amount(p.up)} ${p.up.exact === 1 ? 'floor' : 'floors'} above it (${percent(p.up.fraction)} of the way up).` +
-        ' The seam is where the numbers of the galleries and the floors begin again: the Library has no edge, and closes on itself both ways.';
-    }
-    $('addr-lengths').innerHTML = text;
-  }
-
-  /* ---------------- where the reader is ---------------- */
-
-  /** A count of hexagons or floors, exactly if it is small, else to two figures: "4.8 × 10^946,956" (HTML). */
-  function amount(m) {
-    if (m.exact !== null && m.exact < 1e9) return fmt(m.exact);
-    let e = Math.floor(m.log10), mantissa = Math.pow(10, m.log10 - e);
-    if (mantissa >= 9.95) { mantissa = 1; e++; }
-    return `${mantissa.toFixed(1)}&#8239;×&#8239;10<sup>${fmt(e)}</sup>`;
-  }
-
-  /** A fraction of the way round, as a percentage with one decimal. */
-  function percent(x) {
-    if (x <= 0) return '0%';
-    if (x < 0.001) return 'under 0.1%';
-    if (x > 0.999) return 'over 99.9%';
-    return `${(100 * x).toFixed(1)}%`;
-  }
-
-  /** "4.8 × 10^946,956 hexagons east (23.9%) and 1.6 × 10^946,957 floors up (40.7%) from the seam" (HTML). */
-  function positionHTML() {
-    const p = lib.position(world.gallery(player.cg).digits, world.floor(player.cf).digits);
-    const n = (m, one, many) => `${amount(m)} ${m.exact === 1 ? one : many}`;
-    return `${n(p.east, 'hexagon', 'hexagons')} east (${percent(p.east.fraction)}) and ${n(p.up, 'floor', 'floors')} up (${percent(p.up.fraction)}) from the seam`;
-  }
+  /* ---------------- journeys ---------------- */
 
   /** The reader's hexagon, as absolute addresses. */
   function here() {
     return { gallery: world.gallery(player.cg).digits.slice(), floor: world.floor(player.cf).digits.slice() };
   }
 
-  // How long the line saying how far a journey went stays, then takes to fade, in seconds.
-  const TRAVEL = { stay: 10, fade: 2.5 };
-  let travelTimer = 0;
-
-  /** Makes a journey (`move` takes the reader somewhere), then says how far it went. */
+  /** Makes a journey (`move` takes the reader somewhere) and remembers how far it went, for the catalogue. */
   function journey(move) {
     const from = here();
     move();
-    if (lib.config.showPosition === false) return;
     const to = here();
     const dg = lib.galleryDifference(from.gallery, to.gallery), df = lib.floorDifference(from.floor, to.floor);
-    const part = (d, one, many, pos, neg) => {
-      if (d.sign === 0) return '';
-      const m = lib.magnitude(d.digits);
-      return `${amount(m)} ${m.exact === 1 ? one : many} ${d.sign > 0 ? pos : neg}`;
-    };
-    const parts = [part(dg, 'hexagon', 'hexagons', 'east', 'west'), part(df, 'floor', 'floors', 'up', 'down')].filter(Boolean);
-    const el = $('travel');
-    clearTimeout(travelTimer);
-    if (!parts.length) { el.hidden = true; return; }
-    el.innerHTML = `Travelled ${parts.join(' and ')}`;
-    el.classList.remove('fading');
-    el.hidden = false;
-    travelTimer = setTimeout(() => {
-      el.classList.add('fading');
-      travelTimer = setTimeout(() => { el.hidden = true; el.classList.remove('fading'); }, TRAVEL.fade * 1000);
-    }, TRAVEL.stay * 1000);
+    if (dg.sign === 0 && df.sign === 0) return;
+    const was = lib.position(from.gallery, from.floor);
+    lastJourney = { dg, df, from: { east: was.east.fraction, up: was.up.fraction } };
   }
 
   /* ---------------- modes ---------------- */
@@ -323,31 +266,22 @@
     mode = next;
     $('hud').hidden = next !== 'walking';
     $('reader').hidden = next !== 'reading';
-    $('pause').hidden = next !== 'paused';
     $('terminal').hidden = next !== 'terminal';
     $('sleep').hidden = next !== 'sleeping';
     player.enabled = next === 'walking';
     if ((next === 'terminal' || next === 'reading' || next === 'sleeping') && document.pointerLockElement) document.exitPointerLock();
     if (next !== 'walking') { world.clearHover(); gaze = null; gazeKey = ''; $('gaze').hidden = true; }
-    if (next === 'paused') renderHere();
-    updateMenuButton();
+    updateLookHint();
   }
 
-  function updateMenuButton() {
+  function updateLookHint() {
     const locked = document.pointerLockElement === renderer.domElement;
-    $('menu-button').hidden = !(mode === 'walking' && !locked);
     $('look-hint').hidden = !(mode === 'walking' && !locked && !isTouch);
   }
 
   function startWalking() {
     setMode('walking');
     lockPointer();
-  }
-
-  function pause() {
-    if (mode !== 'walking') return;
-    setMode('paused');
-    if (document.pointerLockElement) document.exitPointerLock();
   }
 
   /* ---------------- reading ---------------- */
@@ -652,18 +586,6 @@
     $('controls-hint').innerHTML = controlsHTML();
     // a link to a book, pasted into the address bar while the Library is open
     window.addEventListener('hashchange', () => { goToLinkedBook(true); });
-    $('resume').addEventListener('click', startWalking);
-    $('menu-button').addEventListener('click', pause);
-    $('wake-elsewhere').addEventListener('click', () => {
-      journey(() => wake(wakeIndex + 1));
-      toast('You wake in another hexagon.');
-      startWalking();
-    });
-    $('copy-address').addEventListener('click', () => {
-      const g = world.gallery(player.cg).digits, f = world.floor(player.cf).digits;
-      const text = lib.hexagonAddressText(g, f);
-      copyText(text, `Copied the address (${fmt(text.length)} characters).`);
-    });
 
     $('prev-page').addEventListener('click', () => turn(-1));
     $('next-page').addEventListener('click', () => turn(1));
@@ -688,17 +610,13 @@
       if (document.pointerLockElement === canvas) interact();
       else lockPointer();
     });
-    document.addEventListener('pointerlockchange', () => {
-      const locked = document.pointerLockElement === canvas;
-      if (!locked && mode === 'walking') pause();
-      updateMenuButton();
-    });
+    // Esc lets go of the mouse (the browser sees to that): the reader stands still until a click
+    document.addEventListener('pointerlockchange', updateLookHint);
 
     window.addEventListener('keydown', (e) => {
       const inField = e.target && (e.target.tagName === 'INPUT');
       if (mode === 'walking') {
         if (e.code === 'KeyE') interact();
-        else if (e.code === 'Escape' || e.code === 'KeyP') pause();
       } else if (mode === 'reading') {
         if (inField && e.code !== 'Escape') return;
         if (e.code === 'ArrowLeft' || e.code === 'PageUp') { turn(-1); e.preventDefault(); }
@@ -706,8 +624,6 @@
         else if (e.code === 'Home') { reading.page = 0; renderPage(); e.preventDefault(); }
         else if (e.code === 'End') { reading.page = lib.config.pagesPerBook - 1; renderPage(); e.preventDefault(); }
         else if (e.code === 'Escape' || e.code === 'KeyE') { closeBook(); e.preventDefault(); }
-      } else if (mode === 'paused') {
-        if (e.code === 'Escape' && !inField) startWalking();
       } else if (mode === 'terminal') {
         if (e.code === 'Escape') { e.preventDefault(); terminal.close(); }
       } else if (mode === 'sleeping') {
@@ -719,8 +635,8 @@
     setMode('walking');
     goToLinkedBook().then((went) => {
       if (!went) {
-        toast(isTouch ? 'Drag on the right to look around, hold and slide on the left to walk, and tap a book to read it.'
-          : 'Walk with W A S D, press E to take down a book, and Esc for the menu.', 7000);
+        toast((isTouch ? 'Drag on the right to look around, hold and slide on the left to walk, and tap a book to read it.'
+          : 'Walk with W A S D, and press E to take down a book.') + ' The catalogue in each vestibule tells you where you are.', 9000);
       }
     });
   }
@@ -778,13 +694,6 @@
     world.tick(dt);
     figureLight.intensity = 1.1 * lightOnReader();
 
-    const cellKey = player.cg + ',' + player.cf;
-    if (cellKey !== lastCell) {
-      lastCell = cellKey;
-      $('whereabouts').textContent = player.whereabouts().short;
-      if (lib.config.showPosition !== false) $('position').innerHTML = positionHTML();
-    }
-
     if (mode === 'walking') updateGaze();
 
     // the nearest mirror on this floor, and the figure it reflects
@@ -802,7 +711,7 @@
 
     // asleep, the dream is drawn instead of the Library, and the Library while it fades
     const picture = sleep ? updateSleep(now / 1000) : null;
-    // behind the catalogue, a book or the pause menu, the Library only needs drawing now and then
+    // behind the catalogue or a book, the Library only needs drawing now and then
     frameCount++;
     if (picture) dream.render(renderer, picture.t, picture.n, picture.mix);
     else if (mode === 'walking' || sleep || frameCount % 4 === 0) renderer.render(scene, camera);
@@ -895,7 +804,8 @@
   Babel.debug = {
     get lib() { return lib; }, get world() { return world; }, get player() { return player; },
     get renderer() { return renderer; }, get mode() { return mode; }, get sleep() { return sleep; }, journey, here,
-    openBook, openBookAt, startWalking, pause, setMode, goToCell, goToAddress, fallAsleep, wakeUp, hexagonSeed,
+    openBook, openBookAt, startWalking, setMode, goToCell, goToAddress, fallAsleep, wakeUp, hexagonSeed,
+    get lastJourney() { return lastJourney; },
     get terminal() { return terminal; },
   };
   Babel.boot = boot;

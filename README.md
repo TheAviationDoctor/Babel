@@ -16,7 +16,7 @@ Everything is pure HTML/JS/CSS, so nothing needs installing. Just visit the Libr
 | Interact with objects (books, catalogue, doors, lamps, beds) | `E` or click |
 | Turn pages | `←` `→`, `Page Up` `Page Down`, `Home` `End` |
 | Put the book back | `Esc` or `E` |
-| Pause | `Esc` or `P` |
+| Let go of the mouse | `Esc` (click to take it back) |
 | Wake from a dream | click or `Esc` |
 
 On a phone or tablet, drag on the right of the screen to look, hold and slide on the left to walk, and tap to interact with objects. Tap again to wake from a dream.
@@ -25,7 +25,7 @@ On a phone or tablet, drag on the right of the screen to look, hold and slide on
 
 No. The library is *finite*, meaning it has a fixed number of books (each one unique), hexagons, and floors. But it is *boundless* (it has no hard boundary) because it is *cyclic* in both directions. Walk past the last hexagon of a floor, or take the stairs up or down to the last floor, and you are back at the first, just like an ant walking endlessly on the surface of a torus (which the Library is, topologically speaking).
 
-Since there is no edge, positions are measured from the *seam*: the first hexagon of the first floor, where the numbers of the galleries and floors start again. The bottom left corner of the screen says how far you are from where you woke (or arrived). Below that, it says how far east of the seam and how far above it your hexagon lies, and what percentage of the way round that is, for example `1.1 × 10^946,956 hexagons east (24.0%) and 1.6 × 10^946,957 floors up (40.7%) from the seam`. Walking barely changes this line, since each hexagon is only `2 × 10^-946,955` % of the way round. After each journey through the catalogue (or after waking in another hexagon from the menu), a third line says how far that journey went, measured the shorter way round, for example `Travelled 2.2 × 10^946,956 hexagons west and 1.9 × 10^946,957 floors down`. It fades after ten seconds. Setting `view.showPosition` to `false` in `config.js` hides both lines.
+Since there is no edge, positions are measured from the *seam*, where the numbers of the galleries and floors start again: east–west between the last hexagon of a floor and the first, and up–down between the last floor and the first. Nothing marks it. The catalogue's **Current position** tab (see [The catalogue](#the-catalogue)) gives your position from it, for example `1.1 × 10^946,956 hexagons east of the seam (24.0% of the way round) and 1.6 × 10^946,957 floors above it (40.7% of the way up)`. Walking barely changes these figures, since each hexagon is only `2 × 10^-946,955` % of the way round.
 
 ## So how big is the Library?
 
@@ -74,7 +74,6 @@ Everything about the Library's size lives in `config.js`, which is read once whe
 | `hexagon.booksPerShelf` | 32 | |
 | `view.lookSensitivity` | 1 | How fast the view turns with the mouse, from 0.1 to 5. |
 | `view.fieldOfView` | 72 | How wide the view is, in degrees, from 30 to 120. |
-| `view.showPosition` | `true` | Shows, in the bottom left corner, where your hexagon lies in the whole Library and how far each journey through the catalogue went. `false` hides them. See [Is the Library infinite?](#is-the-library-infinite) |
 | `dreams.quoteDuration` | 10 | How long each sentence of a dream stays, in seconds, once it has faded in, from 1 to 600. See [Dreams](#dreams). |
 | `dreams.quoteInterval` | 5 | How long after a sentence has faded out the next one begins to fade in, in seconds, from 0 to 600. |
 
@@ -93,7 +92,7 @@ Borges's own figures would be 410 pages, 40 lines, 80 characters, a 25-symbol al
     v = hexagon × S + slot              (S books per hexagon; slot = wall, shelf, volume)
     hexagon = floor × L + gallery       (L = N^m galleries per floor)
 
-so each hexagon has a floor number and a gallery number, each about half a million symbols long. By default there are 64^524,287 = 2^3,145,722 hexagons along every gallery, about 10^946,956, and 64^524,289 / 512 = 2^3,145,725 floors, about 10^946,957. The pause menu shows the current hexagon's address, written in the Library's own alphabet, and can copy it in full.
+so each hexagon has a floor number and a gallery number, each about half a million symbols long. By default there are 64^524,287 = 2^3,145,722 hexagons along every gallery, about 10^946,956, and 64^524,289 / 512 = 2^3,145,725 floors, about 10^946,957. The catalogue's Current position tab shows the current hexagon's address, written in the Library's own alphabet, and can copy it in full.
 
 **Contents.** The book at index *v* is obtained by a permutation of the space of all books, keyed by the seed: a four-round Feistel network on the book's two halves. Each round adds, symbol by symbol and modulo *N*, a pseudorandom stream generated from a hash of the other half. A Feistel network can be run backwards whatever its round functions are, so the map from shelf to contents is a bijection. No two shelves hold the same book and no possible book is missing. Neighbouring books share nothing visible. Opening one takes a few hundredths of a second, and all the arithmetic on the huge numbers is done digit by digit, without big-integer multiplication.
 
@@ -118,13 +117,15 @@ The story leaves room for interpretation. This version reads it as follows.
 
 ## The catalogue
 
-Every vestibule has one. It does three things.
+Every vestibule has one. There is no menu in the Library, so the catalogue is also where you find your bearings. It does four things.
+
+**Current position.** Where you are: how far from where you woke (or, after a jump, from where you arrived), and how far east of the seam and above it, with the percentage of the way round. After a jump through the catalogue, it says how far the jump went, measured the shorter way round, such as `2.2 × 10^946,956 hexagons west and 1.9 × 10^946,957 floors down`. A small map of the whole Library, drawn to its proportions (it is about 2.4 times taller than it is long), shows where you are, and where the last jump began. The tab also explains the seam, shows the hexagon's address and can copy it in full, and lists the controls.
 
 **Find a text.** Type or paste anything into it. Small letters are read as capitals, accents are removed, line breaks and tabs become spaces, and `--` becomes a long dash. Other characters become their nearest equivalents in the alphabet: curly quotation marks become straight ones, Æ becomes AE, ß becomes SS, ½ becomes 1/2, a ligature such as ﬁ becomes FI, and so on. What has no equivalent is left out (the screen lists it). The catalogue then runs the shelving backwards. It composes the book that begins with your text, with the rest of the book either random characters or blank, and the inverse permutation gives the hexagon, wall, shelf and volume where that book stands. Since every possible book exists exactly once, it is certainly there. It is also almost always astronomically far away, so the screen gives the distance as a power of ten. You can read the book on the spot, with your text highlighted, copy its address, or go there: you are set down in front of it, and the volume stands a little out of its row.
 
 **Find a book.** The catalogue can also find a whole book: any plain-text file in the `books` folder. It sets the text in pages, the way a book of this Library holds them: from the first page, 64 characters to a line and 32 lines to a page, with words kept whole and each paragraph starting on a new, indented line. The rest of the 512 pages are blank (or random characters, if you prefer). It then finds the one book of the Library that holds exactly those pages, and you can read it on the spot, go and take it down from its shelf, or copy a link to it (see [Links to books](#links-to-books)). A text longer than one book is set in several parts, one after the other, and each part is found separately.
 
-**Go to a hexagon.** Move any number of hexagons east or west and floors up or down. Paste a full address, as copied from the pause menu or the catalogue, to return to a hexagon you have bookmarked, even after closing the page. An address copied from a Library with another seed is refused, since its books stand elsewhere. Or go somewhere at random. After a jump, the corner of the screen counts your steps from where you arrived.
+**Go to a hexagon.** Move any number of hexagons east or west and floors up or down. Paste a full address, as copied from the Current position tab, to return to a hexagon you have bookmarked, even after closing the page. An address copied from a Library with another seed is refused, since its books stand elsewhere. Or go somewhere at random. After a jump, the Current position tab counts your steps from where you arrived.
 
 ## Links to books
 
@@ -169,22 +170,22 @@ The sentences are grammatical but not necessarily sensible, like surreal poetry:
 
 ## Files
 
-In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-24.5`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
+In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-24.6`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
 
 | Path | Contents |
 |---|---|
 | `index.html` | The page |
 | `config.js` | The configuration |
-| `css/style.css` | Reading view, catalogue, menus and dreams |
+| `css/style.css` | Reading view, catalogue and dreams |
 | `js/library.js` | The mathematics: addresses, the bijection, text search, setting books in pages. No graphics. |
 | `js/architecture.js` | Dimensions, geometry and lighting of hexagons, vestibules, stairs and cells |
 | `js/world.js` | Streams the hexagons around the reader and dresses their books |
 | `js/player.js` | Walking, the spiral stair, and picking a book, door, lamp, bed or catalogue by gaze |
-| `js/terminal.js` | The catalogue's screen: finding texts and books, and going to hexagons |
+| `js/terminal.js` | The catalogue's screen: the current position, finding texts and books, and going to hexagons |
 | `js/textures.js` | Wood, plaster, stone, floor tiles and leather spines, painted at start-up |
 | `js/quotes.js` | The sentences of dreams: a small English grammar and its vocabulary |
 | `js/dream.js` | The moving picture of dreams, drawn by one shader |
-| `js/main.js` | Start-up, reading, pause menu, sleep |
+| `js/main.js` | Start-up, reading, sleep |
 | `lib/` | three.js r147 and its `Reflector` (MIT licence, see `lib/three.LICENSE`) |
 | `tests/library.test.js` | Tests of the mathematics |
 | `obsidian/publish.js` | For an Obsidian Publish site: a link under every note to its book in the Library |

@@ -50,7 +50,7 @@
     book: { pagesPerBook: 512, linesPerPage: 32, charactersPerLine: 64 },
     alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + '0123456789' + '.,;:!?\'"-\u2014()[]_*&/$%\u00A3\u00B0\u2020\u00A7#+=' + ' ',
     hexagon: { wallsWithShelves: 4, shelvesPerWall: 4, booksPerShelf: 32 },
-    view: { lookSensitivity: 1, fieldOfView: 72, showPosition: true },
+    view: { lookSensitivity: 1, fieldOfView: 72 },
     dreams: { quoteDuration: 10, quoteInterval: 5 },
   };
 
@@ -60,7 +60,7 @@
    */
   const SETTINGS = {
     '': { seed: 'seed', book: 'book', alphabet: 'alphabet', hexagon: 'hexagon', website: 'website', view: 'view', dreams: 'dreams' },
-    view: { lookSensitivity: 'lookSensitivity', fieldOfView: 'fieldOfView', showPosition: 'showPosition' },
+    view: { lookSensitivity: 'lookSensitivity', fieldOfView: 'fieldOfView' },
     dreams: { quoteDuration: 'quoteDuration', quoteInterval: 'quoteInterval' },
     book: { pagesPerBook: 'pagesPerBook', linesPerPage: 'linesPerPage', charactersPerLine: 'charactersPerLine' },
     hexagon: { wallsWithShelves: 'wallsWithShelves', shelvesPerWall: 'shelvesPerWall', booksPerShelf: 'booksPerShelf' },
@@ -104,11 +104,6 @@
     return n;
   }
 
-  function yesOrNo(value, name) {
-    if (value !== true && value !== false) throw new Error(`${name} must be true or false (it is ${JSON.stringify(value)}).`);
-    return value;
-  }
-
   /** Validates a raw configuration object and returns a normalised copy with derived values. */
   function normalizeConfig(rawInput) {
     const raw = readSection(rawInput || {}, '');
@@ -143,7 +138,6 @@
       booksPerShelf: positiveInt(hex.booksPerShelf, label('hexagon', 'booksPerShelf'), 256),
       lookSensitivity: numberBetween(view.lookSensitivity, label('view', 'lookSensitivity'), 0.1, 5),
       fieldOfView: numberBetween(view.fieldOfView, label('view', 'fieldOfView'), 30, 120),
-      showPosition: yesOrNo(view.showPosition, label('view', 'showPosition')),
       quoteDuration: numberBetween(dreams.quoteDuration, label('dreams', 'quoteDuration'), 1, 600),
       quoteInterval: numberBetween(dreams.quoteInterval, label('dreams', 'quoteInterval'), 0, 600),
     };
@@ -988,7 +982,7 @@
       return out;
     }
 
-    /** Reads a full hexagon address as copied from the pause menu or the catalogue. */
+    /** Reads a full hexagon address as copied from the catalogue. */
     parseHexagonAddress(text) {
       const lines = String(text).replace(/\r\n?/g, '\n').split('\n');
       let seed = null, floor = null, gallery = null;
@@ -1003,7 +997,7 @@
         else if (key === 'floor') floor = value;
         else gallery = value;
       }
-      if (floor === null || gallery === null) throw new Error('Paste an address with a "Floor:" line and a "Gallery:" line, as copied from the pause menu or from this catalogue.');
+      if (floor === null || gallery === null) throw new Error('Paste an address with a "Floor:" line and a "Gallery:" line, as copied from this catalogue.');
       const f = this.parseAddress(floor, this.floorDigits, 'floor');
       const g = this.parseAddress(gallery, this.galleryDigits, 'gallery');
       if (compareDigits(f, this.floorMax) > 0) throw new Error('That floor is above the last floor of the Library.');

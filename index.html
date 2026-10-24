@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=Libre+Bodoni:ital,wght@0,400;0,500;1,400&display=swap">
-<link rel="stylesheet" href="css/style.css?v=2026-10-24.5">
+<link rel="stylesheet" href="css/style.css?v=2026-10-24.6">
 </head>
 <body>
 <canvas id="view" aria-label="The Library, seen from the eyes of a librarian"></canvas>
@@ -22,13 +22,7 @@
     <p class="where" id="gaze-where"></p>
     <p class="hint" id="gaze-hint">Press E or click to read</p>
   </div>
-  <div id="corner">
-    <p id="whereabouts"></p>
-    <p id="position"></p>
-    <p id="travel" hidden></p>
-  </div>
   <p id="look-hint" hidden>Click to look around</p>
-  <button id="menu-button" type="button" hidden>Menu</button>
 </div>
 
 <section id="reader" class="screen" hidden aria-labelledby="book-title">
@@ -57,37 +51,50 @@
   </div>
 </section>
 
-<section id="pause" class="screen" hidden aria-labelledby="pause-title">
-  <div class="pause-block">
-    <h2 id="pause-title">Paused</h2>
-    <div class="actions">
-      <button id="resume" type="button" class="primary">Resume walking</button>
-      <button id="wake-elsewhere" type="button">Wake in another hexagon</button>
-    </div>
-    <div class="here">
-      <h3>This hexagon</h3>
-      <p>Floor <span class="addr" id="addr-floor"></span></p>
-      <p>Gallery <span class="addr" id="addr-gallery"></span></p>
-      <p class="small" id="addr-lengths"></p>
-      <button id="copy-address" type="button">Copy the full address</button>
-    </div>
-    <p class="controls" id="controls-hint"></p>
-  </div>
-</section>
-
 <section id="terminal" class="screen" hidden aria-labelledby="terminal-title">
   <div class="glass">
     <header class="glass-head">
       <h2 id="terminal-title">The catalogue</h2>
       <div class="tabs" role="tablist" aria-label="What to do">
-        <button id="tab-find" type="button" role="tab" aria-selected="true" aria-controls="panel-find">Find a text</button>
+        <button id="tab-here" type="button" role="tab" aria-selected="true" aria-controls="panel-here">Current position</button>
+        <button id="tab-find" type="button" role="tab" aria-selected="false" aria-controls="panel-find">Find a text</button>
         <button id="tab-books" type="button" role="tab" aria-selected="false" aria-controls="panel-books">Find a book</button>
         <button id="tab-go" type="button" role="tab" aria-selected="false" aria-controls="panel-go">Go to a hexagon</button>
       </div>
       <button id="terminal-close" type="button" class="quiet">Step away</button>
     </header>
 
-    <div id="panel-find" class="panel" role="tabpanel" aria-labelledby="tab-find">
+    <div id="panel-here" class="panel" role="tabpanel" aria-labelledby="tab-here" tabindex="-1">
+      <section class="here-now">
+        <p id="here-whereabouts" class="lead"></p>
+        <p id="here-seam" class="lead"></p>
+        <p id="here-journey" class="note" hidden></p>
+      </section>
+      <section class="go">
+        <h3>The seam</h3>
+        <div class="seam">
+          <div id="seam-map" class="seam-map" role="img" aria-label="Map of the whole Library">
+            <span id="seam-was" class="seam-was" hidden></span>
+            <span id="seam-here" class="seam-here"></span>
+          </div>
+          <p class="note">The Library has no edge. Walk east past the last hexagon of a floor and you are back at the first; climb past the last floor and you are on the first again. The seam is where these numbers begin again. Nothing marks it, and positions are counted east and up from it, as longitude is counted from Greenwich. The map shows the whole Library, east to the right and up to the top: its border is the seam, and each side joins the side opposite. The dot is this hexagon.</p>
+        </div>
+      </section>
+      <section class="go">
+        <h3>The address of this hexagon</h3>
+        <p class="note">Seed <span class="addr" id="term-seed"></span></p>
+        <p class="note">Floor <span class="addr" id="term-floor"></span></p>
+        <p class="note">Gallery <span class="addr" id="term-gallery"></span></p>
+        <p class="note" id="term-lengths"></p>
+        <div class="row"><button id="term-copy" type="button">Copy its full address</button></div>
+      </section>
+      <section class="go">
+        <h3>Walking</h3>
+        <p class="note controls" id="controls-hint"></p>
+      </section>
+    </div>
+
+    <div id="panel-find" class="panel" role="tabpanel" aria-labelledby="tab-find" hidden>
       <form id="find-form" class="find" autocomplete="off">
         <label for="find-text">Text to find</label>
         <textarea id="find-text" rows="3" spellcheck="false" placeholder="Type or paste any text"></textarea>
@@ -162,7 +169,7 @@
       <section class="go">
         <h3>To an address</h3>
         <form id="go-address" autocomplete="off">
-          <label for="go-address-text">Paste a full address, as copied from the pause menu or from this catalogue</label>
+          <label for="go-address-text">Paste a full address, as copied from this catalogue</label>
           <textarea id="go-address-text" rows="3" spellcheck="false" placeholder="Seed: …&#10;Floor: …&#10;Gallery: …"></textarea>
           <p id="go-address-error" class="error" hidden></p>
           <div class="row"><button type="submit" class="primary">Go</button></div>
@@ -171,11 +178,6 @@
       <section class="go">
         <h3>Anywhere</h3>
         <div class="row"><button id="go-random" type="button">Go to a hexagon at random</button></div>
-      </section>
-      <section class="go">
-        <h3>This hexagon</h3>
-        <p class="note">Seed <span id="term-seed"></span>, floor <span class="addr" id="term-floor"></span>, gallery <span class="addr" id="term-gallery"></span>.</p>
-        <div class="row"><button id="term-copy" type="button">Copy its full address</button></div>
       </section>
     </div>
   </div>
@@ -200,18 +202,18 @@
   whenever any of them changes: browsers and GitHub Pages keep copies of files for a while,
   and a new page read with an old script would not start.
 -->
-<script src="lib/three.min.js?v=2026-10-24.5"></script>
-<script src="lib/Reflector.js?v=2026-10-24.5"></script>
-<script src="config.js?v=2026-10-24.5"></script>
-<script src="js/library.js?v=2026-10-24.5"></script>
-<script src="js/textures.js?v=2026-10-24.5"></script>
-<script src="js/architecture.js?v=2026-10-24.5"></script>
-<script src="js/world.js?v=2026-10-24.5"></script>
-<script src="js/player.js?v=2026-10-24.5"></script>
-<script src="js/terminal.js?v=2026-10-24.5"></script>
-<script src="js/quotes.js?v=2026-10-24.5"></script>
-<script src="js/dream.js?v=2026-10-24.5"></script>
-<script src="js/main.js?v=2026-10-24.5"></script>
+<script src="lib/three.min.js?v=2026-10-24.6"></script>
+<script src="lib/Reflector.js?v=2026-10-24.6"></script>
+<script src="config.js?v=2026-10-24.6"></script>
+<script src="js/library.js?v=2026-10-24.6"></script>
+<script src="js/textures.js?v=2026-10-24.6"></script>
+<script src="js/architecture.js?v=2026-10-24.6"></script>
+<script src="js/world.js?v=2026-10-24.6"></script>
+<script src="js/player.js?v=2026-10-24.6"></script>
+<script src="js/terminal.js?v=2026-10-24.6"></script>
+<script src="js/quotes.js?v=2026-10-24.6"></script>
+<script src="js/dream.js?v=2026-10-24.6"></script>
+<script src="js/main.js?v=2026-10-24.6"></script>
 <script>
   // If the Library has not started a few seconds after the page has loaded (a script missing,
   // or not matching the others), say so rather than leave the screen black.
