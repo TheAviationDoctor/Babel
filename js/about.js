@@ -1,5 +1,5 @@
 /*
- * THE LIBRARY OF BABEL — the text of the catalogue's "About" tab
+ * THE LIBRARY OF BABEL — the text of the Catalogue's "About" tab
  *
  * Write it in Markdown between the line START and the line END below, in any text
  * editor, then save and reload the page. Markdown is plain text with a few marks:
