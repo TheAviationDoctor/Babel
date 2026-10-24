@@ -2,9 +2,9 @@
  * publish.js for an Obsidian Publish site: adds, at the end of every note, a link to the
  * book of the Library of Babel that holds the note's text.
  *
- * The link carries the note's text, compressed. Whoever follows it arrives in the
- * Library standing before that book: a title page with the note's title, then the
- * note, set in the Library's pages.
+ * The link carries the note's text and nothing else: https://babel.pellegr.in/#book=…
+ * Whoever follows it arrives in the Library standing before the book that holds exactly
+ * that text, set in the Library's pages from the first page.
  *
  * To use it:
  *   1. Put this file at the root of your vault, named publish.js. (If the vault already
@@ -20,7 +20,6 @@
   /* ---------------- settings ---------------- */
 
   const LIBRARY = 'https://babel.pellegr.in/'; // where the Library is published
-  const SEED = 'borges'; // the Library to send readers to
   const LABEL = 'Find this post in the Library of Babel'; // the words of the link
 
   /* ---------------- the link ---------------- */
@@ -29,54 +28,25 @@
   if (window.__babelLibraryLink) return; // in case the script is included twice
   window.__babelLibraryLink = true;
 
-  // The note's properties (frontmatter), from Publish's own renderer, when it offers them.
-  let props = null;
-  try {
-    if (window.publish && typeof window.publish.registerMarkdownPostProcessor === 'function') {
-      window.publish.registerMarkdownPostProcessor((el, ctx) => {
-        if (ctx && ctx.frontmatter) props = { path: location.pathname, data: ctx.frontmatter };
-      });
-    }
-  } catch (e) { /* not available: the title comes from the page */ }
-
   function toBase64Url(bytes) {
     let s = '';
     for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
     return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
 
-  /** The text as the Library's links carry it: UTF-8, deflated, in base64url ('z'), or plain ('u'). */
-  async function pack(text) {
-    const bytes = new TextEncoder().encode(text);
+  /**
+   * The link to the book that holds `text`: '#book=:' and the text's UTF-8 bytes, deflated
+   * and written in base64url (the short form), or '#book=' and the text percent-encoded.
+   */
+  async function linkTo(text) {
     if (typeof CompressionStream === 'function') {
       try {
+        const bytes = new TextEncoder().encode(text);
         const out = await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate'))).arrayBuffer();
-        return 'z' + toBase64Url(new Uint8Array(out));
-      } catch (e) { /* send it uncompressed */ }
+        return LIBRARY + '#book=:' + toBase64Url(new Uint8Array(out));
+      } catch (e) { /* the plain form, then */ }
     }
-    return 'u' + toBase64Url(bytes);
-  }
-
-  function currentProps() {
-    return props && props.path === location.pathname ? props.data || {} : {};
-  }
-
-  function noteTitle(sizer) {
-    const p = currentProps();
-    if (p.title) return String(p.title).trim();
-    const header = sizer.querySelector('.page-header, .inline-title');
-    if (header && header.innerText.trim()) return header.innerText.trim();
-    const last = location.pathname.split('/').filter(Boolean).pop() || '';
-    try { return decodeURIComponent(last.replace(/\+/g, ' ')).trim() || document.title; } catch (e) { return document.title; }
-  }
-
-  function noteYear() {
-    const p = currentProps();
-    for (const k of ['year', 'date', 'published', 'created']) {
-      const m = p[k] !== undefined && p[k] !== null && /\b(\d{4})\b/.exec(String(p[k]));
-      if (m) return m[1];
-    }
-    return '';
+    return LIBRARY + '#book=' + encodeURIComponent(text);
   }
 
   /** The note's text as a reader sees it: each block of the page, separated by a blank line. */
@@ -122,13 +92,8 @@
       else place(sizer, block);
       if (block.dataset.key === key) continue;
       block.dataset.key = key;
-      const params = new URLSearchParams();
-      params.set('book', await pack(text));
-      params.set('title', noteTitle(sizer));
-      const year = noteYear();
-      if (year) params.set('year', year);
-      params.set('seed', SEED);
-      if (block.dataset.key === key) block.firstChild.href = LIBRARY + '#' + params.toString();
+      const href = await linkTo(text);
+      if (block.dataset.key === key) block.firstChild.href = href;
     }
   }
 

@@ -1,5 +1,6 @@
 /*
- * Start-up and the screens around the walk: title, reading, pause.
+ * Start-up and the screens around the walk: reading, pause. There is no title screen:
+ * the reader wakes in the Library straight away (or before the book a link leads to).
  */
 (function () {
   'use strict';
@@ -7,52 +8,34 @@
   const $ = (id) => document.getElementById(id);
   const isTouch = matchMedia('(hover: none) and (pointer: coarse)').matches;
 
-  const settings = { sensitivity: 1, fov: 72 };
-  try {
-    const saved = JSON.parse(localStorage.getItem('babel.settings') || '{}');
-    if (saved.sensitivity) settings.sensitivity = saved.sensitivity;
-    if (saved.fov) settings.fov = saved.fov;
-  } catch (e) { /* storage unavailable: defaults */ }
-  function saveSettings() {
-    try { localStorage.setItem('babel.settings', JSON.stringify(settings)); } catch (e) { /* ignore */ }
-  }
-
   let raw, lib, assets, world, player, renderer, scene, camera, reflector, sinkReflector, figure, figureLight, terminal;
-  let initialSeed = 'borges';
-  let mode = 'title';
+  let mode = 'walking';
   let wakeIndex = 0;
   let gaze = null, gazeKey = '';
   let reading = null;
   let lastCell = '';
-  let linked = null; // the book a link has brought the reader to find: { kind, text, title, author, year, part, seed, fill }
 
   function showError(message) {
     $('error-message').textContent = message;
     $('error').hidden = false;
-    $('title').hidden = true;
   }
 
   let toastTimer = 0;
-  function toast(text) {
+  function toast(text, ms) {
     const el = $('toast');
     el.textContent = text;
     el.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { el.hidden = true; }, 3200);
+    toastTimer = setTimeout(() => { el.hidden = true; }, ms || 3200);
   }
 
   /* ---------------- building ---------------- */
-
-  function buildLibrary(seed) {
-    return new BabelCore.Library(Object.assign({}, raw, { seed }));
-  }
 
   function boot() {
     raw = window.BABEL_CONFIG;
     if (!raw) return showError('The configuration file config.js was not found, or it does not define window.BABEL_CONFIG.');
     try {
       lib = new BabelCore.Library(raw);
-      initialSeed = lib.seed;
     } catch (e) {
       return showError(e.message);
     }
@@ -69,7 +52,7 @@
     const soot = new THREE.Color(0x0d0a07);
     scene.background = soot;
     scene.fog = new THREE.FogExp2(soot, 0.082);
-    camera = new THREE.PerspectiveCamera(settings.fov, window.innerWidth / window.innerHeight, 0.05, 90);
+    camera = new THREE.PerspectiveCamera(lib.config.fieldOfView, window.innerWidth / window.innerHeight, 0.05, 90);
 
     const textures = Babel.Textures.create();
     const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
@@ -77,7 +60,7 @@
     assets = Babel.Architecture.createAssets(lib.config, textures);
     world = new Babel.World(scene, assets, lib);
     player = new Babel.Player(assets.dims, camera, renderer.domElement);
-    player.sensitivity = settings.sensitivity;
+    player.sensitivity = lib.config.lookSensitivity;
     player.onTap = () => { if (mode === 'walking') interact(); };
     player.doorOpen = (off) => world.isDoorOpen(player.cg + off, player.cf);
 
@@ -115,7 +98,7 @@
 
     terminal = new Babel.Terminal({
       lib: () => lib, world, player, dims: assets.dims,
-      setMode, startWalking, openBookAt, goToCell, goToAddress, goToRandom, useSeed, toast, copyText, linkBase,
+      setMode, startWalking, openBookAt, goToCell, goToAddress, goToRandom, toast, copyText, linkBase,
     });
 
     wake(0);
@@ -169,30 +152,6 @@
     player.placeAtStart();
     world.update(0, 0);
     lastCell = '';
-    renderTitleText();
-  }
-
-  function changeSeed(seed) {
-    seed = String(seed || '').trim() || initialSeed;
-    if (seed === lib.seed) return false;
-    lib = buildLibrary(seed);
-    world.setLibrary(lib);
-    wake(0);
-    $('seed-input').value = seed;
-    $('seed-input-2').value = seed;
-    return true;
-  }
-
-  /** Rebuilds the Library with another seed without moving the reader's anchor. */
-  function useSeed(seed) {
-    if (seed === lib.seed) return;
-    lib = buildLibrary(seed);
-    world.setLibrary(lib);
-    world.setAnchor(world.anchor.gallery, world.anchor.floor);
-    terminal.reset();
-    $('seed-input').value = seed;
-    $('seed-input-2').value = seed;
-    toast(`The Library of seed "${seed}".`);
   }
 
   /** Goes to hexagon (dg, df) relative to the anchor; with `face`, stands before that book. */
@@ -221,56 +180,26 @@
     return /^https?:$/.test(location.protocol) ? location.href.replace(/#.*$/, '') : '';
   }
 
-  /** Reads a link to a book from the page's address, if it has one, and says where it leads. */
-  async function readLocationLink() {
-    if (!/(^#|&)(book|text)=/.test(location.hash)) return false;
+  /**
+   * If the page's address is a link to a book (…/#book=…), sets the reader down before the
+   * book that holds the link's text, and returns true.
+   */
+  async function goToLinkedBook() {
+    if (!/^#book=/.test(location.hash)) return false;
+    let text;
     try {
-      linked = await BabelCore.Library.readLink(location.hash);
+      text = await BabelCore.Library.readLink(location.hash);
     } catch (e) {
-      linked = null;
-      toast(/too old/.test(e.message) ? e.message : 'This link to a book could not be read. It may have been cut short.');
+      toast(/too old/.test(e.message) ? e.message : 'This link to a book could not be read. It may have been cut short.', 6000);
       return false;
     }
-    if (!linked || !linked.text.trim()) { linked = null; return false; }
-    if (linked.seed) $('seed-input').value = linked.seed;
-    const note = $('link-note');
-    note.textContent = '';
-    if (linked.kind === 'book') {
-      note.append('A link has brought you here to find ');
-      const cite = document.createElement('cite');
-      cite.textContent = linked.title || 'a book';
-      note.append(cite);
-      note.append('. Enter the Library and you will stand before it.');
-    } else {
-      const words = linked.text.replace(/\s+/g, ' ').trim();
-      note.append(`A link has brought you here to find the book that begins “${words.length > 80 ? words.slice(0, 80) + '…' : words}”. Enter the Library and you will stand before it.`);
+    if (!text || !lib.prepareText(text).symbols.length) {
+      toast('This link carries no text that the Library can hold.', 6000);
+      return false;
     }
-    note.hidden = false;
-    return true;
-  }
-
-  /** Sets the reader down before the book the link leads to, in the Library of the current seed. */
-  function goToLinked() {
-    const l = linked;
-    if (!l) return false;
-    let r, mark, label;
-    if (l.kind === 'book') {
-      const clean = BabelCore.Library.cleanEbook(l.text);
-      const meta = { title: l.title || clean.title || '', author: l.author || clean.author || '', year: l.year || '' };
-      const set = lib.typeset(clean.text, meta);
-      const k = Math.min(set.parts.length, Math.max(1, parseInt(l.part, 10) || 1)) - 1;
-      r = lib.findText(set.parts[k], { fill: l.fill === 'random' ? 'random' : 'blank' });
-      label = (meta.title || 'the book') + (set.parts.length > 1 ? `, part ${k + 1} of ${set.parts.length}` : '');
-      mark = { slot: r.location.slot, start: 0, length: 0, title: meta.title ? label : '' };
-    } else {
-      const symbols = lib.prepareText(l.text).symbols.subarray(0, lib.M);
-      if (!symbols.length) { toast('None of the characters of that passage are in the alphabet of this Library.'); return false; }
-      r = lib.findText(symbols, { fill: l.fill === 'blank' ? 'blank' : 'random' });
-      label = 'the book that begins with the passage';
-      mark = { slot: r.location.slot, start: 0, length: symbols.length };
-    }
-    goToAddress(r.location.gallery, r.location.floor, lib.slotParts(r.location.slot), mark);
-    toast(`Before you, a little out of its row, stands ${label}. ${isTouch ? 'Tap it' : 'Press E'} to read it.`);
+    const b = lib.bookOfText(text);
+    goToAddress(b.location.gallery, b.location.floor, lib.slotParts(b.location.slot), { slot: b.location.slot, start: 0, length: 0 });
+    toast(`Before you, a little out of its row, stands the book the link leads to. ${isTouch ? 'Tap it' : 'Press E'} to read it.`, 6000);
     return true;
   }
 
@@ -284,36 +213,12 @@
 
   const fmt = (n) => n.toLocaleString('en');
 
-  function factsHTML() {
-    const c = lib.config, s = lib.stats;
-    return `${fmt(lib.M)} characters to a book (${fmt(c.pagesPerBook)} pages of ${fmt(c.linesPerPage)} lines of ${fmt(c.charactersPerLine)}), in an alphabet of ${fmt(lib.N)} symbols, ${fmt(lib.S)} books to a hexagon. ` +
-      `About 10<sup>${fmt(Math.floor(s.log10Books))}</sup> books in all, in about 10<sup>${fmt(Math.floor(s.log10Hexagons))}</sup> hexagons.`;
-  }
-
   function controlsHTML() {
     if (isTouch) return 'Drag on the right of the screen to look. Hold and slide on the left to walk. Tap a book to read it, a door to open it, or the catalogue to use it.';
     return 'Look with the mouse. Walk with <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or the arrow keys, and hold <kbd>Shift</kbd> to hurry. ' +
       'Press <kbd>E</kbd> to take down the book you are looking at, open a door or use the catalogue, and <kbd>Esc</kbd> to pause.';
   }
 
-  function addressHead(digits, count) {
-    const a = lib.glyphs, n = digits.length;
-    let s = '';
-    for (let i = n - 1; i >= Math.max(0, n - count); i--) s += a[digits[i]];
-    return s;
-  }
-
-  function renderTitleText() {
-    const f = world.floor(0).digits;
-    const field = $('address-field');
-    const cols = Math.ceil(window.innerWidth / 6.4), rows = Math.ceil(window.innerHeight / 14) + 2;
-    field.textContent = addressHead(f, Math.min(f.length, cols * rows));
-    $('address-caption').textContent = `Behind these words, the number of the floor you will wake on, in the Library's own alphabet. It runs to ${fmt(f.length)} symbols; this is its beginning.`;
-    $('facts').innerHTML = factsHTML();
-    $('controls-hint').innerHTML = controlsHTML();
-    $('controls-hint-2').innerHTML = controlsHTML();
-    document.querySelector('[data-fact="pages"]').textContent = fmt(lib.config.pagesPerBook);
-  }
 
   function renderHere() {
     const g = world.gallery(player.cg).digits, f = world.floor(player.cf).digits;
@@ -335,7 +240,6 @@
 
   function setMode(next) {
     mode = next;
-    $('title').hidden = next !== 'title';
     $('hud').hidden = next !== 'walking';
     $('reader').hidden = next !== 'reading';
     $('pause').hidden = next !== 'paused';
@@ -519,25 +423,9 @@
   /* ---------------- interface wiring ---------------- */
 
   function bindInterface() {
-    $('seed-input').value = lib.seed;
-    $('seed-input-2').value = lib.seed;
-
-    $('seed-form').addEventListener('submit', (e) => {
-      e.preventDefault();
-      changeSeed($('seed-input').value);
-      if (!(linked && goToLinked())) startWalking();
-    });
-    // a link to a book, opened in this page, or pasted into its address bar later
-    readLocationLink();
-    window.addEventListener('hashchange', async () => {
-      if ((await readLocationLink()) && mode !== 'title') goToLinked();
-    });
-    $('seed-form-2').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const changed = changeSeed($('seed-input-2').value);
-      toast(changed ? `A different Library: seed "${lib.seed}". You wake in a new hexagon.` : 'That is already the seed of this Library.');
-      renderHere();
-    });
+    $('controls-hint').innerHTML = controlsHTML();
+    // a link to a book, pasted into the address bar while the Library is open
+    window.addEventListener('hashchange', () => { goToLinkedBook(); });
     $('resume').addEventListener('click', startWalking);
     $('menu-button').addEventListener('click', pause);
     $('wake-elsewhere').addEventListener('click', () => {
@@ -550,16 +438,6 @@
       const text = lib.hexagonAddressText(g, f);
       copyText(text, `Copied the address (${fmt(text.length)} characters).`);
     });
-
-    const sens = $('sensitivity'), fov = $('fov');
-    sens.value = settings.sensitivity; fov.value = settings.fov;
-    const showSettings = () => {
-      $('sensitivity-out').textContent = Number(sens.value).toFixed(1);
-      $('fov-out').textContent = `${fov.value}°`;
-    };
-    showSettings();
-    sens.addEventListener('input', () => { settings.sensitivity = player.sensitivity = Number(sens.value); showSettings(); saveSettings(); });
-    fov.addEventListener('input', () => { settings.fov = camera.fov = Number(fov.value); camera.updateProjectionMatrix(); showSettings(); saveSettings(); });
 
     $('prev-page').addEventListener('click', () => turn(-1));
     $('next-page').addEventListener('click', () => turn(1));
@@ -606,8 +484,14 @@
       }
     });
 
-    setMode('title');
-    $('seed-input').focus({ preventScroll: true });
+    // straight into the Library: before the book a link leads to, or in the waking hexagon
+    setMode('walking');
+    goToLinkedBook().then((went) => {
+      if (!went) {
+        toast(isTouch ? 'Drag on the right to look around, hold and slide on the left to walk, and tap a book to read it.'
+          : 'Walk with W A S D, press E to take down a book, and Esc for the menu.', 7000);
+      }
+    });
   }
 
   function copyText(text, done) {
@@ -658,7 +542,6 @@
     const dt = Math.min(0.05, rawDt);
     last = now;
     adaptQuality(rawDt);
-    if (mode === 'title') player.yaw += dt * 0.035;
     player.update(dt);
     world.update(player.cg, player.cf);
     world.tick(dt);
@@ -687,7 +570,7 @@
 
     // behind the catalogue, a book or the pause menu, the Library only needs drawing now and then
     frameCount++;
-    if (mode === 'walking' || mode === 'title' || frameCount % 4 === 0) renderer.render(scene, camera);
+    if (mode === 'walking' || frameCount % 4 === 0) renderer.render(scene, camera);
     requestAnimationFrame(frame);
   }
   let frameCount = 0;

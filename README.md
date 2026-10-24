@@ -6,7 +6,7 @@ Every text ever written, including your own life story, as well as every text *n
 
 ## Getting started
 
-Everything is pure HTML/JS/CSS, so nothing needs installing. Just visit the Library online at https://theaviationdoctor.github.io/Babel/, or download the repo and open `index.html` locally in a recent browser (Chrome, Edge, Firefox, or Safari). It even runs offline (except for a couple of Google Fonts which will then revert to your browser's defaults).
+Everything is pure HTML/JS/CSS, so nothing needs installing. Just visit the Library online at https://babel.pellegr.in/, or download the repo and open `index.html` locally in a recent browser (Chrome, Edge, Firefox, or Safari). It even runs offline (except for a couple of Google Fonts which will then revert to your browser's defaults). There is no title screen: you wake in a hexagon of the Library. Click once to look around with the mouse.
 
 | | |
 |---|---|
@@ -60,15 +60,17 @@ Everything about the Library's size lives in `config.js`, which is read once whe
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `seed` | `'borges'` | Decides which book stands on which shelf. The same seed always gives the same Library. It can also be changed from the title screen and the pause menu. |
+| `seed` | `'borges'` | Decides which book stands on which shelf. The same seed always gives the same Library. It can only be changed here, so that every visitor finds every book in the same place. |
 | `book.pagesPerBook` | 512 | Adapted from Borges' story (410 pages) to be a power of 2. |
 | `book.linesPerPage` | 32 | Adapted from Borges' story (40 lines) to be a power of 2. |
 | `book.charactersPerLine` | 64 | Adapted from Borges' story (80 characters) to be a power of 2. |
 | `alphabet` | 64 symbols: the 26 capital letters from the modern latin alphabet, ten digits, the symbols `. , ; : ! ? ' " - — ( ) [ ] _ * & / $ % £ ° † § # + =`, and space. | These are all the symbols books are written in. Each must appear once; at most 256 symbols. Any string of distinct characters works. Adapted from Borges' story (25 symbols) to be a power of 2 (32 symbols were not sufficient to represent most literature classics, so the next option was 64). |
-| `website` | `'https://theaviationdoctor.github.io/Babel/'` | Where the Library is published. Links copied from the catalogue lead there, wherever they were copied from. |
+| `website` | `'https://babel.pellegr.in/'` | Where the Library is published. Links copied from the catalogue lead there, wherever they were copied from. |
 | `hexagon.wallsWithShelves` | 4 | 1 to 4. The other two sides of every hexagon are its vestibules. |
 | `hexagon.shelvesPerWall` | 4 | Adapted from Borges' story (5 shelves) to be a power of 2. |
 | `hexagon.booksPerShelf` | 32 | |
+| `view.lookSensitivity` | 1 | How fast the view turns with the mouse, from 0.1 to 5. |
+| `view.fieldOfView` | 72 | How wide the view is, in degrees, from 30 to 120. |
 
 A book may hold no more than `2^24 = 16,777,216` characters and a hexagon no more `2^16 = 65,536` books. The rooms are built to fit: the number of books per shelf sets the width of each hexagon, and the number of shelves sets the height of its ceiling. If a value is invalid or a setting's name is misspelt, the page says which one and why.
 
@@ -114,25 +116,36 @@ Every vestibule has one. It does three things.
 
 **Find a text.** Type or paste anything into it. Small letters are read as capitals, accents are removed, line breaks and tabs become spaces, and `--` becomes a long dash. Other characters become their nearest equivalents in the alphabet: curly quotation marks become straight ones, Æ becomes AE, ß becomes SS, ½ becomes 1/2, a ligature such as ﬁ becomes FI, and so on. What has no equivalent is left out (the screen lists it). The catalogue then runs the shelving backwards. It composes the book that begins with your text, with the rest of the book either random characters or blank, and the inverse permutation gives the hexagon, wall, shelf and volume where that book stands. Since every possible book exists exactly once, it is certainly there. It is also almost always astronomically far away, so the screen gives the distance as a power of ten. You can read the book on the spot, with your text highlighted, copy its address, or go there: you are set down in front of it, and the volume stands a little out of its row.
 
-**Find a book.** The catalogue can also find a whole book: any plain-text file in the `books` folder. It sets the text in pages, the way a book of this Library holds them: a title page with the title, author and year, then the text at 64 characters to a line and 32 lines to a page, with words kept whole and each paragraph starting on a new, indented line. The rest of the 512 pages are blank (or random characters, if you prefer). It then finds the one book of the Library that holds exactly those pages, and you can read it on the spot or go and take it down from its shelf. A text longer than one book is set in several parts, each with its own title page, and each part is found separately.
+**Find a book.** The catalogue can also find a whole book: any plain-text file in the `books` folder. It sets the text in pages, the way a book of this Library holds them: from the first page, 64 characters to a line and 32 lines to a page, with words kept whole and each paragraph starting on a new, indented line. The rest of the 512 pages are blank (or random characters, if you prefer). It then finds the one book of the Library that holds exactly those pages, and you can read it on the spot, go and take it down from its shelf, or copy a link to it (see [Links to books](#links-to-books)). A text longer than one book is set in several parts, one after the other, and each part is found separately.
 
-**Go to a hexagon.** Move any number of hexagons east or west and floors up or down. Paste a full address, as copied from the pause menu or the catalogue, to return to a hexagon you have bookmarked, even after closing the page. Or go somewhere at random. After a jump, the corner of the screen counts your steps from where you arrived.
+**Go to a hexagon.** Move any number of hexagons east or west and floors up or down. Paste a full address, as copied from the pause menu or the catalogue, to return to a hexagon you have bookmarked, even after closing the page. An address copied from a Library with another seed is refused, since its books stand elsewhere. Or go somewhere at random. After a jump, the corner of the screen counts your steps from where you arrived.
 
 ## Links to books
 
 A book's address cannot serve as a link: it is as long as the book itself, 1,048,576 symbols, about a megabyte. That is no accident of design. The shelving is a bijection, so there are exactly as many addresses as books, and addresses cannot on average be shorter than what they point to.
 
-A link to a book carries the book's text instead, compressed, after the `#` of the Library's address, a part that browsers never send to the server. Whoever opens the link is told which book it leads to; on entering the Library, they are set down before it, the volume standing a little out of its row. The Library sets the text in pages exactly as the catalogue does and runs the shelving backwards to find the book, so a link keeps leading to the right book even if the seed or the configuration change. A blog post of a few thousand words makes a link of a few thousand characters. In the catalogue, **Copy a link to it** copies such a link for any text found with **Find a text** or any book found with **Find a book**. The format is described in `js/library.js`, under "Links to books".
+A link to a book carries the book's text instead, after the `#` of the Library's address, a part that browsers never send to the server:
+
+    https://babel.pellegr.in/#book=<the text>
+
+Whoever opens the link is set down in the Library before the book that holds exactly that text, the volume standing a little out of its row. That book is the text set in pages as the catalogue's **Find a book** sets it (from the first page, words kept whole, a new indented line for each paragraph), with the rest of its pages blank. The Library runs the shelving backwards to find it, so the same text always leads to the same book, and a link keeps leading to the book that holds its text even if the seed or the configuration change.
+
+**Building a link.** The text after `book=` takes one of two forms; both lead to the same book.
+
+- **Plain:** the text itself, percent-encoded, as a web address must write it: a space as `%20`, a line break as `%0A`, `é` as `%C3%A9`, and so on. Every language and spreadsheet has a function for it: `encodeURIComponent(text)` in JavaScript, `urllib.parse.quote(text, safe='')` in Python, `ENCODEURL(A1)` in Excel or Google Sheets. For example `https://babel.pellegr.in/#book=Call%20me%20Ishmael.` For a short text you can even type `https://babel.pellegr.in/#book=Call me Ishmael.` into the address bar, and the browser encodes it.
+- **Compressed:** a colon, then the text's UTF-8 bytes compressed with zlib's deflate and written in URL-safe base64 without the trailing `=` signs. It is about a third as long. In Python: `':' + base64.urlsafe_b64encode(zlib.compress(text.encode('utf-8'))).rstrip(b'=').decode()`. This is the form that `publish.js` and the catalogue's **Copy a link to it** make.
+
+Separate paragraphs with a blank line (`%0A%0A`); a single line break then counts as a space. In a text with no blank line at all, each line is taken as a paragraph. The text is otherwise read as the catalogue reads any text: in capitals, without accents, with curly quotation marks made straight, and so on. A blog post of a few thousand words makes a link of a few thousand characters, well within what browsers accept; a whole novel would be too long for some browsers, which stop at about 80,000 characters.
 
 ### Linking a blog
 
-`obsidian/publish.js` adds, at the end of every note of a site made with [Obsidian Publish](https://obsidian.md/publish), a link to the book of the Library that holds the note: a title page with the note's title (and the year from the note's `date` property, if it has one), then the note's text as a reader sees it. No author is named, since a note may quote or carry texts by others. To use it:
+`obsidian/publish.js` adds, at the end of every note of a site made with [Obsidian Publish](https://obsidian.md/publish), a link to the book of the Library that holds the note's text as a reader sees it, and nothing else: no title, no author. To use it:
 
 1. Copy `obsidian/publish.js` to the root of the vault, as `publish.js`. If the vault already has a `publish.js`, paste its contents at the end of that file instead.
 2. In Obsidian, open **Publish changes**, tick `publish.js` (it is hidden from the file explorer but listed there) and publish.
 3. Reload the site, holding Shift so that the browser fetches the new script.
 
-Obsidian Publish runs `publish.js` only on sites with a custom domain. The settings at the top of the file give the address of the Library (`https://babel.pellegr.in/`), the seed and the words of the link. The script reads the page as Obsidian Publish draws it, which Obsidian does not document and may change; if the link stops appearing, that is the place to look.
+Obsidian Publish runs `publish.js` only on sites with a custom domain. The settings at the top of the file give the address of the Library (`https://babel.pellegr.in/`) and the words of the link. The script reads the page as Obsidian Publish draws it, which Obsidian does not document and may change; if the link stops appearing, that is the place to look.
 
 ## Your books
 

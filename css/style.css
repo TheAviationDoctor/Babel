@@ -82,57 +82,9 @@ input[type="text"]:focus, input[type="number"]:focus { outline: none; border-bot
 
 .small { font-size: var(--step--1); color: var(--ash); }
 
-/* ---------- title ---------- */
-
-#title {
-  display: flex; align-items: center;
-  background: linear-gradient(90deg, rgba(13, 10, 7, 0.94) 0%, rgba(13, 10, 7, 0.72) 42%, rgba(13, 10, 7, 0.3) 100%);
-  overflow: hidden;
-}
-#address-field {
-  position: absolute; inset: -0.5rem;
-  font-family: var(--type);
-  font-size: 11px;
-  line-height: 1.3;
-  letter-spacing: 0.04em;
-  color: var(--vellum);
-  opacity: 0.17;
-  word-break: break-all;
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(90deg, transparent 18%, #000 62%);
-  mask-image: linear-gradient(90deg, transparent 18%, #000 62%);
-  user-select: none;
-}
-.title-block {
-  position: relative;
-  max-width: 34rem;
-  display: grid; gap: 1.1rem;
-  margin-left: clamp(0px, 6vw, 7rem);
-}
-#title-name {
-  font-size: clamp(2.75rem, 6.6vw, 5.9rem);
-  line-height: 0.94;
-  letter-spacing: -0.012em;
-  color: var(--vellum);
-}
-.after { font-style: italic; color: var(--ash); font-size: var(--step-1); margin-top: -0.4rem; }
-.lede { font-size: var(--step-1); line-height: 1.55; max-width: 30em; }
-.link-note { font-size: var(--step-0); line-height: 1.5; max-width: 32em; color: var(--lamp); border-left: 2px solid var(--lamp); padding-left: 0.9em; }
-.link-note cite { font-style: italic; }
-.seed-form { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.75rem 1rem; margin-top: 0.4rem; }
-.seed-form label { font-style: italic; color: var(--ash); }
-.seed-form input { width: 12ch; flex: 1 1 8ch; max-width: 18ch; }
 .note { font-size: var(--step--1); color: var(--ash); line-height: 1.5; max-width: 34em; }
-.facts { font-size: var(--step--1); line-height: 1.6; font-variant-numeric: tabular-nums lining-nums; max-width: 36em; }
-.facts sup { font-size: 0.72em; line-height: 0; }
 .controls { font-size: var(--step--1); color: var(--ash); line-height: 1.6; max-width: 36em; }
 .controls kbd { font-family: var(--type); font-size: 0.95em; color: var(--vellum); }
-.address-caption {
-  position: absolute;
-  right: max(16px, env(safe-area-inset-right, 0px)); bottom: max(18px, env(safe-area-inset-bottom, 0px));
-  max-width: 24rem; text-align: right;
-  font-style: italic; font-size: var(--step--1); color: var(--ash); line-height: 1.5;
-}
 
 /* ---------- walking ---------- */
 
@@ -317,9 +269,6 @@ mark { background: rgba(227, 169, 90, 0.55); color: var(--ink); box-shadow: 0 0 
 }
 #pause-title { font-size: clamp(2.2rem, 4.5vw, 3.4rem); }
 .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
-.settings { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 0.7rem 1.2rem; align-items: center; }
-.settings label { font-style: italic; color: var(--ash); }
-.settings output { font-style: normal; color: var(--vellum); font-variant-numeric: tabular-nums; margin-left: 0.4em; }
 input[type="range"] { accent-color: var(--lamp); width: 100%; }
 .here { display: grid; gap: 0.45rem; }
 .here h3 { font-size: var(--step-1); font-style: italic; }
@@ -341,11 +290,7 @@ input[type="range"] { accent-color: var(--lamp); width: 100%; }
 #error-message { font-family: var(--type); line-height: 1.5; color: var(--lamp); }
 
 @media (max-width: 640px) {
-  #title { align-items: flex-end; background: linear-gradient(0deg, rgba(13, 10, 7, 0.96) 0%, rgba(13, 10, 7, 0.75) 60%, rgba(13, 10, 7, 0.35) 100%); }
-  #address-field { -webkit-mask-image: linear-gradient(0deg, transparent 45%, #000 90%); mask-image: linear-gradient(0deg, transparent 45%, #000 90%); }
-  .address-caption { display: none; }
-  .title-block, .pause-block, .error-block { margin-left: 0; }
-  .settings { grid-template-columns: minmax(0, 1fr); }
+  .pause-block, .error-block { margin-left: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

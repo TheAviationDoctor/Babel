@@ -4,13 +4,14 @@
  *
  * A text is found by running the shelving backwards: the catalogue composes the book
  * that begins with the text, and the inverse permutation gives the shelf it stands on.
- * A whole book (a .txt file the reader shows it) is first set in pages, with a title
- * page, the way a book of this Library holds them; then it is found the same way.
+ * A whole book (a .txt file the reader shows it) is first set in pages, the way a book of
+ * this Library holds them; then it is found the same way, and is the very book a link
+ * carrying that text leads to (see "Links to books" in library.js).
  *
  * It talks to the rest of the game through a small context object (see main.js):
  *   ctx.lib(), ctx.world, ctx.player, ctx.dims, ctx.setMode(mode), ctx.startWalking(),
  *   ctx.openBookAt(options), ctx.goToCell(dg, df, face), ctx.goToAddress(gallery, floor, face),
- *   ctx.goToRandom(), ctx.useSeed(seed), ctx.toast(text), ctx.copyText(text, done), ctx.linkBase()
+ *   ctx.goToRandom(), ctx.toast(text), ctx.copyText(text, done), ctx.linkBase()
  */
 (function () {
   'use strict';
@@ -183,7 +184,6 @@
         const loc = this.certain.location;
         this.ctx.copyText(this.lib.hexagonAddressText(loc.gallery, loc.floor), 'Copied the address of that hexagon.');
       });
-      $('certain-link').addEventListener('click', () => this._copyLink(this.certainLink));
       const folder = $('books-folder-input');
       if (!('webkitdirectory' in folder) || /iPhone|iPad|Android/.test(navigator.userAgent || '')) $('books-folder').hidden = true;
       $('books-folder').addEventListener('click', () => folder.click());
@@ -263,7 +263,6 @@
       const r = lib.findText(this.query.symbols, { fill });
       this.certain = r;
       $('certain-where').innerHTML = this._whereHTML(r.location, 'from the first page');
-      this.certainLink = this._link('text', this.query.raw, { fill });
     }
 
     /* ---------------- links ---------------- */
@@ -273,10 +272,10 @@
      * Library finds the book again from it. Made ahead of the click, so that copying
      * happens within the click itself, as some browsers require.
      */
-    _link(kind, text, extra) {
+    _link(text) {
       const base = this.ctx.linkBase();
-      if (!base) return Promise.resolve(null);
-      const p = BabelCore.Library.makeLink(base, kind, text, Object.assign({ seed: this.lib.seed }, extra)).catch(() => null);
+      if (!base) return null;
+      const p = BabelCore.Library.makeLink(base, text).catch(() => null);
       const holder = { url: null, promise: p };
       p.then((url) => { holder.url = url; });
       return holder;
@@ -374,7 +373,8 @@
         const clean = BabelCore.Library.cleanEbook(entry.text);
         const named = describeBook(entry.name);
         const meta = named.author || !clean.title ? named : { title: clean.title, author: clean.author, year: named.year };
-        t = { meta, text: clean.text, set: this.lib.typeset(clean.text, meta), trimmed: clean.trimmed };
+        // set as a link would set it, without a title page: the same text is the same book
+        t = { meta, text: clean.text, set: this.lib.typeset(clean.text, {}), trimmed: clean.trimmed };
         this.typeset.set(key, t);
       }
       return t;
@@ -396,7 +396,7 @@
         if (by) info.appendChild(el('span', 'by', by));
         const n = set.parts.length;
         info.appendChild(el('span', 'note', n === 1
-          ? `${fmt(set.characters)} characters, ${fmt(this._pagesOf(set.parts[0]))} pages with the title page`
+          ? `${fmt(set.characters)} characters, ${fmt(this._pagesOf(set.parts[0]))} pages`
           : `${fmt(set.characters)} characters: longer than one book of the Library, so set in ${n} parts`));
         const button = el('button', '', 'Find it');
         button.type = 'button';
@@ -431,9 +431,9 @@
       b.found = set.parts.map((part) => lib.findText(part, { fill }));
 
       $('book-found-title').replaceChildren('Where ', el('cite', '', b.meta.title), ' stands');
-      const how = [`The catalogue sets the text as a book of this Library holds it: a title page, then ${fmt(c.charactersPerLine)} characters to a line and ${fmt(c.linesPerPage)} lines to a page, with words kept whole and paragraphs indented.`];
+      const how = [`The catalogue sets the text as a book of this Library holds it, from the first page: ${fmt(c.charactersPerLine)} characters to a line and ${fmt(c.linesPerPage)} lines to a page, with words kept whole and paragraphs indented.`];
       if (n === 1) how.push(`It fills ${fmt(this._pagesOf(set.parts[0]))} of the book's ${fmt(c.pagesPerBook)} pages.`);
-      else how.push(`It is too long for one book, so it is set in ${n} parts, each with its own title page.`);
+      else how.push(`It is too long for one book, so it is set in ${n} parts, one after the other.`);
       how.push('Then the catalogue runs the shelving backwards and finds the book that holds exactly those pages. Every possible book stands somewhere, exactly once.');
       if (b.trimmed) how.push("Project Gutenberg's licence, before and after the text, is left out.");
       if (set.recased) how.push('Letters are set as capitals.');
@@ -449,14 +449,16 @@
       b.found.forEach((r, k) => {
         const li = el('li');
         const p = el('p', 'where');
-        p.innerHTML = (n > 1 ? `Part ${k + 1} of ${n}: ` : '') + this._whereHTML(r.location, 'from its title page');
+        p.innerHTML = (n > 1 ? `Part ${k + 1} of ${n}: ` : '') + this._whereHTML(r.location, 'from the first page');
         const row = el('div', 'row');
         const read = el('button', '', 'Read it here');
         const go = el('button', 'primary', 'Go there');
         const copy = el('button', '', 'Copy its address');
         const link = el('button', '', 'Copy a link to it');
         for (const x of [read, go, copy, link]) x.type = 'button';
-        const holder = this._link('book', b.text, { title: b.meta.title, author: b.meta.author, year: b.meta.year, part: n > 1 ? k + 1 : '', fill: fill === 'random' ? 'random' : '' });
+        // a link carries the text and leads to its book with blank pages after it: the first part, then
+        const linkable = k === 0 && fill !== 'random';
+        const holder = linkable ? this._link(b.text) : null;
         link.addEventListener('click', () => this._copyLink(holder));
         read.addEventListener('click', () => this.ctx.openBookAt({ location: r.location, slot: r.location.slot, content: r.content, returnTo: 'terminal' }));
         go.addEventListener('click', () => {
@@ -468,7 +470,8 @@
           const loc = r.location, { wall, shelf, volume } = this.lib.slotParts(loc.slot);
           this.ctx.copyText(this.lib.hexagonAddressText(loc.gallery, loc.floor), `Copied the address of its hexagon. The book is on wall ${wall + 1}, shelf ${shelf + 1}, volume ${volume + 1}.`);
         });
-        row.append(read, go, copy, link);
+        row.append(read, go, copy);
+        if (linkable) row.append(link);
         li.append(p, row);
         ol.appendChild(li);
       });
@@ -505,7 +508,11 @@
         return;
       }
       err.hidden = true;
-      if (a.seed && a.seed !== this.lib.seed) this.ctx.useSeed(a.seed);
+      if (a.seed && a.seed !== this.lib.seed) {
+        err.textContent = `That address is in the Library of seed "${a.seed}", where every book stands somewhere else. This Library's seed is "${this.lib.seed}"; it can be changed in config.js.`;
+        err.hidden = false;
+        return;
+      }
       this.ctx.goToAddress(a.gallery, a.floor, null);
     }
 

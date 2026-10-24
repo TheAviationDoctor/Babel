@@ -7,7 +7,7 @@
  */
 window.BABEL_CONFIG = {
   // Arranges the books on the shelves. Any word or number; the same seed always
-  // gives the same Library. It can also be changed from the title screen.
+  // gives the same Library, and everyone who visits it finds every book in the same place.
   seed: 'borges',
 
   book: {
@@ -37,11 +37,17 @@ window.BABEL_CONFIG = {
 
   // Where this Library is published. Links copied from the catalogue lead there, so that
   // they work for anyone, wherever they were copied from (this computer included).
-  website: 'https://theaviationdoctor.github.io/Babel/',
+  website: 'https://babel.pellegr.in/',
 
   hexagon: {
     wallsWithShelves: 4, // 1 to 4: the other two sides of each hexagon are its doors
     shelvesPerWall: 4,
     booksPerShelf: 32,
+  },
+
+  // How the reader sees the Library.
+  view: {
+    lookSensitivity: 1, // how fast the view turns with the mouse, from 0.1 to 5
+    fieldOfView: 72, // how wide the view is, in degrees, from 30 to 120
   },
 };

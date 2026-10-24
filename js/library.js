@@ -50,6 +50,7 @@
     book: { pagesPerBook: 512, linesPerPage: 32, charactersPerLine: 64 },
     alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + '0123456789' + '.,;:!?\'"-\u2014()[]_*&/$%\u00A3\u00B0\u2020\u00A7#+=' + ' ',
     hexagon: { wallsWithShelves: 4, shelvesPerWall: 4, booksPerShelf: 32 },
+    view: { lookSensitivity: 1, fieldOfView: 72 },
   };
 
   /*
@@ -57,7 +58,8 @@
    * silently ignored. Names are matched without regard to case or punctuation.
    */
   const SETTINGS = {
-    '': { seed: 'seed', book: 'book', alphabet: 'alphabet', hexagon: 'hexagon', website: 'website' },
+    '': { seed: 'seed', book: 'book', alphabet: 'alphabet', hexagon: 'hexagon', website: 'website', view: 'view' },
+    view: { lookSensitivity: 'lookSensitivity', fieldOfView: 'fieldOfView' },
     book: { pagesPerBook: 'pagesPerBook', linesPerPage: 'linesPerPage', charactersPerLine: 'charactersPerLine' },
     hexagon: { wallsWithShelves: 'wallsWithShelves', shelvesPerWall: 'shelvesPerWall', booksPerShelf: 'booksPerShelf' },
   };
@@ -92,11 +94,20 @@
     return n;
   }
 
+  function numberBetween(value, name, min, max) {
+    const n = Number(value);
+    if (value === null || value === '' || typeof value === 'boolean' || !Number.isFinite(n) || n < min || n > max) {
+      throw new Error(`${name} must be a number from ${min} to ${max} (it is ${JSON.stringify(value)}).`);
+    }
+    return n;
+  }
+
   /** Validates a raw configuration object and returns a normalised copy with derived values. */
   function normalizeConfig(rawInput) {
     const raw = readSection(rawInput || {}, '');
     const book = Object.assign({}, DEFAULT_CONFIG.book, readSection(raw.book, 'book'));
     const hex = Object.assign({}, DEFAULT_CONFIG.hexagon, readSection(raw.hexagon, 'hexagon'));
+    const view = Object.assign({}, DEFAULT_CONFIG.view, readSection(raw.view, 'view'));
     const label = (section, key) => `"${SETTINGS[section][key]}" ${section ? `(under "${section}")` : ''}`.trim();
     const alphabetSource = raw.alphabet !== undefined && raw.alphabet !== null ? raw.alphabet : DEFAULT_CONFIG.alphabet;
     const alphabet = Array.isArray(alphabetSource) ? alphabetSource.map(String) : Array.from(String(alphabetSource));
@@ -122,6 +133,8 @@
       wallsWithShelves: positiveInt(hex.wallsWithShelves, label('hexagon', 'wallsWithShelves'), 4),
       shelvesPerWall: positiveInt(hex.shelvesPerWall, label('hexagon', 'shelvesPerWall'), 64),
       booksPerShelf: positiveInt(hex.booksPerShelf, label('hexagon', 'booksPerShelf'), 256),
+      lookSensitivity: numberBetween(view.lookSensitivity, label('view', 'lookSensitivity'), 0.1, 5),
+      fieldOfView: numberBetween(view.fieldOfView, label('view', 'fieldOfView'), 30, 120),
     };
     cfg.charactersPerPage = cfg.linesPerPage * cfg.charactersPerLine;
     cfg.symbolsPerBook = cfg.pagesPerBook * cfg.charactersPerPage;
@@ -165,19 +178,19 @@
    * Links to books
    *
    * A book's address is as long as the book itself (there are exactly as many
-   * addresses as books), so a link carries the book's text instead, compressed, in
-   * the part of the address after '#', which browsers never send to the server:
+   * addresses as books), so a link carries the book's text instead, in the part of the
+   * address after '#', which browsers never send to the server. It takes one of two forms:
    *
-   *   …/Babel/#book=z<text>&title=…&author=…&year=…&part=…&seed=…   a whole book, set in pages
-   *   …/Babel/#text=z<text>&fill=random|blank&seed=…               a passage, from the first page
+   *   …/#book=<the text, percent-encoded>          e.g. …/#book=Call%20me%20Ishmael.
+   *   …/#book=:<the text, compressed>              the same, shorter: a colon, then the
+   *                                                text's UTF-8 bytes, deflated (zlib) and
+   *                                                written in base64url, without padding
    *
-   * <text> is the UTF-8 text, deflated and written in base64url; a leading 'u' instead of
-   * 'z' means it is not compressed. The Library sets the text as the catalogue does and
-   * runs the shelving backwards to find where the book stands, so a link keeps leading to
-   * the right book whatever the seed or configuration of the Library that opens it.
+   * The book it leads to is the one that holds exactly that text, set in pages as the
+   * catalogue sets a book (whole words, a new line for each paragraph), from the first
+   * page, the rest of its pages blank. Since the link carries the text itself, it keeps
+   * leading to the book that holds it, whatever the seed or configuration of the Library.
    * ------------------------------------------------------------------ */
-
-  const LINK_FIELDS = ['title', 'author', 'year', 'part', 'seed', 'fill'];
 
   function toBase64Url(bytes) {
     let s = '';
@@ -196,20 +209,11 @@
     return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
   }
 
-  async function packText(text) {
-    const bytes = new TextEncoder().encode(String(text));
-    if (typeof CompressionStream === 'function') {
-      try { return 'z' + toBase64Url(await throughStream(bytes, new CompressionStream('deflate'))); } catch (e) { /* send it as it is */ }
-    }
-    return 'u' + toBase64Url(bytes);
-  }
-
-  async function unpackText(packed) {
-    const kind = String(packed).charAt(0), bytes = fromBase64Url(String(packed).slice(1));
-    if (kind === 'u') return new TextDecoder().decode(bytes);
-    if (kind !== 'z') throw new Error('This link is not one the Library can read.');
-    if (typeof DecompressionStream !== 'function') throw new Error('This browser is too old to open links to books.');
-    return new TextDecoder().decode(await throughStream(bytes, new DecompressionStream('deflate')));
+  /** Decodes %XX sequences, leaving alone any '%' that does not begin one (as in "50% off"). */
+  function decodePercent(s) {
+    return String(s).replace(/(?:%[0-9A-Fa-f]{2})+/g, (run) => {
+      try { return decodeURIComponent(run); } catch (e) { return run; }
+    });
   }
 
   /* ------------------------------------------------------------------ *
@@ -770,11 +774,18 @@
       };
       const titleLines = wrap(prep(meta.title || ''));
       const byLines = wrap(prep(meta.author || ''));
-      const bodyPagesPerPart = Math.max(1, P - 1);
+      // with no title, author or year, there is no title page: the text starts on the first page
+      const titled = titleLines.length > 0 || byLines.length > 0 || !!meta.year;
+      const bodyPagesPerPart = titled ? Math.max(1, P - 1) : P;
       const linesPerPart = bodyPagesPerPart * L;
       const partCount = Math.max(1, Math.ceil(lines.length / linesPerPart));
       const parts = [];
       for (let k = 0; k < partCount; k++) {
+        if (!titled) {
+          const body = lines.slice(k * linesPerPart, (k + 1) * linesPerPart);
+          parts.push(this.prepareText(body.join('')).symbols.subarray(0, this.M));
+          continue;
+        }
         const page = [];
         const top = Math.max(0, Math.floor(L / 3) - 1);
         for (let i = 0; i < top; i++) page.push(pad(''));
@@ -791,27 +802,36 @@
     }
 
     /**
-     * A link to a book (kind 'book') or to a passage (kind 'text'), as described above.
-     * `base` is the address of the published Library; `extra` holds the optional fields.
+     * A link to the book that holds `text`, as described under "Links to books": the
+     * compressed form, or the percent-encoded one if `plain` is set or compression is
+     * unavailable. `base` is the address of the published Library.
      */
-    static async makeLink(base, kind, text, extra) {
-      const params = new URLSearchParams();
-      params.set(kind === 'text' ? 'text' : 'book', await packText(text));
-      for (const k of LINK_FIELDS) {
-        const v = extra && extra[k];
-        if (v !== undefined && v !== null && v !== '') params.set(k, String(v));
+    static async makeLink(base, text, plain) {
+      base = String(base || '').replace(/#.*$/, '');
+      if (!plain && typeof CompressionStream === 'function') {
+        try {
+          const bytes = await throughStream(new TextEncoder().encode(String(text)), new CompressionStream('deflate'));
+          return base + '#book=:' + toBase64Url(bytes);
+        } catch (e) { /* the plain form, then */ }
       }
-      return String(base || '').replace(/#.*$/, '') + '#' + params.toString();
+      return base + '#book=' + encodeURIComponent(String(text));
     }
 
-    /** Reads a link made by makeLink (its part after '#'), or returns null if it holds none. */
+    /** The text a link carries (its part after '#'), or null if it is not a link to a book. */
     static async readLink(hash) {
-      const params = new URLSearchParams(String(hash || '').replace(/^#/, ''));
-      const kind = params.has('book') ? 'book' : params.has('text') ? 'text' : null;
-      if (!kind) return null;
-      const out = { kind, text: await unpackText(params.get(kind)) };
-      for (const k of LINK_FIELDS) if (params.has(k)) out[k] = params.get(k);
-      return out;
+      const m = /^#?book=([\s\S]*)$/.exec(String(hash || ''));
+      if (!m) return null;
+      const value = m[1];
+      if (value.charAt(0) !== ':') return decodePercent(value);
+      if (typeof DecompressionStream !== 'function') throw new Error('This browser is too old to open compressed links to books.');
+      return new TextDecoder().decode(await throughStream(fromBase64Url(value.slice(1)), new DecompressionStream('deflate')));
+    }
+
+    /** The book that holds a text, as a link leads to it: its location and contents. */
+    bookOfText(text) {
+      const set = this.typeset(Library.cleanEbook(text).text, {});
+      const r = this.findText(set.parts[0], { fill: 'blank' });
+      return { location: r.location, content: r.content, parts: set.parts.length, set };
     }
 
     /**
