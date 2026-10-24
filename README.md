@@ -126,13 +126,13 @@ A link to a book carries the book's text instead, compressed, after the `#` of t
 
 ### Linking a blog
 
-`obsidian/publish.js` adds, at the end of every note of a site made with [Obsidian Publish](https://obsidian.md/publish), a link to the book of the Library that holds the note: a title page with the note's title, the author's name and the year from the note's `date` property, if it has one, then the note's text as a reader sees it. To use it:
+`obsidian/publish.js` adds, at the end of every note of a site made with [Obsidian Publish](https://obsidian.md/publish), a link to the book of the Library that holds the note: a title page with the note's title (and the year from the note's `date` property, if it has one), then the note's text as a reader sees it. No author is named, since a note may quote or carry texts by others. To use it:
 
 1. Copy `obsidian/publish.js` to the root of the vault, as `publish.js`. If the vault already has a `publish.js`, paste its contents at the end of that file instead.
 2. In Obsidian, open **Publish changes**, tick `publish.js` (it is hidden from the file explorer but listed there) and publish.
 3. Reload the site, holding Shift so that the browser fetches the new script.
 
-Obsidian Publish runs `publish.js` only on sites with a custom domain. The settings at the top of the file give the author's name, the words of the link and the address of the Library. The script reads the page as Obsidian Publish draws it, which Obsidian does not document and may change; if the link stops appearing, that is the place to look.
+Obsidian Publish runs `publish.js` only on sites with a custom domain. The settings at the top of the file give the address of the Library (`https://babel.pellegr.in/`), the seed and the words of the link. The script reads the page as Obsidian Publish draws it, which Obsidian does not document and may change; if the link stops appearing, that is the place to look.
 
 ## Your books
 

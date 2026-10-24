@@ -3,8 +3,8 @@
  * book of the Library of Babel that holds the note's text.
  *
  * The link carries the note's text, compressed. Whoever follows it arrives in the
- * Library standing before that book: a title page with the note's title and author,
- * then the note, set in the Library's pages.
+ * Library standing before that book: a title page with the note's title, then the
+ * note, set in the Library's pages.
  *
  * To use it:
  *   1. Put this file at the root of your vault, named publish.js. (If the vault already
@@ -19,8 +19,7 @@
 
   /* ---------------- settings ---------------- */
 
-  const LIBRARY = 'https://theaviationdoctor.github.io/Babel/'; // where the Library is published
-  const AUTHOR = 'Thomas Pellegrin'; // set on each book's title page; '' for none
+  const LIBRARY = 'https://babel.pellegr.in/'; // where the Library is published
   const SEED = 'borges'; // the Library to send readers to
   const LABEL = 'Find this post in the Library of Babel'; // the words of the link
 
@@ -126,7 +125,6 @@
       const params = new URLSearchParams();
       params.set('book', await pack(text));
       params.set('title', noteTitle(sizer));
-      if (AUTHOR) params.set('author', AUTHOR);
       const year = noteYear();
       if (year) params.set('year', year);
       params.set('seed', SEED);

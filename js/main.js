@@ -240,7 +240,6 @@
       const cite = document.createElement('cite');
       cite.textContent = linked.title || 'a book';
       note.append(cite);
-      if (linked.author) note.append(`, by ${linked.author}`);
       note.append('. Enter the Library and you will stand before it.');
     } else {
       const words = linked.text.replace(/\s+/g, ' ').trim();
