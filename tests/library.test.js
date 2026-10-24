@@ -347,6 +347,41 @@ test("Project Gutenberg's licence is left out of a book", () => {
   assert.strictEqual(plain.text, 'Title: not a header\nJust a text.');
 });
 
+test('positions are measured from the seam, as a fraction of the way round', () => {
+  const lib = new Library({});
+  const g = new Uint8Array(lib.galleryDigits), f = new Uint8Array(lib.floorDigits);
+  let p = lib.position(g, f);
+  assert.strictEqual(p.east.exact, 0);
+  assert.strictEqual(p.east.fraction, 0);
+  assert.strictEqual(p.up.fraction, 0);
+  g[g.length - 1] = lib.N / 2; // halfway round
+  f[f.length - 1] = (lib.floorMax[lib.floorMax.length - 1] + 1) / 2; // halfway up
+  p = lib.position(g, f);
+  assert.ok(Math.abs(p.east.fraction - 0.5) < 1e-12, p.east.fraction);
+  assert.ok(Math.abs(p.up.fraction - 0.5) < 1e-12, p.up.fraction);
+  assert.ok(Math.abs(p.east.log10 - (lib.stats.log10GalleriesPerFloor - Math.log10(2))) < 1e-6);
+  p = lib.position(new Uint8Array(lib.galleryDigits).fill(lib.N - 1), lib.floorMax);
+  // the last hexagon is 1 − 64^−524,287 of the way round: 1, as near as a double can tell
+  assert.ok(p.east.fraction > 0.999999 && p.east.fraction <= 1, p.east.fraction);
+  assert.ok(p.up.fraction > 0.999999 && p.up.fraction <= 1, p.up.fraction);
+  // a small library whose number of floors is not a power of its alphabet
+  const small = new Library({ seed: 's', alphabet: 'ABC', book: { pagesPerBook: 1, linesPerPage: 1, charactersPerLine: 7 }, hexagon: { wallsWithShelves: 1, shelvesPerWall: 1, booksPerShelf: 5 } });
+  const floors = small.floorMax.reduceRight((v, d) => v * 3 + d, 0) + 1;
+  const galleries = 3 ** small.galleryDigits;
+  for (let n = 0; n < floors; n++) {
+    const digits = new Uint8Array(small.floorDigits);
+    for (let i = 0, v = n; i < digits.length; i++, v = Math.floor(v / 3)) digits[i] = v % 3;
+    const q = small.position(new Uint8Array(small.galleryDigits), digits);
+    assert.ok(Math.abs(q.up.fraction - n / floors) < 1e-12, `floor ${n} of ${floors}: ${q.up.fraction}`);
+  }
+  const last = small.position(new Uint8Array(small.galleryDigits).fill(2), small.floorMax);
+  assert.ok(Math.abs(last.east.fraction - (galleries - 1) / galleries) < 1e-12);
+  // the setting that shows positions
+  assert.strictEqual(lib.config.showPosition, true);
+  assert.strictEqual(new Library({ view: { showPosition: false } }).config.showPosition, false);
+  assert.throws(() => new Library({ view: { showPosition: 'yes' } }), /showPosition/);
+});
+
 test('the timing of dreams is checked', () => {
   const d = new Library({}).config;
   assert.strictEqual(d.quoteDuration, 10);

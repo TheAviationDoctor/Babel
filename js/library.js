@@ -50,7 +50,7 @@
     book: { pagesPerBook: 512, linesPerPage: 32, charactersPerLine: 64 },
     alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + '0123456789' + '.,;:!?\'"-\u2014()[]_*&/$%\u00A3\u00B0\u2020\u00A7#+=' + ' ',
     hexagon: { wallsWithShelves: 4, shelvesPerWall: 4, booksPerShelf: 32 },
-    view: { lookSensitivity: 1, fieldOfView: 72 },
+    view: { lookSensitivity: 1, fieldOfView: 72, showPosition: true },
     dreams: { quoteDuration: 10, quoteInterval: 5 },
   };
 
@@ -60,7 +60,7 @@
    */
   const SETTINGS = {
     '': { seed: 'seed', book: 'book', alphabet: 'alphabet', hexagon: 'hexagon', website: 'website', view: 'view', dreams: 'dreams' },
-    view: { lookSensitivity: 'lookSensitivity', fieldOfView: 'fieldOfView' },
+    view: { lookSensitivity: 'lookSensitivity', fieldOfView: 'fieldOfView', showPosition: 'showPosition' },
     dreams: { quoteDuration: 'quoteDuration', quoteInterval: 'quoteInterval' },
     book: { pagesPerBook: 'pagesPerBook', linesPerPage: 'linesPerPage', charactersPerLine: 'charactersPerLine' },
     hexagon: { wallsWithShelves: 'wallsWithShelves', shelvesPerWall: 'shelvesPerWall', booksPerShelf: 'booksPerShelf' },
@@ -104,6 +104,11 @@
     return n;
   }
 
+  function yesOrNo(value, name) {
+    if (value !== true && value !== false) throw new Error(`${name} must be true or false (it is ${JSON.stringify(value)}).`);
+    return value;
+  }
+
   /** Validates a raw configuration object and returns a normalised copy with derived values. */
   function normalizeConfig(rawInput) {
     const raw = readSection(rawInput || {}, '');
@@ -138,6 +143,7 @@
       booksPerShelf: positiveInt(hex.booksPerShelf, label('hexagon', 'booksPerShelf'), 256),
       lookSensitivity: numberBetween(view.lookSensitivity, label('view', 'lookSensitivity'), 0.1, 5),
       fieldOfView: numberBetween(view.fieldOfView, label('view', 'fieldOfView'), 30, 120),
+      showPosition: yesOrNo(view.showPosition, label('view', 'showPosition')),
       quoteDuration: numberBetween(dreams.quoteDuration, label('dreams', 'quoteDuration'), 1, 600),
       quoteInterval: numberBetween(dreams.quoteInterval, label('dreams', 'quoteInterval'), 0, 600),
     };
@@ -919,6 +925,37 @@
       F.set(this.floorMax);
       addSmall(F, 1, this.N);
       return this._difference(a, b, F);
+    }
+
+    /**
+     * Where a hexagon lies in the whole Library, measured from the seam: gallery 0 of floor 0,
+     * where the numbers begin again (the Library has no edge; it closes on itself both ways).
+     * Returns { east, up }, each the size of the number (as magnitude() gives it) and the
+     * fraction of the way round, from 0 to 1.
+     */
+    position(gallery, floor) {
+      const G = new Uint8Array(this.galleryDigits + 1);
+      G[this.galleryDigits] = 1; // N^galleryDigits galleries on a floor
+      const F = new Uint8Array(this.floorDigits + 1);
+      F.set(this.floorMax);
+      addSmall(F, 1, this.N); // floorMax + 1 floors
+      return {
+        east: Object.assign(this.magnitude(gallery), { fraction: this._fraction(gallery, G) }),
+        up: Object.assign(this.magnitude(floor), { fraction: this._fraction(floor, F) }),
+      };
+    }
+
+    /** digits ÷ modulus, from their leading digits (as many as a double can use). */
+    _fraction(digits, modulus) {
+      const L = significantLength(modulus);
+      const count = Math.min(L, Math.ceil(53 / Math.log2(this.N)) + 1);
+      let x = 0, m = 0, scale = 1;
+      for (let i = L - 1; i >= L - count; i--) {
+        x += (digits[i] || 0) * scale;
+        m += modulus[i] * scale;
+        scale /= this.N;
+      }
+      return Math.min(1, x / m);
     }
 
     /** Size of a non-negative number given as digits: { exact (a Number, or null if too large), log10 }. */

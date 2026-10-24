@@ -103,12 +103,20 @@ input[type="text"]:focus, input[type="number"]:focus { outline: none; border-bot
 #gaze .spine { font-style: italic; font-size: var(--step-2); letter-spacing: 0.04em; }
 #gaze .where { font-size: var(--step-0); }
 #gaze .hint { font-size: var(--step--1); color: var(--ash); }
-#whereabouts {
+#corner {
   position: absolute;
   left: max(18px, env(safe-area-inset-left, 0px)); bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  max-width: calc(100% - 36px);
+  display: grid; gap: 0.2rem;
   font-style: italic; font-size: var(--step--1); color: var(--ash);
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
 }
+#corner p { margin: 0; }
+#corner sup { font-size: 0.72em; line-height: 0; }
+#position, #travel { opacity: 0.78; }
+#position:empty { display: none; }
+#travel { transition: opacity 2.5s ease; }
+#travel.fading { opacity: 0; }
 
 #look-hint {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, 1.4rem);

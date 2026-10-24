@@ -49,6 +49,9 @@ window.BABEL_CONFIG = {
   view: {
     lookSensitivity: 1, // how fast the view turns with the mouse, from 0.1 to 5
     fieldOfView: 72, // how wide the view is, in degrees, from 30 to 120
+    // true shows, in the bottom left corner, where the hexagon lies in the whole Library
+    // and how far each journey through the catalogue went; false hides them
+    showPosition: true,
   },
 
   // What the reader dreams when they lie down on the bed of a cell: words that fade in

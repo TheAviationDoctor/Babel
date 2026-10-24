@@ -25,6 +25,8 @@ On a phone or tablet, drag on the right of the screen to look, hold and slide on
 
 No. The library is *finite*, meaning it has a fixed number of books (each one unique), hexagons, and floors. But it is *boundless* (it has no hard boundary) because it is *cyclic* in both directions. Walk past the last hexagon of a floor, or take the stairs up or down to the last floor, and you are back at the first, just like an ant walking endlessly on the surface of a torus (which the Library is, topologically speaking).
 
+Since there is no edge, positions are measured from the *seam*: the first hexagon of the first floor, where the numbers of the galleries and floors start again. The bottom left corner of the screen says how far you are from where you woke (or arrived). Below that, it says how far east of the seam and how far above it your hexagon lies, and what percentage of the way round that is, for example `1.1 × 10^946,956 hexagons east (24.0%) and 1.6 × 10^946,957 floors up (40.7%) from the seam`. Walking barely changes this line, since each hexagon is only `2 × 10^-946,955` % of the way round. After each journey through the catalogue (or after waking in another hexagon from the menu), a third line says how far that journey went, measured the shorter way round, for example `Travelled 2.2 × 10^946,956 hexagons west and 1.9 × 10^946,957 floors down`. It fades after ten seconds. Setting `view.showPosition` to `false` in `config.js` hides both lines.
+
 ## So how big is the Library?
 
 With the default settings:
@@ -72,6 +74,7 @@ Everything about the Library's size lives in `config.js`, which is read once whe
 | `hexagon.booksPerShelf` | 32 | |
 | `view.lookSensitivity` | 1 | How fast the view turns with the mouse, from 0.1 to 5. |
 | `view.fieldOfView` | 72 | How wide the view is, in degrees, from 30 to 120. |
+| `view.showPosition` | `true` | Shows, in the bottom left corner, where your hexagon lies in the whole Library and how far each journey through the catalogue went. `false` hides them. See [Is the Library infinite?](#is-the-library-infinite) |
 | `dreams.quoteDuration` | 10 | How long each sentence of a dream stays, in seconds, once it has faded in, from 1 to 600. See [Dreams](#dreams). |
 | `dreams.quoteInterval` | 5 | How long after a sentence has faded out the next one begins to fade in, in seconds, from 0 to 600. |
 
@@ -166,7 +169,7 @@ The sentences are grammatical but not necessarily sensible, like surreal poetry:
 
 ## Files
 
-In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-24.4`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
+In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-24.5`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
 
 | Path | Contents |
 |---|---|
@@ -189,7 +192,7 @@ In `index.html`, every file name is followed by `?v=` and a version, such as `js
 
 ## Tests
 
-With Node.js installed, run `node tests/library.test.js`. The tests enumerate every shelf of three small libraries and check that each holds a different book and that the inverse map finds every book again. They then check round trips, text search and timing on the Library described by `config.js`, and on Borges's own figures, and finally the catalogue: preparing texts, setting whole books in pages and splitting long ones into parts, leaving out Project Gutenberg's licence, finding them in books, distances that wrap around the Library, reading back copied addresses, and making and reading links to books. They also check the sentences of dreams: grammatical, varied, and always the same for the same hexagon.
+With Node.js installed, run `node tests/library.test.js`. The tests enumerate every shelf of three small libraries and check that each holds a different book and that the inverse map finds every book again. They then check round trips, text search and timing on the Library described by `config.js`, and on Borges's own figures, and finally the catalogue: preparing texts, setting whole books in pages and splitting long ones into parts, leaving out Project Gutenberg's licence, finding them in books, distances that wrap around the Library, reading back copied addresses, and making and reading links to books. They also check positions measured from the seam, and the sentences of dreams: grammatical, varied, and always the same for the same hexagon.
 
 ## Credits
 
