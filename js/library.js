@@ -57,7 +57,7 @@
    * silently ignored. Names are matched without regard to case or punctuation.
    */
   const SETTINGS = {
-    '': { seed: 'seed', book: 'book', alphabet: 'alphabet', hexagon: 'hexagon' },
+    '': { seed: 'seed', book: 'book', alphabet: 'alphabet', hexagon: 'hexagon', website: 'website' },
     book: { pagesPerBook: 'pagesPerBook', linesPerPage: 'linesPerPage', charactersPerLine: 'charactersPerLine' },
     hexagon: { wallsWithShelves: 'wallsWithShelves', shelvesPerWall: 'shelvesPerWall', booksPerShelf: 'booksPerShelf' },
   };
@@ -110,8 +110,11 @@
     if (alphabet.length < 2) throw new Error('The alphabet needs at least 2 characters.');
     if (alphabet.length > 256) throw new Error('The alphabet may have at most 256 characters.');
 
+    const website = raw.website === undefined || raw.website === null ? '' : String(raw.website).trim();
+    if (website && !/^https?:\/\/\S+$/i.test(website)) throw new Error(`"website" should be the address where this Library is published, starting with https:// (it is ${JSON.stringify(raw.website)}).`);
     const cfg = {
       seed: String(raw.seed !== undefined && raw.seed !== null ? raw.seed : DEFAULT_CONFIG.seed),
+      website,
       pagesPerBook: positiveInt(book.pagesPerBook, label('book', 'pagesPerBook')),
       linesPerPage: positiveInt(book.linesPerPage, label('book', 'linesPerPage')),
       charactersPerLine: positiveInt(book.charactersPerLine, label('book', 'charactersPerLine')),
@@ -157,6 +160,57 @@
     '\u00D7': 'x', '\u00BA': ['\u00B0', 'o'], '\u2021': ['\u2020\u2020', '**'], '\u2020': '*',
     '\u2026': '...', '\u00A0': ' ', '\u2009': ' ', '\u202F': ' ', '\u2007': ' ', '\u2002': ' ', '\u2003': ' ',
   };
+
+  /* ------------------------------------------------------------------ *
+   * Links to books
+   *
+   * A book's address is as long as the book itself (there are exactly as many
+   * addresses as books), so a link carries the book's text instead, compressed, in
+   * the part of the address after '#', which browsers never send to the server:
+   *
+   *   …/Babel/#book=z<text>&title=…&author=…&year=…&part=…&seed=…   a whole book, set in pages
+   *   …/Babel/#text=z<text>&fill=random|blank&seed=…               a passage, from the first page
+   *
+   * <text> is the UTF-8 text, deflated and written in base64url; a leading 'u' instead of
+   * 'z' means it is not compressed. The Library sets the text as the catalogue does and
+   * runs the shelving backwards to find where the book stands, so a link keeps leading to
+   * the right book whatever the seed or configuration of the Library that opens it.
+   * ------------------------------------------------------------------ */
+
+  const LINK_FIELDS = ['title', 'author', 'year', 'part', 'seed', 'fill'];
+
+  function toBase64Url(bytes) {
+    let s = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function fromBase64Url(str) {
+    const b = atob(String(str).replace(/-/g, '+').replace(/_/g, '/').replace(/\s+/g, ''));
+    const out = new Uint8Array(b.length);
+    for (let i = 0; i < b.length; i++) out[i] = b.charCodeAt(i);
+    return out;
+  }
+
+  async function throughStream(bytes, stream) {
+    return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
+  }
+
+  async function packText(text) {
+    const bytes = new TextEncoder().encode(String(text));
+    if (typeof CompressionStream === 'function') {
+      try { return 'z' + toBase64Url(await throughStream(bytes, new CompressionStream('deflate'))); } catch (e) { /* send it as it is */ }
+    }
+    return 'u' + toBase64Url(bytes);
+  }
+
+  async function unpackText(packed) {
+    const kind = String(packed).charAt(0), bytes = fromBase64Url(String(packed).slice(1));
+    if (kind === 'u') return new TextDecoder().decode(bytes);
+    if (kind !== 'z') throw new Error('This link is not one the Library can read.');
+    if (typeof DecompressionStream !== 'function') throw new Error('This browser is too old to open links to books.');
+    return new TextDecoder().decode(await throughStream(bytes, new DecompressionStream('deflate')));
+  }
 
   /* ------------------------------------------------------------------ *
    * Hashing and pseudorandom streams (32-bit integer arithmetic only)
@@ -734,6 +788,30 @@
         parts.push(this.prepareText(str).symbols.subarray(0, this.M));
       }
       return { parts, dropped: [...dropped], recased, substituted, characters };
+    }
+
+    /**
+     * A link to a book (kind 'book') or to a passage (kind 'text'), as described above.
+     * `base` is the address of the published Library; `extra` holds the optional fields.
+     */
+    static async makeLink(base, kind, text, extra) {
+      const params = new URLSearchParams();
+      params.set(kind === 'text' ? 'text' : 'book', await packText(text));
+      for (const k of LINK_FIELDS) {
+        const v = extra && extra[k];
+        if (v !== undefined && v !== null && v !== '') params.set(k, String(v));
+      }
+      return String(base || '').replace(/#.*$/, '') + '#' + params.toString();
+    }
+
+    /** Reads a link made by makeLink (its part after '#'), or returns null if it holds none. */
+    static async readLink(hash) {
+      const params = new URLSearchParams(String(hash || '').replace(/^#/, ''));
+      const kind = params.has('book') ? 'book' : params.has('text') ? 'text' : null;
+      if (!kind) return null;
+      const out = { kind, text: await unpackText(params.get(kind)) };
+      for (const k of LINK_FIELDS) if (params.has(k)) out[k] = params.get(k);
+      return out;
     }
 
     /**

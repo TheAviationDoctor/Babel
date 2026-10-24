@@ -65,6 +65,7 @@ Everything about the Library's size lives in `config.js`, which is read once whe
 | `book.linesPerPage` | 32 | Adapted from Borges' story (40 lines) to be a power of 2. |
 | `book.charactersPerLine` | 64 | Adapted from Borges' story (80 characters) to be a power of 2. |
 | `alphabet` | 64 symbols: the 26 capital letters from the modern latin alphabet, ten digits, the symbols `. , ; : ! ? ' " - — ( ) [ ] _ * & / $ % £ ° † § # + =`, and space. | These are all the symbols books are written in. Each must appear once; at most 256 symbols. Any string of distinct characters works. Adapted from Borges' story (25 symbols) to be a power of 2 (32 symbols were not sufficient to represent most literature classics, so the next option was 64). |
+| `website` | `'https://theaviationdoctor.github.io/Babel/'` | Where the Library is published. Links copied from the catalogue lead there, wherever they were copied from. |
 | `hexagon.wallsWithShelves` | 4 | 1 to 4. The other two sides of every hexagon are its vestibules. |
 | `hexagon.shelvesPerWall` | 4 | Adapted from Borges' story (5 shelves) to be a power of 2. |
 | `hexagon.booksPerShelf` | 32 | |
@@ -117,6 +118,22 @@ Every vestibule has one. It does three things.
 
 **Go to a hexagon.** Move any number of hexagons east or west and floors up or down. Paste a full address, as copied from the pause menu or the catalogue, to return to a hexagon you have bookmarked, even after closing the page. Or go somewhere at random. After a jump, the corner of the screen counts your steps from where you arrived.
 
+## Links to books
+
+A book's address cannot serve as a link: it is as long as the book itself, 1,048,576 symbols, about a megabyte. That is no accident of design. The shelving is a bijection, so there are exactly as many addresses as books, and addresses cannot on average be shorter than what they point to.
+
+A link to a book carries the book's text instead, compressed, after the `#` of the Library's address, a part that browsers never send to the server. Whoever opens the link is told which book it leads to; on entering the Library, they are set down before it, the volume standing a little out of its row. The Library sets the text in pages exactly as the catalogue does and runs the shelving backwards to find the book, so a link keeps leading to the right book even if the seed or the configuration change. A blog post of a few thousand words makes a link of a few thousand characters. In the catalogue, **Copy a link to it** copies such a link for any text found with **Find a text** or any book found with **Find a book**. The format is described in `js/library.js`, under "Links to books".
+
+### Linking a blog
+
+`obsidian/publish.js` adds, at the end of every note of a site made with [Obsidian Publish](https://obsidian.md/publish), a link to the book of the Library that holds the note: a title page with the note's title, the author's name and the year from the note's `date` property, if it has one, then the note's text as a reader sees it. To use it:
+
+1. Copy `obsidian/publish.js` to the root of the vault, as `publish.js`. If the vault already has a `publish.js`, paste its contents at the end of that file instead.
+2. In Obsidian, open **Publish changes**, tick `publish.js` (it is hidden from the file explorer but listed there) and publish.
+3. Reload the site, holding Shift so that the browser fetches the new script.
+
+Obsidian Publish runs `publish.js` only on sites with a custom domain. The settings at the top of the file give the author's name, the words of the link and the address of the Library. The script reads the page as Obsidian Publish draws it, which Obsidian does not document and may change; if the link stops appearing, that is the place to look.
+
 ## Your books
 
 To add a book, save it as a plain-text file (`.txt`, preferably UTF-8) in the `books` folder, named `Author — Title (Year).txt`. The catalogue reads the title, author and year from the name. Files from [Project Gutenberg](https://www.gutenberg.org) can be added as they are: the catalogue leaves out the licence that comes before and after the text, and the volunteers' credits, and if the file name does not name an author, it takes the title and author from the e-book's header. Any other name is used as the title. Leave a blank line between paragraphs. If there are no blank lines, each line is taken as a paragraph, and a file written on a single line is set as one long paragraph.
@@ -139,11 +156,12 @@ A page opened straight from your computer is not allowed to look into folders by
 | `js/main.js` | Start-up, reading, pause menu |
 | `lib/` | three.js r147 and its `Reflector` (MIT licence, see `lib/three.LICENSE`) |
 | `tests/library.test.js` | Tests of the mathematics |
+| `obsidian/publish.js` | For an Obsidian Publish site: a link under every note to its book in the Library |
 | `books/` | Your own books, as `.txt` files, for the catalogue to find |
 
 ## Tests
 
-With Node.js installed, run `node tests/library.test.js`. The tests enumerate every shelf of three small libraries and check that each holds a different book and that the inverse map finds every book again. They then check round trips, text search and timing on the Library described by `config.js`, and on Borges's own figures, and finally the catalogue: preparing texts, setting whole books in pages and splitting long ones into parts, leaving out Project Gutenberg's licence, finding them in books, distances that wrap around the Library, and reading back copied addresses.
+With Node.js installed, run `node tests/library.test.js`. The tests enumerate every shelf of three small libraries and check that each holds a different book and that the inverse map finds every book again. They then check round trips, text search and timing on the Library described by `config.js`, and on Borges's own figures, and finally the catalogue: preparing texts, setting whole books in pages and splitting long ones into parts, leaving out Project Gutenberg's licence, finding them in books, distances that wrap around the Library, reading back copied addresses, and making and reading links to books.
 
 ## Credits
 

@@ -10,7 +10,7 @@
  * It talks to the rest of the game through a small context object (see main.js):
  *   ctx.lib(), ctx.world, ctx.player, ctx.dims, ctx.setMode(mode), ctx.startWalking(),
  *   ctx.openBookAt(options), ctx.goToCell(dg, df, face), ctx.goToAddress(gallery, floor, face),
- *   ctx.goToRandom(), ctx.useSeed(seed), ctx.toast(text), ctx.copyText(text, done)
+ *   ctx.goToRandom(), ctx.useSeed(seed), ctx.toast(text), ctx.copyText(text, done), ctx.linkBase()
  */
 (function () {
   'use strict';
@@ -183,6 +183,7 @@
         const loc = this.certain.location;
         this.ctx.copyText(this.lib.hexagonAddressText(loc.gallery, loc.floor), 'Copied the address of that hexagon.');
       });
+      $('certain-link').addEventListener('click', () => this._copyLink(this.certainLink));
       const folder = $('books-folder-input');
       if (!('webkitdirectory' in folder) || /iPhone|iPad|Android/.test(navigator.userAgent || '')) $('books-folder').hidden = true;
       $('books-folder').addEventListener('click', () => folder.click());
@@ -247,7 +248,7 @@
     find() {
       const p = this._note();
       if (!p.symbols.length || p.symbols.length > this.lib.M) return;
-      this.query = p;
+      this.query = Object.assign({ raw: $('find-text').value }, p);
       $('find-results').hidden = false;
       $('find-query').textContent = p.text.length > 160 ? p.text.slice(0, 160) + '…' : p.text;
       this._certain();
@@ -262,6 +263,34 @@
       const r = lib.findText(this.query.symbols, { fill });
       this.certain = r;
       $('certain-where').innerHTML = this._whereHTML(r.location, 'from the first page');
+      this.certainLink = this._link('text', this.query.raw, { fill });
+    }
+
+    /* ---------------- links ---------------- */
+
+    /**
+     * A link that leads anyone to this book: it carries the text, compressed, and the
+     * Library finds the book again from it. Made ahead of the click, so that copying
+     * happens within the click itself, as some browsers require.
+     */
+    _link(kind, text, extra) {
+      const base = this.ctx.linkBase();
+      if (!base) return Promise.resolve(null);
+      const p = BabelCore.Library.makeLink(base, kind, text, Object.assign({ seed: this.lib.seed }, extra)).catch(() => null);
+      const holder = { url: null, promise: p };
+      p.then((url) => { holder.url = url; });
+      return holder;
+    }
+
+    async _copyLink(holder) {
+      if (!holder || !holder.promise) {
+        this.ctx.toast('To copy links from a copy of the Library on this computer, set "website" in config.js to the address where the Library is published.');
+        return;
+      }
+      const url = holder.url || (await holder.promise);
+      if (!url) { this.ctx.toast('The link could not be made.'); return; }
+      const long = url.length > 60000 ? ` It is ${fmt(url.length)} characters long, which is more than some browsers and websites accept.` : '';
+      this.ctx.copyText(url, `Copied a link to this book. Whoever opens it is set down before the book.${long}`);
     }
 
     /** "Wall 2, shelf 3, volume 17, …, about 10^… hexagons east from here. Its floor is …" (HTML). */
@@ -345,7 +374,7 @@
         const clean = BabelCore.Library.cleanEbook(entry.text);
         const named = describeBook(entry.name);
         const meta = named.author || !clean.title ? named : { title: clean.title, author: clean.author, year: named.year };
-        t = { meta, set: this.lib.typeset(clean.text, meta), trimmed: clean.trimmed };
+        t = { meta, text: clean.text, set: this.lib.typeset(clean.text, meta), trimmed: clean.trimmed };
         this.typeset.set(key, t);
       }
       return t;
@@ -385,8 +414,8 @@
     }
 
     findBook(entry) {
-      const { meta, set, trimmed } = this._set(entry);
-      this.book = { entry, meta, set, trimmed, found: null };
+      const { meta, text, set, trimmed } = this._set(entry);
+      this.book = { entry, meta, text, set, trimmed, found: null };
       this._placeBook();
       this._markCurrent();
       $('book-results').hidden = false;
@@ -425,7 +454,10 @@
         const read = el('button', '', 'Read it here');
         const go = el('button', 'primary', 'Go there');
         const copy = el('button', '', 'Copy its address');
-        for (const x of [read, go, copy]) x.type = 'button';
+        const link = el('button', '', 'Copy a link to it');
+        for (const x of [read, go, copy, link]) x.type = 'button';
+        const holder = this._link('book', b.text, { title: b.meta.title, author: b.meta.author, year: b.meta.year, part: n > 1 ? k + 1 : '', fill: fill === 'random' ? 'random' : '' });
+        link.addEventListener('click', () => this._copyLink(holder));
         read.addEventListener('click', () => this.ctx.openBookAt({ location: r.location, slot: r.location.slot, content: r.content, returnTo: 'terminal' }));
         go.addEventListener('click', () => {
           const loc = r.location, face = this.lib.slotParts(loc.slot);
@@ -436,7 +468,7 @@
           const loc = r.location, { wall, shelf, volume } = this.lib.slotParts(loc.slot);
           this.ctx.copyText(this.lib.hexagonAddressText(loc.gallery, loc.floor), `Copied the address of its hexagon. The book is on wall ${wall + 1}, shelf ${shelf + 1}, volume ${volume + 1}.`);
         });
-        row.append(read, go, copy);
+        row.append(read, go, copy, link);
         li.append(p, row);
         ol.appendChild(li);
       });

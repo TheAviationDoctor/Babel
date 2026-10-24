@@ -117,6 +117,8 @@ input[type="text"]:focus, input[type="number"]:focus { outline: none; border-bot
 }
 .after { font-style: italic; color: var(--ash); font-size: var(--step-1); margin-top: -0.4rem; }
 .lede { font-size: var(--step-1); line-height: 1.55; max-width: 30em; }
+.link-note { font-size: var(--step-0); line-height: 1.5; max-width: 32em; color: var(--lamp); border-left: 2px solid var(--lamp); padding-left: 0.9em; }
+.link-note cite { font-style: italic; }
 .seed-form { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.75rem 1rem; margin-top: 0.4rem; }
 .seed-form label { font-style: italic; color: var(--ash); }
 .seed-form input { width: 12ch; flex: 1 1 8ch; max-width: 18ch; }

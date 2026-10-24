@@ -24,6 +24,7 @@
   let gaze = null, gazeKey = '';
   let reading = null;
   let lastCell = '';
+  let linked = null; // the book a link has brought the reader to find: { kind, text, title, author, year, part, seed, fill }
 
   function showError(message) {
     $('error-message').textContent = message;
@@ -114,7 +115,7 @@
 
     terminal = new Babel.Terminal({
       lib: () => lib, world, player, dims: assets.dims,
-      setMode, startWalking, openBookAt, goToCell, goToAddress, goToRandom, useSeed, toast, copyText,
+      setMode, startWalking, openBookAt, goToCell, goToAddress, goToRandom, useSeed, toast, copyText, linkBase,
     });
 
     wake(0);
@@ -210,6 +211,68 @@
     player.origin = 'arrived';
     if (mark) world.setMark(Object.assign({ dg: 0, df: 0 }, mark));
     goToCell(0, 0, face);
+  }
+
+  /* ---------------- links to books ---------------- */
+
+  /** Where links copied from the catalogue lead: the published Library, or else this page if it is on the web. */
+  function linkBase() {
+    if (lib.config.website) return lib.config.website;
+    return /^https?:$/.test(location.protocol) ? location.href.replace(/#.*$/, '') : '';
+  }
+
+  /** Reads a link to a book from the page's address, if it has one, and says where it leads. */
+  async function readLocationLink() {
+    if (!/(^#|&)(book|text)=/.test(location.hash)) return false;
+    try {
+      linked = await BabelCore.Library.readLink(location.hash);
+    } catch (e) {
+      linked = null;
+      toast(/too old/.test(e.message) ? e.message : 'This link to a book could not be read. It may have been cut short.');
+      return false;
+    }
+    if (!linked || !linked.text.trim()) { linked = null; return false; }
+    if (linked.seed) $('seed-input').value = linked.seed;
+    const note = $('link-note');
+    note.textContent = '';
+    if (linked.kind === 'book') {
+      note.append('A link has brought you here to find ');
+      const cite = document.createElement('cite');
+      cite.textContent = linked.title || 'a book';
+      note.append(cite);
+      if (linked.author) note.append(`, by ${linked.author}`);
+      note.append('. Enter the Library and you will stand before it.');
+    } else {
+      const words = linked.text.replace(/\s+/g, ' ').trim();
+      note.append(`A link has brought you here to find the book that begins “${words.length > 80 ? words.slice(0, 80) + '…' : words}”. Enter the Library and you will stand before it.`);
+    }
+    note.hidden = false;
+    return true;
+  }
+
+  /** Sets the reader down before the book the link leads to, in the Library of the current seed. */
+  function goToLinked() {
+    const l = linked;
+    if (!l) return false;
+    let r, mark, label;
+    if (l.kind === 'book') {
+      const clean = BabelCore.Library.cleanEbook(l.text);
+      const meta = { title: l.title || clean.title || '', author: l.author || clean.author || '', year: l.year || '' };
+      const set = lib.typeset(clean.text, meta);
+      const k = Math.min(set.parts.length, Math.max(1, parseInt(l.part, 10) || 1)) - 1;
+      r = lib.findText(set.parts[k], { fill: l.fill === 'random' ? 'random' : 'blank' });
+      label = (meta.title || 'the book') + (set.parts.length > 1 ? `, part ${k + 1} of ${set.parts.length}` : '');
+      mark = { slot: r.location.slot, start: 0, length: 0, title: meta.title ? label : '' };
+    } else {
+      const symbols = lib.prepareText(l.text).symbols.subarray(0, lib.M);
+      if (!symbols.length) { toast('None of the characters of that passage are in the alphabet of this Library.'); return false; }
+      r = lib.findText(symbols, { fill: l.fill === 'blank' ? 'blank' : 'random' });
+      label = 'the book that begins with the passage';
+      mark = { slot: r.location.slot, start: 0, length: symbols.length };
+    }
+    goToAddress(r.location.gallery, r.location.floor, lib.slotParts(r.location.slot), mark);
+    toast(`Before you, a little out of its row, stands ${label}. ${isTouch ? 'Tap it' : 'Press E'} to read it.`);
+    return true;
   }
 
   function goToRandom() {
@@ -463,7 +526,12 @@
     $('seed-form').addEventListener('submit', (e) => {
       e.preventDefault();
       changeSeed($('seed-input').value);
-      startWalking();
+      if (!(linked && goToLinked())) startWalking();
+    });
+    // a link to a book, opened in this page, or pasted into its address bar later
+    readLocationLink();
+    window.addEventListener('hashchange', async () => {
+      if ((await readLocationLink()) && mode !== 'title') goToLinked();
     });
     $('seed-form-2').addEventListener('submit', (e) => {
       e.preventDefault();

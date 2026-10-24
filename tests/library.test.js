@@ -347,5 +347,59 @@ test("Project Gutenberg's licence is left out of a book", () => {
   assert.strictEqual(plain.text, 'Title: not a header\nJust a text.');
 });
 
-console.log(failures ? `\n${failures} test(s) failed` : '\nAll tests passed');
-process.exit(failures ? 1 : 0);
+// Links to books are made and read asynchronously (compression streams).
+(async () => {
+  async function testAsync(name, fn) {
+    const t0 = Date.now();
+    try {
+      await fn();
+      console.log(`  ok   ${name}  (${Date.now() - t0} ms)`);
+    } catch (e) {
+      failures++;
+      console.log(`  FAIL ${name}\n       ${e.stack.split('\n').slice(0, 3).join('\n       ')}`);
+    }
+  }
+
+  await testAsync('a link carries a book, and leads back to the same shelf', async () => {
+    const post = 'A first paragraph, with “curly quotes”, an em dash — and an émigré.\n\nA second paragraph.';
+    const url = await Library.makeLink('https://example.org/Babel/', 'book', post, { title: 'A post', author: 'Someone', year: 2026, seed: 'borges' });
+    assert(url.startsWith('https://example.org/Babel/#book=z'));
+    assert(url.length < 400, `a short post makes a short link (${url.length} characters)`);
+    const l = await Library.readLink(new URL(url).hash);
+    assert.strictEqual(l.kind, 'book');
+    assert.strictEqual(l.text, post);
+    assert.strictEqual(l.title, 'A post');
+    assert.strictEqual(l.author, 'Someone');
+    assert.strictEqual(l.year, '2026');
+    assert.strictEqual(l.seed, 'borges');
+    // the book it leads to holds the post, set in pages after its title page
+    const set = lib.typeset(l.text, l);
+    const r = lib.findText(set.parts[0], { fill: 'blank' });
+    const book = lib.bookAt(r.location);
+    const page = lib.pageLines(book, 1).join(' ').replace(/\s+/g, ' ').trim();
+    assert(page.startsWith('A FIRST PARAGRAPH, WITH "CURLY QUOTES", AN EM DASH — AND AN EMIGRE. A SECOND PARAGRAPH.'), page.slice(0, 80));
+  });
+
+  await testAsync('a link carries a passage, and links are read safely', async () => {
+    const url = await Library.makeLink('https://example.org/Babel/#old', 'text', 'Call me Ishmael.', { fill: 'blank' });
+    assert(!url.includes('#old'));
+    const l = await Library.readLink(new URL(url).hash);
+    assert.strictEqual(l.kind, 'text');
+    assert.strictEqual(l.text, 'Call me Ishmael.');
+    assert.strictEqual(l.fill, 'blank');
+    assert.strictEqual(await Library.readLink('#floor=ABC'), null);
+    assert.strictEqual(await Library.readLink(''), null);
+    await assert.rejects(Library.readLink('#book=xyz'));
+    const big = 'WORD '.repeat(200000);
+    const bigUrl = await Library.makeLink('https://example.org/', 'book', big, {});
+    assert(bigUrl.length < big.length / 50, 'repetitive text compresses');
+  });
+
+  await testAsync('the website setting is checked', async () => {
+    assert.strictEqual(new Library({ website: 'https://example.org/Babel/' }).config.website, 'https://example.org/Babel/');
+    assert.throws(() => new Library({ website: 'example.org' }), /website/);
+  });
+
+  console.log(failures ? `\n${failures} test(s) failed` : '\nAll tests passed');
+  process.exit(failures ? 1 : 0);
+})();

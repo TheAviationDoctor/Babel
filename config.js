@@ -35,6 +35,10 @@ window.BABEL_CONFIG = {
   //   alphabet: Array.from({ length: 128 }, (_, code) => String.fromCharCode(code)).join(''),
   alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + '0123456789' + '.,;:!?\'"-—()[]_*&/$%£°†§#+=' + ' ',
 
+  // Where this Library is published. Links copied from the catalogue lead there, so that
+  // they work for anyone, wherever they were copied from (this computer included).
+  website: 'https://theaviationdoctor.github.io/Babel/',
+
   hexagon: {
     wallsWithShelves: 4, // 1 to 4: the other two sides of each hexagon are its doors
     shelvesPerWall: 4,
