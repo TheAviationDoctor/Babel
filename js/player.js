@@ -40,6 +40,7 @@
       this.x = 0; this.y = 0; this.z = 0;
       this.yaw = 0; this.pitch = 0;
       this.speed = 1.35;
+      this.capsLock = false;
       this.keys = new Set();
       this.sensitivity = 1;
       this.bob = 0;
@@ -63,12 +64,17 @@
     /* ---------------- input ---------------- */
 
     _bindInput() {
+      // Caps Lock, while on, makes the reader hurry as Shift does. Browsers only say whether it
+      // is on as part of a key or mouse event, so every such event is asked.
+      const caps = (e) => { if (e.getModifierState) this.capsLock = e.getModifierState('CapsLock'); };
       window.addEventListener('keydown', (e) => {
+        caps(e);
         if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
         this.keys.add(e.code);
       });
-      window.addEventListener('keyup', (e) => this.keys.delete(e.code));
+      window.addEventListener('keyup', (e) => { caps(e); this.keys.delete(e.code); });
       window.addEventListener('blur', () => this.keys.clear());
+      for (const type of ['mousemove', 'mousedown', 'wheel']) window.addEventListener(type, caps, { passive: true });
       // Some browsers report one large jump just as the pointer is captured; ignore it.
       document.addEventListener('pointerlockchange', () => { this._settleUntil = performance.now() + 120; });
       document.addEventListener('mousemove', (e) => {
@@ -320,7 +326,7 @@
       }
       let len = Math.hypot(f, s);
       if (len > 1) { f /= len; s /= len; len = 1; }
-      const run = K.has('ShiftLeft') || K.has('ShiftRight') ? 1.9 : 1;
+      const run = K.has('ShiftLeft') || K.has('ShiftRight') || this.capsLock ? 1.9 : 1;
       const v = this.speed * run;
       // forward is −z rotated by yaw
       const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);

@@ -12,7 +12,7 @@ Everything is pure HTML/JS/CSS, so nothing needs installing. Just visit the Libr
 |---|---|
 | Look | mouse (click once to capture it) |
 | Walk | `W` `A` `S` `D` or the arrow keys |
-| Hurry | hold `Shift` |
+| Hurry | hold `Shift`, or turn on `Caps Lock` to keep hurrying until you turn it off |
 | Interact with objects (books, catalogue, doors, lamps, beds) | `E` or click |
 | Turn pages | `←` `→`, `Page Up` `Page Down`, `Home` `End` |
 | Put the book back | `Esc` or `E` |
@@ -166,7 +166,7 @@ The sentences are grammatical but not necessarily sensible, like surreal poetry:
 
 ## Files
 
-In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-24.3`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
+In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-24.4`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
 
 | Path | Contents |
 |---|---|
