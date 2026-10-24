@@ -297,7 +297,7 @@
       if (tab === 'tab-about') this._renderAbout();
     }
 
-    /** The About tab: the Markdown of about.js, read the first time the tab is shown. */
+    /** The About tab: the Markdown of js/about.js, read the first time the tab is shown. */
     _renderAbout() {
       if (this._aboutShown) return;
       this._aboutShown = true;
@@ -306,8 +306,8 @@
       const m = /\/\*[ \t]*START[^\n]*\n([\s\S]*?)\n?[ \t]*END[ \t]*\*\/\s*\}\s*$/.exec(source);
       if (!m || !window.BabelMarkdown) {
         box.textContent = source
-          ? 'The text of about.js could not be found between its lines START and END.'
-          : 'The file about.js, which holds the text of this tab, could not be read. Check that it is beside index.html, and that its text holds no star followed straight away by a slash.';
+          ? 'The text of js/about.js could not be found between its lines START and END.'
+          : 'The file js/about.js, which holds the text of this tab, could not be read. Check that it is in the js folder, and that its text holds no star followed straight away by a slash.';
         return;
       }
       box.innerHTML = window.BabelMarkdown.render(m[1]);

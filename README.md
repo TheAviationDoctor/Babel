@@ -127,7 +127,7 @@ Every vestibule has one. There is no menu in the Library, so the catalogue is al
 
 **Go to a hexagon.** Move any number of hexagons east or west and floors up or down. Paste a full address, as copied from the Current position tab, to return to a hexagon you have bookmarked, even after closing the page. An address copied from a Library with another seed is refused, since its books stand elsewhere. Or go somewhere at random. After a jump, the Current position tab counts your steps from where you arrived.
 
-A fifth tab, **About**, tells the reader about the Library. Its text is in `about.js`, written in Markdown like this README (of which it is, to begin with, a copy), and can be edited like `config.js`: in any text editor, then save and reload the page.
+A fifth tab, **About**, tells the reader about the Library. Its text is in `js/about.js`, written in Markdown like this README (of which it is, to begin with, a copy), and can be edited like `config.js`: in any text editor, then save and reload the page.
 
 ## Links to books
 
@@ -187,18 +187,18 @@ The sentences are grammatical but not necessarily sensible, like surreal poetry:
 
 ## Files
 
-In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-24.10`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
+In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-24.11`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
 
 | Path | Contents |
 |---|---|
 | `index.html` | The page |
 | `config.js` | The configuration |
-| `about.js` | The text of the catalogue's About tab, in Markdown |
 | `css/style.css` | Reading view, catalogue and dreams |
 | `js/library.js` | The mathematics: addresses, the bijection, text search, setting books in pages. No graphics. |
 | `js/architecture.js` | Dimensions, geometry and lighting of hexagons, vestibules, stairs and cells |
 | `js/world.js` | Streams the hexagons around the reader and dresses their books |
 | `js/player.js` | Walking, the spiral stair, and picking a book, door, lamp, bed or catalogue by gaze |
+| `js/about.js` | The text of the catalogue's About tab, in Markdown |
 | `js/markdown.js` | Reads the Markdown of the About tab |
 | `js/terminal.js` | The catalogue's screen: the current position, finding texts and books, and going to hexagons |
 | `js/textures.js` | Wood, plaster, stone, floor tiles and leather spines, painted at start-up |

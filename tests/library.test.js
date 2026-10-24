@@ -411,12 +411,12 @@ test('the About tab reads Markdown, and runs none of the HTML in it', () => {
     '<p>See <a href="#the-seam">the seam</a> at <a href="https://babel.pellegr.in/">https://babel.pellegr.in/</a>.</p>');
   assert.strictEqual(render('<script>alert(1)</script> [x](javascript:alert(1))'), '<p>&lt;script&gt;alert(1)&lt;/script&gt; <a href="#">x</a></p>');
   assert.strictEqual(render('5 * 3 and snake_case_name'), '<p>5 * 3 and snake_case_name</p>');
-  // about.js holds Markdown that the tab can find
+  // js/about.js holds Markdown that the tab can find
   global.window = global.window || {};
-  delete require.cache[require.resolve('../about.js')];
-  require('../about.js');
+  delete require.cache[require.resolve('../js/about.js')];
+  require('../js/about.js');
   const m = /\/\*[ \t]*START[^\n]*\n([\s\S]*?)\n?[ \t]*END[ \t]*\*\/\s*\}\s*$/.exec(String(global.window.BABEL_ABOUT));
-  assert.ok(m && m[1].trim().length > 0, 'about.js should hold its text between START and END');
+  assert.ok(m && m[1].trim().length > 0, 'js/about.js should hold its text between START and END');
   const html = render(m[1]);
   const headings = m[1].split('\n').filter((l) => /^#{1,6} /.test(l)).length;
   assert.strictEqual((html.match(/<h[1-6]>/g) || []).length, headings);
