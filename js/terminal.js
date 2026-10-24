@@ -48,8 +48,9 @@
   /* ---------------- the reader's own books ---------------- */
 
   /**
-   * Remembers the books the reader showed the catalogue, in this browser's own storage
-   * (IndexedDB). Where that is not allowed, it remembers them until the page is closed.
+   * Remembers the books the reader showed the catalogue themselves (not those of the
+   * collection), in this browser's own storage (IndexedDB). Where that is not allowed, it
+   * remembers them until the page is closed.
    */
   const shelf = {
     db: undefined,
@@ -59,8 +60,13 @@
       return new Promise((resolve) => {
         const done = (db) => { this.db = db; resolve(db); };
         try {
-          const req = indexedDB.open('babel', 1);
-          req.onupgradeneeded = () => req.result.createObjectStore('books', { keyPath: 'name' });
+          const req = indexedDB.open('babel', 2);
+          req.onupgradeneeded = () => {
+            const db = req.result;
+            // the first store could hold a whole books folder, which the collection now replaces
+            if (db.objectStoreNames.contains('books')) db.deleteObjectStore('books');
+            if (!db.objectStoreNames.contains('own-books')) db.createObjectStore('own-books', { keyPath: 'name' });
+          };
           req.onsuccess = () => done(req.result);
           req.onerror = req.onblocked = () => done(null);
         } catch (e) { done(null); }
@@ -71,8 +77,8 @@
       if (!db) return null;
       return new Promise((resolve) => {
         try {
-          const tx = db.transaction('books', mode);
-          const req = fn(tx.objectStore('books'));
+          const tx = db.transaction('own-books', mode);
+          const req = fn(tx.objectStore('own-books'));
           tx.oncomplete = () => resolve(req ? req.result : true);
           tx.onerror = tx.onabort = () => resolve(null);
         } catch (e) { resolve(null); }
@@ -93,6 +99,69 @@
       await this._do('readwrite', (s) => { s.clear(); });
     },
   };
+
+  /*
+   * The Library's own collection of books, shelved beside it in books/ by the download
+   * script: books/index.js lists them, and books/shelf/<id>.js holds each one's text,
+   * deflated and in base64. They are scripts because a page opened by double-click may
+   * load scripts but not read files; so the collection works there as on the web.
+   */
+  const collection = {
+    books: null, // the list, once loaded
+    _loading: null,
+    _arrived: new Map(), // shelf id → the function waiting for that book's text
+    _script(src) {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.async = true;
+        s.onload = () => { s.remove(); resolve(); };
+        s.onerror = () => { s.remove(); reject(new Error(`its file, ${src.replace(/\?.*$/, '')}, is missing`)); };
+        document.head.appendChild(s);
+      });
+    },
+    /** The list of books, or [] if none has been shelved beside this Library. */
+    load() {
+      if (!this._loading) {
+        this._loading = this._script(`books/index.js?t=${Date.now()}`)
+          .then(() => (Array.isArray(window.BABEL_BOOKS) ? window.BABEL_BOOKS : []), () => [])
+          .then((books) => { this.books = books; return books; });
+      }
+      return this._loading;
+    },
+    /** The text of a book of the collection. */
+    async text(book) {
+      const packed = await new Promise((resolve, reject) => {
+        this._arrived.set(book.shelf, resolve);
+        this._script(`books/shelf/${book.shelf}.js`).then(() => {
+          if (this._arrived.delete(book.shelf)) reject(new Error('its file on the shelf is not what was expected'));
+        }, (e) => { this._arrived.delete(book.shelf); reject(e); });
+      });
+      if (typeof DecompressionStream !== 'function') throw new Error('This browser is too old to open the books of the collection.');
+      const bin = atob(packed), bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const out = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer();
+      return new TextDecoder('utf-8').decode(out);
+    },
+  };
+  // each book's script calls this with its text
+  window.BABEL_SHELF_BOOK = (id, packed) => {
+    const resolve = collection._arrived.get(id);
+    if (resolve) { collection._arrived.delete(id); resolve(packed); }
+  };
+
+  /** Lower case, without accents: for searching. */
+  const fold = (s) => String(s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+  /** The surname to order an author by: "Arthur Conan Doyle" → "doyle", "Karl Marx and Friedrich Engels" → "marx". */
+  function surname(author) {
+    const first = fold(author).split(/\s+and\s+|,|;/)[0].replace(/\s+(jr|sr)\.?$/, '').trim();
+    const words = first.split(/\s+/).filter(Boolean);
+    return words.length ? words[words.length - 1] : '\uffff';
+  }
+
+  /** A title to order by, without a leading "The", "A" or "An". */
+  const titleKey = (title) => fold(title).replace(/^(the|a|an)\s+/, '');
 
   /** Reads a text file as UTF-8, or as Windows-1252 if it is clearly not UTF-8. */
   async function readBookFile(file) {
@@ -167,7 +236,8 @@
       if (this.query) this._certain();
       if (this.book) this._placeBook();
       const tab = TABS.find(([t]) => $(t).getAttribute('aria-selected') === 'true')[0];
-      const active = { 'tab-here': $('panel-here'), 'tab-find': $('find-text'), 'tab-books': $('books-folder'), 'tab-go': $('go-east') }[tab];
+      if (tab === 'tab-books') this._openShelf();
+      const active = { 'tab-here': $('panel-here'), 'tab-find': $('find-text'), 'tab-books': $('shelf-filter'), 'tab-go': $('go-east') }[tab];
       setTimeout(() => active.focus({ preventScroll: true }), 0);
     }
 
@@ -201,12 +271,10 @@
         const loc = this.certain.location;
         this.ctx.copyText(this.lib.hexagonAddressText(loc.gallery, loc.floor), 'Copied the address of that hexagon.');
       });
-      const folder = $('books-folder-input');
-      if (!('webkitdirectory' in folder) || /iPhone|iPad|Android/.test(navigator.userAgent || '')) $('books-folder').hidden = true;
-      $('books-folder').addEventListener('click', () => folder.click());
       $('books-files').addEventListener('click', () => $('books-files-input').click());
-      folder.addEventListener('change', () => this._addBooks(folder, true));
-      $('books-files-input').addEventListener('change', () => this._addBooks($('books-files-input'), false));
+      $('shelf-filter').addEventListener('input', () => this._filterShelf());
+      $('shelf-order').addEventListener('change', () => this._renderShelf());
+      $('books-files-input').addEventListener('change', () => this._addBooks($('books-files-input')));
       $('books-forget').addEventListener('click', () => this._forgetBooks());
       for (const r of document.querySelectorAll('input[name="book-fill"]')) r.addEventListener('change', () => this._placeBook());
       $('go-offset').addEventListener('submit', (e) => { e.preventDefault(); this._goOffset(); });
@@ -223,6 +291,7 @@
         $(t).setAttribute('aria-selected', String(t === tab));
         $(p).hidden = p !== panel;
       }
+      if (tab === 'tab-books') this._openShelf();
     }
 
     async _paste() {
@@ -336,7 +405,7 @@
 
     /* ---------------- finding a whole book ---------------- */
 
-    async _addBooks(input, replace) {
+    async _addBooks(input) {
       const status = $('books-status');
       const all = [...input.files];
       const files = all.filter((f) => /\.txt$/i.test(f.name) && !f.name.startsWith('.'));
@@ -352,20 +421,20 @@
         if (big.includes(f)) continue;
         try { books.push(await readBookFile(f)); } catch (e) { unread.push(f.name); }
       }
-      input.value = ''; // so that choosing the same folder again reads it again
+      input.value = ''; // so that choosing the same files again reads them again
       if (!books.length) {
         status.textContent = `The browser could not read ${unread.length ? unread.join(', ') : 'those files'}.`;
         return;
       }
-      await shelf.put(books, replace);
+      await shelf.put(books, false);
       this.books = await shelf.all();
       this.typeset.clear();
       this._renderBooks();
       const n = books.length;
-      status.textContent = `${n === 1 ? 'One book' : `${fmt(n)} books`} ${replace ? 'in the folder' : 'added'}.` +
+      status.textContent = `${n === 1 ? 'One book' : `${fmt(n)} books`} added.` +
         (big.length ? ` Left out, being larger than 64 MB: ${big.map((f) => f.name).join(', ')}.` : '') +
         (unread.length ? ` The browser could not read ${unread.join(', ')}.` : '') +
-        ' The catalogue will remember them in this browser. To add or change books, open the folder again.';
+        ' The catalogue will remember them in this browser.';
     }
 
     async _forgetBooks() {
@@ -384,15 +453,18 @@
      * the file name, or else from the e-book's own header.
      */
     _set(entry) {
-      const key = entry.name + '|' + entry.lastModified + '|' + entry.size;
+      const key = entry.key;
       let t = this.typeset.get(key);
       if (!t) {
         const clean = BabelCore.Library.cleanEbook(entry.text);
         const named = describeBook(entry.name);
-        const meta = named.author || !clean.title ? named : { title: clean.title, author: clean.author, year: named.year };
+        const meta = entry.meta || (named.author || !clean.title ? named : { title: clean.title, author: clean.author, year: named.year });
         // set as a link would set it, without a title page: the same text is the same book
         t = { meta, text: clean.text, set: this.lib.typeset(clean.text, {}), trimmed: clean.trimmed };
         this.typeset.set(key, t);
+        // books of the collection can be long: keep only the last few of them set
+        const kept = [...this.typeset.keys()].filter((k) => k.startsWith('shelf:'));
+        for (const k of kept.slice(0, Math.max(0, kept.length - 6))) this.typeset.delete(k);
       }
       return t;
     }
@@ -404,9 +476,10 @@
       list.textContent = '';
       $('books-forget').hidden = !this.books.length;
       for (const entry of this.books) {
+        entry.key = 'own:' + entry.name + '|' + entry.lastModified + '|' + entry.size;
         const { meta, set } = this._set(entry);
         const li = el('li');
-        li.dataset.name = entry.name;
+        li.dataset.key = entry.key;
         const info = el('div');
         info.appendChild(el('cite', '', meta.title));
         const by = [meta.author, meta.year].filter(Boolean).join(', ');
@@ -421,16 +494,105 @@
         li.append(info, button);
         list.appendChild(li);
       }
-      if (!this.books.length && !$('books-status').textContent) $('books-status').textContent = 'No books yet.';
-      else if (this.books.length && $('books-status').textContent === 'No books yet.') $('books-status').textContent = '';
       this._markCurrent();
     }
 
     _markCurrent() {
-      for (const li of $('books-list').children) li.setAttribute('aria-current', String(!!this.book && li.dataset.name === this.book.entry.name));
+      for (const list of [$('books-list'), $('shelf-list')]) {
+        for (const li of list.children) li.setAttribute('aria-current', String(!!this.book && li.dataset.key === this.book.entry.key));
+      }
+    }
+
+    /* ---------------- the collection ---------------- */
+
+    /** Shows the collection, loading its list the first time. */
+    async _openShelf() {
+      if (this._shelfShown) return;
+      this._shelfShown = true;
+      $('shelf-status').textContent = 'Opening the shelves…';
+      const books = await collection.load();
+      if (!books.length) {
+        $('shelf-intro').textContent = 'This Library has no collection of books yet. To give it one, put plain-text files (.txt) in its books folder and run download_gutenberg_top1024.py there with --shelve-only. Meanwhile, you can show the catalogue your own books below.';
+        $('shelf-status').textContent = '';
+        $('shelf-list').hidden = true;
+        document.querySelector('#panel-books .shelf-tools').hidden = true;
+        return;
+      }
+      for (const b of books) b.search = fold([b.title, b.author, b.language].join(' '));
+      this._renderShelf();
+    }
+
+    /** Lists the collection in the order chosen. */
+    _renderShelf() {
+      const books = collection.books;
+      if (!books || !books.length) return;
+      const order = $('shelf-order').value;
+      const sorted = books.slice();
+      if (order === 'title') sorted.sort((a, b) => titleKey(a.title).localeCompare(titleKey(b.title), 'en'));
+      else if (order === 'author') sorted.sort((a, b) => surname(a.author).localeCompare(surname(b.author), 'en') || fold(a.author).localeCompare(fold(b.author), 'en') || titleKey(a.title).localeCompare(titleKey(b.title), 'en'));
+      const list = $('shelf-list');
+      list.textContent = '';
+      for (const book of sorted) {
+        const li = el('li');
+        li.dataset.key = 'shelf:' + book.file;
+        li._book = book;
+        const info = el('div');
+        info.appendChild(el('cite', '', book.title));
+        const by = [book.author, book.year].filter(Boolean).join(', ');
+        const line = el('span', 'note');
+        if (by) line.appendChild(el('span', 'by', by));
+        line.append([by ? '' : null, book.language && !/^english$/i.test(book.language) ? book.language : null, `${fmt(book.characters)} characters`].filter((x) => x !== null).join(' · '));
+        info.appendChild(line);
+        const button = el('button', '', 'Find it');
+        button.type = 'button';
+        button.addEventListener('click', () => this.findShelfBook(book));
+        li.append(info, button);
+        list.appendChild(li);
+      }
+      this._filterShelf();
+      this._markCurrent();
+    }
+
+    /** Shows only the books whose title, author or language holds every word searched for. */
+    _filterShelf() {
+      const books = collection.books;
+      if (!books || !books.length) return;
+      const words = fold($('shelf-filter').value).split(/\s+/).filter(Boolean);
+      let shown = 0;
+      for (const li of $('shelf-list').children) {
+        const ok = words.every((w) => li._book.search.includes(w));
+        li.hidden = !ok;
+        if (ok) shown++;
+      }
+      $('shelf-status').textContent = words.length
+        ? (shown ? `${fmt(shown)} of ${fmt(books.length)} books.` : 'No book of the collection matches.')
+        : `${fmt(books.length)} books.`;
+    }
+
+    /** Takes a book of the collection down from its shelf, then finds it in the Library. */
+    async findShelfBook(book) {
+      const ticket = (this._ticket = (this._ticket || 0) + 1);
+      $('book-results').hidden = false;
+      $('book-found-title').replaceChildren('Where ', el('cite', '', book.title), ' stands');
+      $('book-how').textContent = 'Taking it down from the shelf…';
+      $('book-parts').textContent = '';
+      $('book-found-title').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      let text;
+      try {
+        text = await collection.text(book);
+      } catch (e) {
+        if (ticket === this._ticket) $('book-how').textContent = `It could not be taken down: ${e.message}`;
+        return;
+      }
+      if (ticket !== this._ticket) return; // another book was chosen meanwhile
+      $('book-how').textContent = 'Setting it in pages and finding its shelf…';
+      await new Promise((r) => setTimeout(r, 30)); // let that be seen before the work begins
+      if (ticket !== this._ticket) return;
+      this.findBook({ key: 'shelf:' + book.file, name: book.file, text, meta: { title: book.title, author: book.author, year: book.year } });
     }
 
     findBook(entry) {
+      this._ticket = (this._ticket || 0) + 1;
       const { meta, text, set, trimmed } = this._set(entry);
       this.book = { entry, meta, text, set, trimmed, found: null };
       this._placeBook();

@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=Libre+Bodoni:ital,wght@0,400;0,500;1,400&display=swap">
-<link rel="stylesheet" href="css/style.css?v=2026-10-24.6">
+<link rel="stylesheet" href="css/style.css?v=2026-10-24.7">
 </head>
 <body>
 <canvas id="view" aria-label="The Library, seen from the eyes of a librarian"></canvas>
@@ -129,17 +129,20 @@
 
     <div id="panel-books" class="panel" role="tabpanel" aria-labelledby="tab-books" hidden>
       <section class="intro">
-        <p class="status">The catalogue can find any of your own books in the Library: the plain-text files (<code>.txt</code>) in the <code>books</code> folder beside <code>index.html</code>. A page opened straight from your computer cannot look into a folder by itself, so show it the folder once. Your browser may ask whether to “upload” the files: they are only read by this page, and nothing leaves your computer.</p>
-        <div class="row">
-          <button id="books-folder" type="button" class="primary">Open the books folder</button>
-          <button id="books-files" type="button">Choose book files</button>
-          <button id="books-forget" type="button" class="quiet" hidden>Forget these books</button>
+        <p id="shelf-intro" class="status">These are the books of this Library’s own collection. Choose one, and the catalogue sets it in pages as a book of the Library holds it, then finds the one book on the shelves that holds exactly those pages.</p>
+        <div class="row shelf-tools">
+          <input id="shelf-filter" type="search" placeholder="Title, author or language" autocomplete="off" spellcheck="false" aria-label="Search the books">
+          <label>Order
+            <select id="shelf-order">
+              <option value="rank">most read first</option>
+              <option value="title">by title</option>
+              <option value="author">by author</option>
+            </select>
+          </label>
         </div>
-        <input id="books-folder-input" type="file" webkitdirectory multiple hidden>
-        <input id="books-files-input" type="file" accept=".txt,text/plain" multiple hidden>
-        <p id="books-status" class="note" role="status"></p>
+        <p id="shelf-status" class="note" role="status"></p>
       </section>
-      <ul id="books-list" class="books" aria-label="Your books"></ul>
+      <ul id="shelf-list" class="books shelf" aria-label="The books of this Library"></ul>
 
       <div id="book-results" class="results" hidden>
         <section class="result" aria-labelledby="book-found-title">
@@ -153,6 +156,18 @@
           <ol id="book-parts" class="parts"></ol>
         </section>
       </div>
+
+      <section class="go">
+        <h3>Other books</h3>
+        <p class="note">To find a book that is not in the collection, show the catalogue its plain-text file (<code>.txt</code>). Your browser may ask whether to “upload” it: it is only read by this page, and nothing leaves your computer.</p>
+        <div class="row">
+          <button id="books-files" type="button">Choose book files</button>
+          <button id="books-forget" type="button" class="quiet" hidden>Forget these books</button>
+        </div>
+        <input id="books-files-input" type="file" accept=".txt,text/plain" multiple hidden>
+        <p id="books-status" class="note" role="status"></p>
+        <ul id="books-list" class="books" aria-label="Your books"></ul>
+      </section>
     </div>
 
     <div id="panel-go" class="panel" role="tabpanel" aria-labelledby="tab-go" hidden>
@@ -202,18 +217,18 @@
   whenever any of them changes: browsers and GitHub Pages keep copies of files for a while,
   and a new page read with an old script would not start.
 -->
-<script src="lib/three.min.js?v=2026-10-24.6"></script>
-<script src="lib/Reflector.js?v=2026-10-24.6"></script>
-<script src="config.js?v=2026-10-24.6"></script>
-<script src="js/library.js?v=2026-10-24.6"></script>
-<script src="js/textures.js?v=2026-10-24.6"></script>
-<script src="js/architecture.js?v=2026-10-24.6"></script>
-<script src="js/world.js?v=2026-10-24.6"></script>
-<script src="js/player.js?v=2026-10-24.6"></script>
-<script src="js/terminal.js?v=2026-10-24.6"></script>
-<script src="js/quotes.js?v=2026-10-24.6"></script>
-<script src="js/dream.js?v=2026-10-24.6"></script>
-<script src="js/main.js?v=2026-10-24.6"></script>
+<script src="lib/three.min.js?v=2026-10-24.7"></script>
+<script src="lib/Reflector.js?v=2026-10-24.7"></script>
+<script src="config.js?v=2026-10-24.7"></script>
+<script src="js/library.js?v=2026-10-24.7"></script>
+<script src="js/textures.js?v=2026-10-24.7"></script>
+<script src="js/architecture.js?v=2026-10-24.7"></script>
+<script src="js/world.js?v=2026-10-24.7"></script>
+<script src="js/player.js?v=2026-10-24.7"></script>
+<script src="js/terminal.js?v=2026-10-24.7"></script>
+<script src="js/quotes.js?v=2026-10-24.7"></script>
+<script src="js/dream.js?v=2026-10-24.7"></script>
+<script src="js/main.js?v=2026-10-24.7"></script>
 <script>
   // If the Library has not started a few seconds after the page has loaded (a script missing,
   // or not matching the others), say so rather than leave the screen black.

@@ -123,7 +123,7 @@ Every vestibule has one. There is no menu in the Library, so the catalogue is al
 
 **Find a text.** Type or paste anything into it. Small letters are read as capitals, accents are removed, line breaks and tabs become spaces, and `--` becomes a long dash. Other characters become their nearest equivalents in the alphabet: curly quotation marks become straight ones, Æ becomes AE, ß becomes SS, ½ becomes 1/2, a ligature such as ﬁ becomes FI, and so on. What has no equivalent is left out (the screen lists it). The catalogue then runs the shelving backwards. It composes the book that begins with your text, with the rest of the book either random characters or blank, and the inverse permutation gives the hexagon, wall, shelf and volume where that book stands. Since every possible book exists exactly once, it is certainly there. It is also almost always astronomically far away, so the screen gives the distance as a power of ten. You can read the book on the spot, with your text highlighted, copy its address, or go there: you are set down in front of it, and the volume stands a little out of its row.
 
-**Find a book.** The catalogue can also find a whole book: any plain-text file in the `books` folder. It sets the text in pages, the way a book of this Library holds them: from the first page, 64 characters to a line and 32 lines to a page, with words kept whole and each paragraph starting on a new, indented line. The rest of the 512 pages are blank (or random characters, if you prefer). It then finds the one book of the Library that holds exactly those pages, and you can read it on the spot, go and take it down from its shelf, or copy a link to it (see [Links to books](#links-to-books)). A text longer than one book is set in several parts, one after the other, and each part is found separately.
+**Find a book.** The catalogue can also find a whole book: any book of the Library's own collection (see [Your books](#your-books)), which it lists with a search box, most read first, by title or by author, or a plain-text file of your own. It sets the text in pages, the way a book of this Library holds them: from the first page, 64 characters to a line and 32 lines to a page, with words kept whole and each paragraph starting on a new, indented line. The rest of the 512 pages are blank (or random characters, if you prefer). It then finds the one book of the Library that holds exactly those pages, and you can read it on the spot, go and take it down from its shelf, or copy a link to it (see [Links to books](#links-to-books)). A text longer than one book is set in several parts, one after the other, and each part is found separately.
 
 **Go to a hexagon.** Move any number of hexagons east or west and floors up or down. Paste a full address, as copied from the Current position tab, to return to a hexagon you have bookmarked, even after closing the page. An address copied from a Library with another seed is refused, since its books stand elsewhere. Or go somewhere at random. After a jump, the Current position tab counts your steps from where you arrived.
 
@@ -156,9 +156,24 @@ Obsidian Publish runs `publish.js` only on sites with a custom domain. The setti
 
 ## Your books
 
-To add a book, save it as a plain-text file (`.txt`, preferably UTF-8) in the `books` folder, named `Author — Title (Year).txt`. The catalogue reads the title, author and year from the name. Files from [Project Gutenberg](https://www.gutenberg.org) can be added as they are: the catalogue leaves out the licence that comes before and after the text, and the volunteers' credits, and if the file name does not name an author, it takes the title and author from the e-book's header. Any other name is used as the title. Leave a blank line between paragraphs. If there are no blank lines, each line is taken as a paragraph, and a file written on a single line is set as one long paragraph.
+The Library has a collection of books for the catalogue's **Find a book**: the plain-text files (`.txt`) in the `books` folder. For now, they are 957 of the 1,024 most read books of [Project Gutenberg](https://www.gutenberg.org), downloaded by `books/download_gutenberg_top1024.py`.
 
-A page opened straight from your computer is not allowed to look into folders by itself, so the first time, press **Open the books folder** in the catalogue and choose the `books` folder. Browsers word this as "uploading" the files, but they are only read by the page and never leave your computer. The catalogue then remembers the books in this browser, even after the page is closed, until you press **Forget these books**. After adding or changing a book, open the folder again. On a phone or tablet, use **Choose book files** instead.
+A web page is not allowed to look inside a folder, and a page opened by double-click cannot even read a file beside it, but it can load scripts. So after downloading, the script also *shelves* the books:
+
+- `books/index.js` lists them: title, author, language, length, and rank by downloads (about 180 KB);
+- `books/shelf/` holds one small script per book, its text compressed (about half the size of the `.txt` file; 402 MB for the 957 books).
+
+The catalogue loads the list when **Find a book** is first opened, and a book's text only when you choose it, so the collection works the same whether the Library is opened by double-click or online. Commit `books/index.js` and `books/shelf/` to publish the collection with the Library. The `.txt` files, the script and its manifest stay out of the repository (see `.gitignore`). GitHub Pages allows a site of up to 1 GB, which leaves room for roughly as many books again.
+
+To add a book of your own to the collection, save it as a plain-text file (preferably UTF-8) in the `books` folder, named `Author — Title (Year).txt`, and shelve the books again without downloading anything:
+
+```
+python3 books/download_gutenberg_top1024.py --output books --shelve-only
+```
+
+The title, author and year come from the file name. If the name does not give an author, they come from the e-book's header, as for the Gutenberg files. Those can be added as they are: the catalogue leaves out the licence that comes before and after the text, and the volunteers' credits. Leave a blank line between paragraphs. If there are no blank lines, each line is taken as a paragraph, and a file written on a single line is set as one long paragraph. Each book's script is named after its text, so shelving again only writes the books that are new or changed, and removes those that are gone.
+
+Under **Other books**, anyone can also show the catalogue a `.txt` file of their own with **Choose book files**. Browsers word this as "uploading", but the file is only read by the page and never leaves the computer. The catalogue remembers those books in that browser until **Forget these books** is pressed.
 
 ## Dreams
 
@@ -170,7 +185,7 @@ The sentences are grammatical but not necessarily sensible, like surreal poetry:
 
 ## Files
 
-In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-24.6`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
+In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-24.7`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
 
 | Path | Contents |
 |---|---|
@@ -189,7 +204,7 @@ In `index.html`, every file name is followed by `?v=` and a version, such as `js
 | `lib/` | three.js r147 and its `Reflector` (MIT licence, see `lib/three.LICENSE`) |
 | `tests/library.test.js` | Tests of the mathematics |
 | `obsidian/publish.js` | For an Obsidian Publish site: a link under every note to its book in the Library |
-| `books/` | Your own books, as `.txt` files, for the catalogue to find |
+| `books/index.js`, `books/shelf/` | The collection, as the catalogue reads it, written by `books/download_gutenberg_top1024.py` from the `.txt` files beside it (which are not published) |
 
 ## Tests
 
