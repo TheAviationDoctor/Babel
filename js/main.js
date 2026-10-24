@@ -114,7 +114,7 @@
       lastJourney: () => lastJourney,
     });
 
-    wake(0);
+    wake();
     bindInterface();
     fitGlyphs();
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitGlyphs).catch(() => {});
@@ -156,9 +156,9 @@
     if (mode === 'reading') sizePage();
   }
 
-  /** Puts the reader in waking hexagon number n of the current seed. */
-  function wake(n) {
-    const loc = lib.wakingLocation(n);
+  /** Wakes the reader in a hexagon chosen at random, a different one on every visit. */
+  function wake() {
+    const loc = lib.randomLocation();
     world.setAnchor(loc.gallery, loc.floor);
     if (terminal) terminal.reset();
     player.origin = 'woke';
@@ -216,7 +216,7 @@
   }
 
   function goToRandom() {
-    const loc = lib.wakingLocation(1 + Math.floor(Math.random() * 4294967295));
+    const loc = lib.randomLocation();
     goToAddress(loc.gallery, loc.floor, null);
     toast('You arrive in a hexagon chosen at random.');
   }

@@ -378,6 +378,27 @@ test('positions are measured from the seam, as a fraction of the way round', () 
   assert.ok(Math.abs(last.east.fraction - (galleries - 1) / galleries) < 1e-12);
 });
 
+test('random locations can be anywhere, and are real hexagons', () => {
+  const lib = new Library({});
+  const a = lib.randomLocation(), b = lib.randomLocation();
+  for (const loc of [a, b]) {
+    assert.ok(lib.hexagonExists(loc.gallery, loc.floor));
+    assert.ok(loc.slot >= 0 && loc.slot < lib.S);
+  }
+  assert.notStrictEqual(lib.hexagonAddressText(a.gallery, a.floor), lib.hexagonAddressText(b.gallery, b.floor));
+  // with a seeded source of randomness, always the same
+  const seeded = () => { const r = util.sfc32(1, 2, 3, 4); return () => util.unit(r); };
+  const c = lib.randomLocation(seeded()), d = lib.randomLocation(seeded());
+  assert.strictEqual(lib.hexagonAddressText(c.gallery, c.floor), lib.hexagonAddressText(d.gallery, d.floor));
+  // spread over the whole Library: 32 random hexagons fall in many of 8 bands of floors
+  const bands = new Set();
+  for (let i = 0; i < 32; i++) {
+    const l = lib.randomLocation();
+    bands.add(Math.floor(lib.position(l.gallery, l.floor).up.fraction * 8));
+  }
+  assert.ok(bands.size >= 4, `random hexagons fall in only ${bands.size} of 8 bands of floors`);
+});
+
 test('the timing of dreams is checked', () => {
   const d = new Library({}).config;
   assert.strictEqual(d.quoteDuration, 10);

@@ -600,7 +600,28 @@
       return x.slice(0, len);
     }
 
-    /** A pseudorandom (seeded) location to wake up in. `n` selects among many. */
+    /**
+     * A location chosen at random: any book, and so any hexagon, as likely as any other.
+     * `random` returns numbers from 0 to 1 (for tests); by default the randomness is the
+     * browser's (or Node's) cryptographic one, so that every hexagon can come up.
+     */
+    randomLocation(random) {
+      const N = this.N, M = this.M, v = new Uint8Array(M);
+      const c = typeof globalThis !== 'undefined' ? globalThis.crypto : null;
+      if (!random && c && c.getRandomValues) {
+        const words = new Uint32Array(16384); // 64 KB, as much as one call may fill
+        for (let i = 0; i < M; i += words.length) {
+          c.getRandomValues(words);
+          for (let k = 0; k < words.length && i + k < M; k++) v[i + k] = Math.floor((words[k] / 4294967296) * N);
+        }
+      } else {
+        const r = random || Math.random;
+        for (let i = 0; i < M; i++) v[i] = Math.floor(r() * N);
+      }
+      return this.locate(v);
+    }
+
+    /** A pseudorandom (seeded) location: the same for the same seed and `n`. */
     wakingLocation(n) {
       const k = hashString('babel/waking/' + this.seed + '/' + (n || 0));
       const rng = sfc32(k[0], k[1], k[2], k[3]);

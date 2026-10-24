@@ -6,7 +6,7 @@ Every text ever written, including your own life story, as well as every text *n
 
 ## Getting started
 
-Everything is pure HTML/JS/CSS, so nothing needs installing. Just visit the Library online at https://babel.pellegr.in/, or download the repo and open `index.html` locally in a recent browser (Chrome, Edge, Firefox, or Safari). It even runs offline (except for a couple of Google Fonts which will then revert to your browser's defaults). There is no title screen: you wake in a hexagon of the Library. Click once to look around with the mouse. If, just after an update, the page stays black or says that the Library did not start, reload it while holding Shift, so that the browser fetches every file again.
+Everything is pure HTML/JS/CSS, so nothing needs installing. Just visit the Library online at https://babel.pellegr.in/, or download the repo and open `index.html` locally in a recent browser (Chrome, Edge, Firefox, or Safari). It even runs offline (except for a couple of Google Fonts which will then revert to your browser's defaults). There is no title screen: you wake in a hexagon of the Library chosen at random, a different one on every visit (any of its hexagons may come up). Click once to look around with the mouse. If, just after an update, the page stays black or says that the Library did not start, reload it while holding Shift, so that the browser fetches every file again.
 
 | | |
 |---|---|
@@ -185,7 +185,7 @@ The sentences are grammatical but not necessarily sensible, like surreal poetry:
 
 ## Files
 
-In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-24.8`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
+In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-24.9`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
 
 | Path | Contents |
 |---|---|
