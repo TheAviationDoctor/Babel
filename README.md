@@ -39,7 +39,7 @@ Using the default settings from `config.js`:
 
 - Each book holds `2^5 = 32` characters per line, `2^6 = 64` lines per page, and `2^9 = 512` pages. That's a total of `2^20 = 1,048,576` characters per book. That's about twice the length of a typical English novel, which gives plenty of headroom to capture most books ever published.
 
-- The alphabet contains `2^6 = 64` symbols (`26` uppercase letters A–Z, `10` digits 0–9, and `28` punctuation marks). That's exactly half as many symbols as the ASCII set, but this parsimonious choice was empirically tested and verified to represent virtually every one of the 11.7 million characters sampled across 18 public-domain classics from the Gutenberg website.
+- The alphabet contains `2^6 = 64` symbols (`26` uppercase letters A–Z, `10` digits 0–9, and `28` punctuation marks). This parsimonious choice was empirically tested and verified to represent virtually every one of the 11.7 million characters sampled across 18 public-domain classics from the Gutenberg website.
 
 - There are therefore `64^(2^20) = 2^6,291,456 ≈ 9.38 × 10^1,893,916` unique books in the Library. That's one followed by nearly two million zeros. If you kept repeating the word 'trillion' once per second, it would take you nearly 44 hours to verbalize that number.
 
@@ -148,6 +148,13 @@ python3 -c "import sys,zlib,base64; t=sys.stdin.buffer.read(); print('#book=:'+b
 
 Separate paragraphs with a blank line (`%0A%0A`); a single line break then counts as a space. In a text with no blank line at all, each line is taken as a paragraph. The text is otherwise read as the Catalogue reads any text: in capitals, without accents, with curly quotation marks made straight, and so on. A blog post of a few thousand words makes a link of a few thousand characters, well within what browsers accept; a whole novel would be too long for some browsers, which stop at about 80,000 characters.
 
+### Short links
+
+Two kinds of links are only a few dozen characters long, and carry no text at all:
+
+- **A book of the collection:** `#shelf=` followed by the name of its file in `books/compressed/`, such as `https://babel.pellegr.in/#shelf=3f6bb9d6f78e0293b56a` for *Pride and Prejudice*, or `#shelf=…/3` for the third part of a book too long for one volume. The Catalogue's **Find a book** copies these links. Like text links, they lead to the same book whatever the seed.
+- **Any place you walked to:** each visit begins in a hexagon drawn from a random 128-bit *start number* rather than from the whole Library. That gives 2^128 ≈ 3.4 × 10^38 possible starting points, far more than anyone could ever tell apart. A place reached by walking from there is then named by the start number and the steps taken: `#at=`, then a fingerprint of the configuration, the start number, the hexagons east (negative for west), the floors up (negative for down) and, for a book, its number in the hexagon. For example, `https://babel.pellegr.in/#at=31uH.T1rAJz8_WwfPbaP6D9mUQg.3.-1.17` (64 characters). **Copy a link to it**, while reading a book, and **Copy a link to this hexagon**, in the Current position tab, copy these links. They still work after a jump through **Go to a hexagon** by a number of hexagons or at random, but not after a jump to a text, a book or an address. Unlike text links, they depend on the seed and the dimensions in `config.js`: the fingerprint changes with them, and a Library with other settings refuses such a link rather than lead somewhere else.
+
 ## Your books
 
 The Library has a collection of ~1K copyright-free literature classics from the list of most read books of [Project Gutenberg](https://www.gutenberg.org). They are kept in `books/compressed/`. You can access those from the Catalogue's **Find a book** tab and read them from within the Library.
@@ -168,7 +175,7 @@ The sentences are grammatical but not necessarily sensible. A small English gram
 
 ## Files
 
-In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-24.12`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
+In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-25.1`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
 
 | Path | Contents |
 |---|---|

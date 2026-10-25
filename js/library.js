@@ -600,6 +600,86 @@
       return x.slice(0, len);
     }
 
+    /*
+     * Starting hexagons, and short links to the places reached from them.
+     *
+     * A visit begins in the hexagon of a random book, drawn from a 128-bit start number
+     * (16 bytes) rather than from the whole Library: 2^128 starting points, far more than
+     * anyone could ever tell apart from all the hexagons there are. In exchange, a place
+     * reached from a start by walking is named in a few dozen characters, with no storage:
+     *     #at=<fingerprint>.<start>.<east>.<up>[.<book>]
+     * the fingerprint of this Library's configuration (4 characters), the start number (22),
+     * the hexagons east (negative: west) and floors up (negative: down) from the start, and
+     * the book in that hexagon (0 to S − 1), if the link is to a book.
+     */
+
+    /** The hexagon (and a book in it) that a start number begins in. */
+    startLocation(start) {
+      const k = hashString('babel/start/' + this.seed);
+      const w = (i) => ((start[i] << 24) | (start[i + 1] << 16) | (start[i + 2] << 8) | start[i + 3]) >>> 0;
+      const rng = sfc32(k[0] ^ w(0), k[1] ^ w(4), k[2] ^ w(8), k[3] ^ w(12));
+      for (let i = 0; i < 16; i++) rng();
+      const v = new Uint8Array(this.M);
+      for (let i = 0; i < this.M; i++) v[i] = Math.floor(unit(rng) * this.N);
+      return this.locate(v);
+    }
+
+    /** A new start number, from the browser's (or Node's) cryptographic randomness. */
+    static newStart() {
+      const start = new Uint8Array(16);
+      const c = typeof globalThis !== 'undefined' ? globalThis.crypto : null;
+      if (c && c.getRandomValues) c.getRandomValues(start);
+      else for (let i = 0; i < 16; i++) start[i] = Math.floor(Math.random() * 256);
+      return start;
+    }
+
+    /** Four characters that change with anything that moves the books: seed, alphabet, sizes. */
+    fingerprint() {
+      const c = this.config;
+      const h = hashString('babel/fingerprint/' + JSON.stringify([c.seed, c.alphabet.join(''), c.pagesPerBook, c.linesPerPage,
+        c.charactersPerLine, c.wallsWithShelves, c.shelvesPerWall, c.booksPerShelf]));
+      return toBase64Url(new Uint8Array([h[0] >>> 24, (h[0] >>> 16) & 255, (h[0] >>> 8) & 255]));
+    }
+
+    /** '#at=…' for the place `east` hexagons east and `up` floors up from a start, and book `slot` there (or none). */
+    placeLink(start, east, up, slot) {
+      return `#at=${this.fingerprint()}.${toBase64Url(start)}.${east}.${up}${slot === undefined || slot === null ? '' : '.' + slot}`;
+    }
+
+    /**
+     * Reads '#at=…': { start, east, up, slot } (slot null if the link is to a hexagon), or
+     * { error } saying why it cannot be followed, or null if it is not such a link.
+     */
+    readPlace(hash) {
+      const m = /^#?at=([A-Za-z0-9_-]{4})\.([A-Za-z0-9_-]{22})\.(-?\d{1,16})\.(-?\d{1,16})(?:\.(\d{1,6}))?$/.exec(String(hash || '').trim());
+      if (!/^#?at=/.test(String(hash || ''))) return null;
+      if (!m) return { error: 'This link to a place in the Library is incomplete: part of it may have been lost when it was copied.' };
+      if (m[1] !== this.fingerprint()) return { error: 'This link was made in a Library with another seed or other dimensions, so here it would lead somewhere else.' };
+      const east = Number(m[3]), up = Number(m[4]), slot = m[5] === undefined ? null : Number(m[5]);
+      if (!Number.isSafeInteger(east) || !Number.isSafeInteger(up)) return { error: 'This link to a place in the Library goes further than the Library can count.' };
+      if (slot !== null && slot >= this.S) return { error: 'This link names a book that no hexagon of this Library holds.' };
+      return { start: fromBase64Url(m[2]), east, up, slot };
+    }
+
+    /**
+     * A book of the collection, by the name of its file in books/compressed/ (a hash of its
+     * text): '#shelf=<id>' for its first part, '#shelf=<id>/<n>' for part n of a long one.
+     * Like '#book=…' links, these lead to the book with blank pages after the text, and
+     * keep leading to it whatever the seed.
+     */
+    static shelfLink(id, part) {
+      return `#shelf=${id}${part > 1 ? '/' + part : ''}`;
+    }
+
+    /** Reads '#shelf=…': { id, part }, or { error }, or null if it is not such a link. */
+    static readShelfLink(hash) {
+      const h = String(hash || '').trim();
+      if (!/^#?shelf=/.test(h)) return null;
+      const m = /^#?shelf=([0-9a-f]{20})(?:\/(\d{1,6}))?$/.exec(h);
+      if (!m) return { error: 'This link to a book of the collection is incomplete: part of it may have been lost when it was copied.' };
+      return { id: m[1], part: m[2] ? Math.max(1, Number(m[2])) : 1 };
+    }
+
     /**
      * A location chosen at random: any book, and so any hexagon, as likely as any other.
      * `random` returns numbers from 0 to 1 (for tests); by default the randomness is the

@@ -14,6 +14,10 @@
   let gaze = null, gazeKey = '';
   let reading = null;
   let lastJourney = null; // how far the last jump through the catalogue went
+  // The start number of the hexagon the reader woke in, or arrived in at random or by a link
+  // to a place: the anchor's hexagon. Places reached from it have short links. Null after a
+  // jump to a text, a book or an address, from which there are none.
+  let start = null;
 
   function showError(message, hint) {
     Babel.failed = true;
@@ -107,6 +111,7 @@
     terminal = new Babel.Terminal({
       lib: () => lib, world, player, dims: assets.dims,
       setMode, startWalking, openBookAt, toast, copyText, linkBase,
+      placeLink: () => (start ? lib.placeLink(start, player.cg, player.cf) : null),
       // every journey through the catalogue says, for a while, how far it went
       goToCell: (...a) => journey(() => goToCell(...a)),
       goToAddress: (...a) => journey(() => goToAddress(...a)),
@@ -158,10 +163,12 @@
 
   /** Wakes the reader in a hexagon chosen at random, a different one on every visit. */
   function wake() {
-    const loc = lib.randomLocation();
+    start = BabelCore.Library.newStart();
+    const loc = lib.startLocation(start);
     world.setAnchor(loc.gallery, loc.floor);
     if (terminal) terminal.reset();
     player.origin = 'woke';
+    player.home = { g: 0, f: 0 };
     player.placeAtStart();
     world.update(0, 0);
   }
@@ -178,7 +185,9 @@
   function goToAddress(gallery, floor, face, mark) {
     world.setAnchor(gallery, floor);
     terminal.reset();
+    start = null;
     player.origin = 'arrived';
+    player.home = { g: 0, f: 0 };
     if (mark) world.setMark(Object.assign({ dg: 0, df: 0 }, mark));
     goToCell(0, 0, face);
   }
@@ -196,7 +205,18 @@
    * book that holds the link's text, and returns true.
    */
   async function goToLinkedBook(travelling) {
-    if (!/^#book=/.test(location.hash)) return false;
+    const hash = location.hash;
+    const place = lib.readPlace(hash);
+    if (place) {
+      if (place.error) { toast(place.error, 7000); return false; }
+      if (travelling) journey(() => goToPlace(place, hash)); else goToPlace(place, hash);
+      toast(place.slot === null ? 'You arrive in the hexagon the link leads to.'
+        : `Before you, a little out of its row, stands the book the link leads to. ${isTouch ? 'Tap it' : 'Press E'} to read it.`, 6000);
+      return true;
+    }
+    const shelf = BabelCore.Library.readShelfLink(hash);
+    if (shelf) return goToShelfBook(shelf, hash, travelling);
+    if (!/^#book=/.test(hash)) return false;
     let text;
     try {
       text = await BabelCore.Library.readLink(location.hash);
@@ -209,16 +229,58 @@
       return false;
     }
     const b = lib.bookOfText(text);
-    const go = () => goToAddress(b.location.gallery, b.location.floor, lib.slotParts(b.location.slot), { slot: b.location.slot, start: 0, length: 0 });
+    const go = () => goToAddress(b.location.gallery, b.location.floor, lib.slotParts(b.location.slot), { slot: b.location.slot, start: 0, length: 0, link: hash });
     if (travelling) journey(go); else go();
     toast(`Before you, a little out of its row, stands the book the link leads to. ${isTouch ? 'Tap it' : 'Press E'} to read it.`, 6000);
     return true;
   }
 
   function goToRandom() {
-    const loc = lib.randomLocation();
+    const s = BabelCore.Library.newStart();
+    const loc = lib.startLocation(s);
     goToAddress(loc.gallery, loc.floor, null);
+    start = s; // a hexagon chosen at random is a start too: places around it have short links
     toast('You arrive in a hexagon chosen at random.');
+  }
+
+  /** Follows a link to a place (see placeLink in library.js): a hexagon reached from a start, or a book in it. */
+  function goToPlace(place, hash) {
+    const loc = lib.startLocation(place.start);
+    world.setAnchor(loc.gallery, loc.floor);
+    terminal.reset();
+    start = place.start;
+    player.origin = 'arrived';
+    player.home = { g: place.east, f: place.up };
+    let face = null;
+    if (place.slot !== null) {
+      face = lib.slotParts(place.slot);
+      world.setMark({ dg: place.east, df: place.up, slot: place.slot, start: 0, length: 0, link: hash });
+    }
+    goToCell(place.east, place.up, face);
+  }
+
+  /** Follows a link to a book of the collection: '#shelf=<id>' or '#shelf=<id>/<part>'. */
+  async function goToShelfBook(ref, hash, travelling) {
+    if (ref.error) { toast(ref.error, 7000); return false; }
+    let text;
+    try {
+      text = await Babel.Collection.text({ shelf: ref.id });
+    } catch (e) {
+      toast(/too old/.test(e.message) ? e.message : 'This link leads to a book that is not in the collection of this Library.', 7000);
+      return false;
+    }
+    const books = await Babel.Collection.load();
+    const book = books.find((b) => b.shelf === ref.id);
+    const set = lib.typeset(BabelCore.Library.cleanEbook(text).text, {});
+    const n = set.parts.length;
+    if (ref.part > n) { toast(`This link leads to part ${ref.part} of a book that has ${n === 1 ? 'only one part' : `only ${n} parts`}.`, 7000); return false; }
+    const r = lib.findText(set.parts[ref.part - 1], { fill: 'blank' });
+    const title = book ? (n > 1 ? `${book.title}, part ${ref.part} of ${n}` : book.title) : '';
+    const go = () => goToAddress(r.location.gallery, r.location.floor, lib.slotParts(r.location.slot),
+      { slot: r.location.slot, start: 0, length: 0, title, link: hash });
+    if (travelling) journey(go); else go();
+    toast(`Before you, a little out of its row, stands ${title || 'the book the link leads to'}. ${isTouch ? 'Tap it' : 'Press E'} to read it.`, 6000);
+    return true;
   }
 
   /* ---------------- text ---------------- */
@@ -314,6 +376,8 @@
     openBookAt({
       location: world.location(dg, df, target.slot), slot: target.slot,
       highlight: mark && mark.length ? { start: mark.start, length: mark.length } : null, returnTo: 'walking',
+      // the link that led here, or a short link to the place, if there is one
+      link: (mark && mark.link) || (start ? lib.placeLink(start, dg, df, target.slot) : null),
     });
   }
 
@@ -330,7 +394,9 @@
       content, returnTo: o.returnTo || 'walking', highlight: o.highlight || null,
       page: o.highlight ? Math.floor(o.highlight.start / c.charactersPerPage) : 0,
       title: lib.spineTitle(fp, o.slot),
+      link: o.link || null,
     };
+    $('copy-book-link').hidden = !reading.link;
     $('book-title').textContent = reading.title;
     $('book-where').textContent = `Wall ${wall + 1}, shelf ${shelf + 1}, volume ${volume + 1}`;
     $('page-count').textContent = `of ${fmt(c.pagesPerBook)}`;
@@ -594,6 +660,13 @@
       copyText(lib.pageLines(reading.content, reading.page).join('\n'), `Copied page ${reading.page + 1}.`);
     });
     $('close-book').addEventListener('click', closeBook);
+    $('copy-book-link').addEventListener('click', () => {
+      const base = linkBase();
+      if (!base) { toast('To copy links from a copy of the Library on this computer, set "website" in config.js to the address where the Library is published.', 7000); return; }
+      const url = base.replace(/#.*$/, '') + reading.link;
+      const long = url.length > 60000 ? ` It is ${fmt(url.length)} characters long, which is more than some browsers and websites accept.` : '';
+      copyText(url, `Copied a link to this book. Whoever opens it is set down before it.${long}`);
+    });
     $('show-passage').addEventListener('click', () => {
       reading.page = Math.floor(reading.highlight.start / lib.config.charactersPerPage);
       renderPage();
@@ -634,7 +707,8 @@
     // straight into the Library: before the book a link leads to, or in the waking hexagon
     setMode('walking');
     goToLinkedBook().then((went) => {
-      if (!went) {
+      // (a link that could not be followed has said why: that stays on screen instead)
+      if (!went && !/^#(book|shelf|at)=/.test(location.hash)) {
         toast((isTouch ? 'Drag on the right to look around, hold and slide on the left to walk, and tap a book to read it.'
           : 'Walk with W A S D, and press E to take down a book.') + ' The catalogue in each vestibule tells you where you are.', 9000);
       }
@@ -804,6 +878,7 @@
   Babel.debug = {
     get lib() { return lib; }, get world() { return world; }, get player() { return player; },
     get renderer() { return renderer; }, get mode() { return mode; }, get sleep() { return sleep; }, journey, here,
+    get start() { return start; }, get reading() { return reading; },
     openBook, openBookAt, startWalking, setMode, goToCell, goToAddress, fallAsleep, wakeUp, hexagonSeed,
     get lastJourney() { return lastJourney; },
     get terminal() { return terminal; },

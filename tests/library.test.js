@@ -423,6 +423,37 @@ test('the About tab reads Markdown, and runs none of the HTML in it', () => {
   assert.ok(!/<script/i.test(html));
 });
 
+test('a start number always begins in the same hexagon, and places around it have short links', () => {
+  const lib = new Library({});
+  const start = Library.newStart();
+  assert.strictEqual(start.length, 16);
+  const a = lib.startLocation(start), b = lib.startLocation(start.slice());
+  assert.strictEqual(lib.hexagonAddressText(a.gallery, a.floor), lib.hexagonAddressText(b.gallery, b.floor));
+  assert.ok(lib.hexagonExists(a.gallery, a.floor));
+  const other = Library.newStart();
+  assert.notStrictEqual(lib.hexagonAddressText(lib.startLocation(other).gallery, lib.startLocation(other).floor), lib.hexagonAddressText(a.gallery, a.floor));
+  // links: round trips, short, and refused by a Library they were not made in
+  const link = lib.placeLink(start, -12, 3, 417);
+  assert.ok(/^#at=[A-Za-z0-9_-]{4}\.[A-Za-z0-9_-]{22}\.-12\.3\.417$/.test(link), link);
+  const p = lib.readPlace(link);
+  assert.deepStrictEqual([p.east, p.up, p.slot, Buffer.from(p.start).toString('hex')], [-12, 3, 417, Buffer.from(start).toString('hex')]);
+  assert.strictEqual(lib.readPlace(lib.placeLink(start, 0, 0)).slot, null);
+  assert.strictEqual(lib.readPlace('#book=HELLO'), null);
+  assert.ok(lib.readPlace(link.slice(0, -10)).error);
+  assert.ok(/another seed/.test(new Library({ seed: 'elsewhere' }).readPlace(link).error));
+  assert.ok(lib.readPlace(lib.placeLink(start, 0, 0, lib.S)).error);
+  // the same configuration gives the same fingerprint; another one another
+  assert.strictEqual(lib.fingerprint(), new Library({}).fingerprint());
+  assert.notStrictEqual(lib.fingerprint(), new Library({ book: { pagesPerBook: 256 } }).fingerprint());
+  // links to the books of the collection
+  assert.strictEqual(Library.shelfLink('3f6bb9d6f78e0293b56a', 1), '#shelf=3f6bb9d6f78e0293b56a');
+  assert.strictEqual(Library.shelfLink('3f6bb9d6f78e0293b56a', 3), '#shelf=3f6bb9d6f78e0293b56a/3');
+  assert.deepStrictEqual(Library.readShelfLink('#shelf=3f6bb9d6f78e0293b56a/3'), { id: '3f6bb9d6f78e0293b56a', part: 3 });
+  assert.deepStrictEqual(Library.readShelfLink('#shelf=3f6bb9d6f78e0293b56a'), { id: '3f6bb9d6f78e0293b56a', part: 1 });
+  assert.ok(Library.readShelfLink('#shelf=3f6b').error);
+  assert.strictEqual(Library.readShelfLink('#at=x'), null);
+});
+
 test('the timing of dreams is checked', () => {
   const d = new Library({}).config;
   assert.strictEqual(d.quoteDuration, 10);

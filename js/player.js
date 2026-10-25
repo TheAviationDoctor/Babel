@@ -47,6 +47,7 @@
       this.enabled = false;
       this.touch = { move: null, look: null };
       this.reach = 2.1;
+      this.home = { g: 0, f: 0 }; // where the reader woke or arrived, relative to the anchor
       this._ray = { o: new THREE.Vector3(), d: new THREE.Vector3() };
       this._bindInput();
     }
@@ -402,7 +403,7 @@
 
     /** Plain-words description of where the reader is relative to the waking hexagon. */
     whereabouts() {
-      const g = this.cg, f = this.cf;
+      const g = this.cg - this.home.g, f = this.cf - this.home.f;
       const n = (k, one, many) => `${Math.abs(k).toLocaleString('en')} ${Math.abs(k) === 1 ? one : many}`;
       const parts = [];
       if (g) parts.push(`${n(g, 'hexagon', 'hexagons')} ${g > 0 ? 'east' : 'west'}`);
