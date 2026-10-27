@@ -12,8 +12,7 @@
  *   ctx.lib(), ctx.world, ctx.player, ctx.dims, ctx.setMode(mode), ctx.startWalking(),
  *   ctx.openBookAt(options), ctx.goToCell(dg, df, face), ctx.goToAddress(gallery, floor, face),
  *   ctx.goToRandom(), ctx.toast(text), ctx.copyText(text, done), ctx.linkBase(),
- *   ctx.lastJourney() (how far the last jump through the catalogue went, or null),
- *   ctx.placeLink() (a short link to the reader's hexagon, '#at=…', or null if there is none)
+ *   ctx.lastJourney() (how far the last jump through the catalogue went, or null)
  */
 (function () {
   'use strict';
@@ -272,6 +271,7 @@
       for (const r of document.querySelectorAll('input[name="fill"]')) r.addEventListener('change', () => this._certain());
       $('certain-read').addEventListener('click', () => this._readCertain());
       $('certain-go').addEventListener('click', () => this._goCertain());
+      $('certain-link').addEventListener('click', () => this._copyLink(this.certainLink));
       $('certain-copy').addEventListener('click', () => {
         const loc = this.certain.location;
         this.ctx.copyText(this.lib.hexagonAddressText(loc.gallery, loc.floor), 'Copied the address of that hexagon.');
@@ -285,11 +285,6 @@
       $('go-offset').addEventListener('submit', (e) => { e.preventDefault(); this._goOffset(); });
       $('go-address').addEventListener('submit', (e) => { e.preventDefault(); this._goAddress(); });
       $('go-random').addEventListener('click', () => this.ctx.goToRandom());
-      $('term-link').addEventListener('click', () => {
-        const hash = this.ctx.placeLink(), base = this.ctx.linkBase();
-        if (!base) { this.ctx.toast('To copy links from a copy of the Library on this computer, set "website" in config.js to the address where the Library is published.', 7000); return; }
-        if (hash) this.ctx.copyText(base.replace(/#.*$/, '') + hash, 'Copied a link to this hexagon. Whoever opens it arrives here.');
-      });
       $('term-copy').addEventListener('click', () => {
         const w = this.ctx.world, p = this.ctx.player;
         this.ctx.copyText(this.lib.hexagonAddressText(w.gallery(p.cg).digits, w.floor(p.cf).digits), 'Copied the address of this hexagon.');
@@ -329,11 +324,11 @@
       }
       for (const a of box.querySelectorAll('a[href]')) {
         const href = a.getAttribute('href');
-        const book = href.search(/#(book|shelf|at)=/);
+        const book = href.search(/#(text|book)=/);
         if (book !== -1) {
-          // A link to a book or a place (#book=…, #shelf=…, #at=…), however it is written
-          // (#book=…, /#book=… or with the Library's full address), leads there in this same
-          // Library, whether it was opened from the computer or on the web.
+          // A link to a text or to a book of the collection (#text=…, #book=…), however it is
+          // written (#text=…, /#text=… or with the Library's full address), leads there in this
+          // same Library, whether it was opened from the computer or on the web.
           const hash = href.slice(book);
           a.setAttribute('href', hash);
           a.addEventListener('click', (e) => {
@@ -408,6 +403,8 @@
       const fill = document.querySelector('input[name="fill"]:checked').value;
       const r = lib.findText(this.query.symbols, { fill });
       this.certain = r;
+      // a link to this very book: the text as typed, at the start of the first page
+      this.certainLink = this._link(this.query.raw, { typed: true, random: fill === 'random' });
       $('certain-where').innerHTML = this._whereHTML(r.location, 'from the first page');
     }
 
@@ -426,10 +423,10 @@
       return { url, promise: Promise.resolve(url) };
     }
 
-    _link(text) {
+    _link(text, options) {
       const base = this.ctx.linkBase();
       if (!base) return null;
-      const p = BabelCore.Library.makeLink(base, text).catch(() => null);
+      const p = BabelCore.Library.makeLink(base, text, options).catch(() => null);
       const holder = { url: null, promise: p };
       p.then((url) => { holder.url = url; });
       return holder;
@@ -461,14 +458,16 @@
 
     _readCertain() {
       const r = this.certain;
-      this.ctx.openBookAt({ location: r.location, slot: r.location.slot, content: r.content, highlight: { start: 0, length: this.query.symbols.length }, returnTo: 'terminal' });
+      const h = this.certainLink, link = h && h.url ? h.url.slice(h.url.indexOf('#')) : null;
+      this.ctx.openBookAt({ location: r.location, slot: r.location.slot, content: r.content, highlight: { start: 0, length: this.query.symbols.length }, returnTo: 'terminal', link });
     }
 
     _goCertain() {
       const r = this.certain, loc = r.location;
       const { wall, shelf, volume } = this.lib.slotParts(loc.slot);
       const length = this.query.symbols.length;
-      this.ctx.goToAddress(loc.gallery, loc.floor, { wall, shelf, volume }, { slot: loc.slot, start: 0, length });
+      const h = this.certainLink, link = h && h.url ? h.url.slice(h.url.indexOf('#')) : null;
+      this.ctx.goToAddress(loc.gallery, loc.floor, { wall, shelf, volume }, { slot: loc.slot, start: 0, length, link });
     }
 
     /* ---------------- finding a whole book ---------------- */
@@ -704,16 +703,18 @@
         const link = el('button', '', 'Copy a link to it');
         for (const x of [read, go, copy, link]) x.type = 'button';
         // a link to a book of the collection names it (any part); a link to another text carries
-        // it, and leads to its book with blank pages after it: the first part, then
-        const shelfHash = b.entry.shelf && fill !== 'random' ? BabelCore.Library.shelfLink(b.entry.shelf, k + 1) : null;
-        const linkable = !!shelfHash || (k === 0 && fill !== 'random');
-        const holder = shelfHash ? this._shortLink(shelfHash) : linkable ? this._link(b.text) : null;
+        // it, and leads to the book set from its first page: the first part, then
+        const random = fill === 'random';
+        const bookHash = b.entry.shelf ? BabelCore.Library.bookLink(b.entry.shelf, k + 1, random) : null;
+        const linkable = !!bookHash || k === 0;
+        const holder = bookHash ? this._shortLink(bookHash) : linkable ? this._link(b.text, { random }) : null;
         link.addEventListener('click', () => this._copyLink(holder));
-        read.addEventListener('click', () => this.ctx.openBookAt({ location: r.location, slot: r.location.slot, content: r.content, returnTo: 'terminal', link: shelfHash }));
+        const linkOf = () => bookHash || (holder && holder.url ? holder.url.slice(holder.url.indexOf('#')) : null);
+        read.addEventListener('click', () => this.ctx.openBookAt({ location: r.location, slot: r.location.slot, content: r.content, returnTo: 'terminal', link: linkOf() }));
         go.addEventListener('click', () => {
           const loc = r.location, face = this.lib.slotParts(loc.slot);
           const title = n > 1 ? `${b.meta.title}, part ${k + 1} of ${n}` : b.meta.title;
-          this.ctx.goToAddress(loc.gallery, loc.floor, face, { slot: loc.slot, start: 0, length: 0, title, link: shelfHash });
+          this.ctx.goToAddress(loc.gallery, loc.floor, face, { slot: loc.slot, start: 0, length: 0, title, link: linkOf() });
         });
         copy.addEventListener('click', () => {
           const loc = r.location, { wall, shelf, volume } = this.lib.slotParts(loc.slot);
@@ -805,11 +806,6 @@
       $('term-gallery').textContent = lib.addressText(g, 28);
       $('term-lengths').textContent = `The full address is ${fmt(f.length)} symbols for the floor and ${fmt(g.length)} for the gallery. ` +
         'Copy it to come back here later from "Go to a hexagon", even after closing the page.';
-      const short = this.ctx.placeLink ? this.ctx.placeLink() : null;
-      $('term-link').hidden = !short;
-      $('term-link-note').textContent = short
-        ? 'A link to this hexagon is much shorter, and leads whoever opens it straight here.'
-        : 'Short links lead to the hexagons reached by walking from where you woke, or from a hexagon chosen at random. You came here from a text, a book or an address, so only the full address leads back here.';
     }
   }
 

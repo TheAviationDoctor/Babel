@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=Libre+Bodoni:ital,wght@0,400;0,500;1,400&display=swap">
-<link rel="stylesheet" href="css/style.css?v=2026-10-25.1">
+<link rel="stylesheet" href="css/style.css?v=2026-10-27.1">
 </head>
 <body>
 <canvas id="view" aria-label="The Library, seen from the eyes of a librarian"></canvas>
@@ -88,11 +88,7 @@
         <p class="note">Floor <span class="addr" id="term-floor"></span></p>
         <p class="note">Gallery <span class="addr" id="term-gallery"></span></p>
         <p class="note" id="term-lengths"></p>
-        <div class="row">
-          <button id="term-link" type="button" class="primary" hidden>Copy a link to this hexagon</button>
-          <button id="term-copy" type="button">Copy its full address</button>
-        </div>
-        <p class="note" id="term-link-note"></p>
+        <div class="row"><button id="term-copy" type="button">Copy its full address</button></div>
       </section>
       <section class="go">
         <h3>Walking</h3>
@@ -128,6 +124,7 @@
             <button id="certain-read" type="button">Read it here</button>
             <button id="certain-go" type="button" class="primary">Go there</button>
             <button id="certain-copy" type="button">Copy its address</button>
+            <button id="certain-link" type="button">Copy a link to it</button>
           </div>
         </section>
       </div>
@@ -227,20 +224,20 @@
   whenever any of them changes: browsers and GitHub Pages keep copies of files for a while,
   and a new page read with an old script would not start.
 -->
-<script src="lib/three.min.js?v=2026-10-25.1"></script>
-<script src="lib/Reflector.js?v=2026-10-25.1"></script>
-<script src="config.js?v=2026-10-25.1"></script>
-<script src="js/about.js?v=2026-10-25.1"></script>
-<script src="js/library.js?v=2026-10-25.1"></script>
-<script src="js/textures.js?v=2026-10-25.1"></script>
-<script src="js/architecture.js?v=2026-10-25.1"></script>
-<script src="js/world.js?v=2026-10-25.1"></script>
-<script src="js/player.js?v=2026-10-25.1"></script>
-<script src="js/markdown.js?v=2026-10-25.1"></script>
-<script src="js/terminal.js?v=2026-10-25.1"></script>
-<script src="js/quotes.js?v=2026-10-25.1"></script>
-<script src="js/dream.js?v=2026-10-25.1"></script>
-<script src="js/main.js?v=2026-10-25.1"></script>
+<script src="lib/three.min.js?v=2026-10-27.1"></script>
+<script src="lib/Reflector.js?v=2026-10-27.1"></script>
+<script src="config.js?v=2026-10-27.1"></script>
+<script src="js/about.js?v=2026-10-27.1"></script>
+<script src="js/library.js?v=2026-10-27.1"></script>
+<script src="js/textures.js?v=2026-10-27.1"></script>
+<script src="js/architecture.js?v=2026-10-27.1"></script>
+<script src="js/world.js?v=2026-10-27.1"></script>
+<script src="js/player.js?v=2026-10-27.1"></script>
+<script src="js/markdown.js?v=2026-10-27.1"></script>
+<script src="js/terminal.js?v=2026-10-27.1"></script>
+<script src="js/quotes.js?v=2026-10-27.1"></script>
+<script src="js/dream.js?v=2026-10-27.1"></script>
+<script src="js/main.js?v=2026-10-27.1"></script>
 <script>
   // If the Library has not started a few seconds after the page has loaded (a script missing,
   // or not matching the others), say so rather than leave the screen black.

@@ -180,21 +180,28 @@
   };
 
   /* ------------------------------------------------------------------ *
-   * Links to books
+   * Links to texts
    *
    * A book's address is as long as the book itself (there are exactly as many
    * addresses as books), so a link carries the book's text instead, in the part of the
    * address after '#', which browsers never send to the server. It takes one of two forms:
    *
-   *   …/#book=<the text, percent-encoded>          e.g. …/#book=Call%20me%20Ishmael.
-   *   …/#book=:<the text, compressed>              the same, shorter: a colon, then the
-   *                                                text's UTF-8 bytes, deflated (zlib) and
-   *                                                written in base64url, without padding
+   *   …/#text=<the text, percent-encoded>          e.g. …/#text=Call%20me%20Ishmael.
+   *   …/#text=:<the text, compressed>              the same, often shorter: a colon, then
+   *                                                the text's UTF-8 bytes, deflated (zlib)
+   *                                                and written in base64url, without padding
    *
    * The book it leads to is the one that holds exactly that text, set in pages as the
    * catalogue sets a book (whole words, a new line for each paragraph), from the first
-   * page, the rest of its pages blank. Since the link carries the text itself, it keeps
-   * leading to the book that holds it, whatever the seed or configuration of the Library.
+   * page, the rest of its pages blank. Two options may follow, in any order:
+   *
+   *   &typed     the text as typed, at the very start of the first page, as the
+   *              catalogue's "Find a text" places it, rather than set in pages
+   *   &random    the rest of the book in random characters rather than blank
+   *
+   * Without &random, the link carries everything the book holds, so it keeps leading to
+   * the same book whatever the seed or configuration of the Library. With it, the random
+   * characters come from the seed, so the book is the same only in the same Library.
    * ------------------------------------------------------------------ */
 
   function toBase64Url(bytes) {
@@ -600,84 +607,24 @@
       return x.slice(0, len);
     }
 
-    /*
-     * Starting hexagons, and short links to the places reached from them.
-     *
-     * A visit begins in the hexagon of a random book, drawn from a 128-bit start number
-     * (16 bytes) rather than from the whole Library: 2^128 starting points, far more than
-     * anyone could ever tell apart from all the hexagons there are. In exchange, a place
-     * reached from a start by walking is named in a few dozen characters, with no storage:
-     *     #at=<fingerprint>.<start>.<east>.<up>[.<book>]
-     * the fingerprint of this Library's configuration (4 characters), the start number (22),
-     * the hexagons east (negative: west) and floors up (negative: down) from the start, and
-     * the book in that hexagon (0 to S − 1), if the link is to a book.
-     */
-
-    /** The hexagon (and a book in it) that a start number begins in. */
-    startLocation(start) {
-      const k = hashString('babel/start/' + this.seed);
-      const w = (i) => ((start[i] << 24) | (start[i + 1] << 16) | (start[i + 2] << 8) | start[i + 3]) >>> 0;
-      const rng = sfc32(k[0] ^ w(0), k[1] ^ w(4), k[2] ^ w(8), k[3] ^ w(12));
-      for (let i = 0; i < 16; i++) rng();
-      const v = new Uint8Array(this.M);
-      for (let i = 0; i < this.M; i++) v[i] = Math.floor(unit(rng) * this.N);
-      return this.locate(v);
-    }
-
-    /** A new start number, from the browser's (or Node's) cryptographic randomness. */
-    static newStart() {
-      const start = new Uint8Array(16);
-      const c = typeof globalThis !== 'undefined' ? globalThis.crypto : null;
-      if (c && c.getRandomValues) c.getRandomValues(start);
-      else for (let i = 0; i < 16; i++) start[i] = Math.floor(Math.random() * 256);
-      return start;
-    }
-
-    /** Four characters that change with anything that moves the books: seed, alphabet, sizes. */
-    fingerprint() {
-      const c = this.config;
-      const h = hashString('babel/fingerprint/' + JSON.stringify([c.seed, c.alphabet.join(''), c.pagesPerBook, c.linesPerPage,
-        c.charactersPerLine, c.wallsWithShelves, c.shelvesPerWall, c.booksPerShelf]));
-      return toBase64Url(new Uint8Array([h[0] >>> 24, (h[0] >>> 16) & 255, (h[0] >>> 8) & 255]));
-    }
-
-    /** '#at=…' for the place `east` hexagons east and `up` floors up from a start, and book `slot` there (or none). */
-    placeLink(start, east, up, slot) {
-      return `#at=${this.fingerprint()}.${toBase64Url(start)}.${east}.${up}${slot === undefined || slot === null ? '' : '.' + slot}`;
-    }
-
     /**
-     * Reads '#at=…': { start, east, up, slot } (slot null if the link is to a hexagon), or
-     * { error } saying why it cannot be followed, or null if it is not such a link.
+     * A link to a book of the collection, by the name of its file in books/compressed/ (a
+     * hash of its text): '#book=<id>' for its first part, '#book=<id>/<n>' for part n of a
+     * book too long for one volume, and '&random' after either for random characters after
+     * the text rather than blank pages. Without &random, these links keep leading to the
+     * same book whatever the seed, like links to texts.
      */
-    readPlace(hash) {
-      const m = /^#?at=([A-Za-z0-9_-]{4})\.([A-Za-z0-9_-]{22})\.(-?\d{1,16})\.(-?\d{1,16})(?:\.(\d{1,6}))?$/.exec(String(hash || '').trim());
-      if (!/^#?at=/.test(String(hash || ''))) return null;
-      if (!m) return { error: 'This link to a place in the Library is incomplete: part of it may have been lost when it was copied.' };
-      if (m[1] !== this.fingerprint()) return { error: 'This link was made in a Library with another seed or other dimensions, so here it would lead somewhere else.' };
-      const east = Number(m[3]), up = Number(m[4]), slot = m[5] === undefined ? null : Number(m[5]);
-      if (!Number.isSafeInteger(east) || !Number.isSafeInteger(up)) return { error: 'This link to a place in the Library goes further than the Library can count.' };
-      if (slot !== null && slot >= this.S) return { error: 'This link names a book that no hexagon of this Library holds.' };
-      return { start: fromBase64Url(m[2]), east, up, slot };
+    static bookLink(id, part, random) {
+      return `#book=${id}${part > 1 ? '/' + part : ''}${random ? '&random' : ''}`;
     }
 
-    /**
-     * A book of the collection, by the name of its file in books/compressed/ (a hash of its
-     * text): '#shelf=<id>' for its first part, '#shelf=<id>/<n>' for part n of a long one.
-     * Like '#book=…' links, these lead to the book with blank pages after the text, and
-     * keep leading to it whatever the seed.
-     */
-    static shelfLink(id, part) {
-      return `#shelf=${id}${part > 1 ? '/' + part : ''}`;
-    }
-
-    /** Reads '#shelf=…': { id, part }, or { error }, or null if it is not such a link. */
-    static readShelfLink(hash) {
+    /** Reads '#book=…': { id, part, random }, or { error }, or null if it is not such a link. */
+    static readBookLink(hash) {
       const h = String(hash || '').trim();
-      if (!/^#?shelf=/.test(h)) return null;
-      const m = /^#?shelf=([0-9a-f]{20})(?:\/(\d{1,6}))?$/.exec(h);
+      if (!/^#?book=/.test(h)) return null;
+      const m = /^#?book=([0-9a-f]{20})(?:\/(\d{1,6}))?(&random)?$/.exec(h);
       if (!m) return { error: 'This link to a book of the collection is incomplete: part of it may have been lost when it was copied.' };
-      return { id: m[1], part: m[2] ? Math.max(1, Number(m[2])) : 1 };
+      return { id: m[1], part: m[2] ? Math.max(1, Number(m[2])) : 1, random: !!m[3] };
     }
 
     /**
@@ -912,31 +859,50 @@
      * compressed form, or the percent-encoded one if `plain` is set or compression is
      * unavailable. `base` is the address of the published Library.
      */
-    static async makeLink(base, text, plain) {
+    /**
+     * A link to the book that holds `text`: `base` (the Library's address), then '#text='
+     * and the text, compressed or plain, whichever is shorter. options: { plain, typed,
+     * random } (plain: never compressed; typed, random: the options above).
+     */
+    static async makeLink(base, text, options) {
+      const o = options || {};
       base = String(base || '').replace(/#.*$/, '');
-      if (!plain && typeof CompressionStream === 'function') {
+      const flags = (o.typed ? '&typed' : '') + (o.random ? '&random' : '');
+      const plain = base + '#text=' + encodeURIComponent(String(text)) + flags;
+      if (!o.plain && typeof CompressionStream === 'function') {
         try {
           const bytes = await throughStream(new TextEncoder().encode(String(text)), new CompressionStream('deflate'));
-          return base + '#book=:' + toBase64Url(bytes);
+          const packed = base + '#text=:' + toBase64Url(bytes) + flags;
+          if (packed.length < plain.length) return packed;
         } catch (e) { /* the plain form, then */ }
       }
-      return base + '#book=' + encodeURIComponent(String(text));
+      return plain;
     }
 
-    /** The text a link carries (its part after '#'), or null if it is not a link to a book. */
+    /**
+     * What a link to a text carries (its part after '#'): { text, typed, random }, or null
+     * if it is not such a link.
+     */
     static async readLink(hash) {
-      const m = /^#?book=([\s\S]*)$/.exec(String(hash || ''));
+      const m = /^#?text=([\s\S]*)$/.exec(String(hash || ''));
       if (!m) return null;
-      const value = m[1];
-      if (value.charAt(0) !== ':') return decodePercent(value);
-      if (typeof DecompressionStream !== 'function') throw new Error('This browser is too old to open compressed links to books.');
-      return new TextDecoder().decode(await throughStream(fromBase64Url(value.slice(1)), new DecompressionStream('deflate')));
+      let value = m[1], typed = false, random = false;
+      for (let f; (f = /&(typed|random)$/.exec(value)); value = value.slice(0, f.index)) {
+        if (f[1] === 'typed') typed = true; else random = true;
+      }
+      if (value.charAt(0) !== ':') return { text: decodePercent(value), typed, random };
+      if (typeof DecompressionStream !== 'function') throw new Error('This browser is too old to open compressed links to texts.');
+      const text = new TextDecoder().decode(await throughStream(fromBase64Url(value.slice(1)), new DecompressionStream('deflate')));
+      return { text, typed, random };
     }
 
-    /** The book that holds a text, as a link leads to it: its location and contents. */
-    bookOfText(text) {
+    /**
+     * The book that holds a text, as a link leads to it: its location and contents. With
+     * `random`, the rest of the book is random characters rather than blank.
+     */
+    bookOfText(text, random) {
       const set = this.typeset(Library.cleanEbook(text).text, {});
-      const r = this.findText(set.parts[0], { fill: 'blank' });
+      const r = this.findText(set.parts[0], { fill: random ? 'random' : 'blank' });
       return { location: r.location, content: r.content, parts: set.parts.length, set };
     }
 

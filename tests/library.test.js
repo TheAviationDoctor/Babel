@@ -423,35 +423,15 @@ test('the About tab reads Markdown, and runs none of the HTML in it', () => {
   assert.ok(!/<script/i.test(html));
 });
 
-test('a start number always begins in the same hexagon, and places around it have short links', () => {
-  const lib = new Library({});
-  const start = Library.newStart();
-  assert.strictEqual(start.length, 16);
-  const a = lib.startLocation(start), b = lib.startLocation(start.slice());
-  assert.strictEqual(lib.hexagonAddressText(a.gallery, a.floor), lib.hexagonAddressText(b.gallery, b.floor));
-  assert.ok(lib.hexagonExists(a.gallery, a.floor));
-  const other = Library.newStart();
-  assert.notStrictEqual(lib.hexagonAddressText(lib.startLocation(other).gallery, lib.startLocation(other).floor), lib.hexagonAddressText(a.gallery, a.floor));
-  // links: round trips, short, and refused by a Library they were not made in
-  const link = lib.placeLink(start, -12, 3, 417);
-  assert.ok(/^#at=[A-Za-z0-9_-]{4}\.[A-Za-z0-9_-]{22}\.-12\.3\.417$/.test(link), link);
-  const p = lib.readPlace(link);
-  assert.deepStrictEqual([p.east, p.up, p.slot, Buffer.from(p.start).toString('hex')], [-12, 3, 417, Buffer.from(start).toString('hex')]);
-  assert.strictEqual(lib.readPlace(lib.placeLink(start, 0, 0)).slot, null);
-  assert.strictEqual(lib.readPlace('#book=HELLO'), null);
-  assert.ok(lib.readPlace(link.slice(0, -10)).error);
-  assert.ok(/another seed/.test(new Library({ seed: 'elsewhere' }).readPlace(link).error));
-  assert.ok(lib.readPlace(lib.placeLink(start, 0, 0, lib.S)).error);
-  // the same configuration gives the same fingerprint; another one another
-  assert.strictEqual(lib.fingerprint(), new Library({}).fingerprint());
-  assert.notStrictEqual(lib.fingerprint(), new Library({ book: { pagesPerBook: 256 } }).fingerprint());
-  // links to the books of the collection
-  assert.strictEqual(Library.shelfLink('3f6bb9d6f78e0293b56a', 1), '#shelf=3f6bb9d6f78e0293b56a');
-  assert.strictEqual(Library.shelfLink('3f6bb9d6f78e0293b56a', 3), '#shelf=3f6bb9d6f78e0293b56a/3');
-  assert.deepStrictEqual(Library.readShelfLink('#shelf=3f6bb9d6f78e0293b56a/3'), { id: '3f6bb9d6f78e0293b56a', part: 3 });
-  assert.deepStrictEqual(Library.readShelfLink('#shelf=3f6bb9d6f78e0293b56a'), { id: '3f6bb9d6f78e0293b56a', part: 1 });
-  assert.ok(Library.readShelfLink('#shelf=3f6b').error);
-  assert.strictEqual(Library.readShelfLink('#at=x'), null);
+test('links to books of the collection name them by their file', () => {
+  assert.strictEqual(Library.bookLink('3f6bb9d6f78e0293b56a', 1), '#book=3f6bb9d6f78e0293b56a');
+  assert.strictEqual(Library.bookLink('3f6bb9d6f78e0293b56a', 3), '#book=3f6bb9d6f78e0293b56a/3');
+  assert.strictEqual(Library.bookLink('3f6bb9d6f78e0293b56a', 3, true), '#book=3f6bb9d6f78e0293b56a/3&random');
+  assert.deepStrictEqual(Library.readBookLink('#book=3f6bb9d6f78e0293b56a/3'), { id: '3f6bb9d6f78e0293b56a', part: 3, random: false });
+  assert.deepStrictEqual(Library.readBookLink('#book=3f6bb9d6f78e0293b56a&random'), { id: '3f6bb9d6f78e0293b56a', part: 1, random: true });
+  assert.ok(Library.readBookLink('#book=3f6b').error);
+  assert.ok(Library.readBookLink('#book=:eNpc').error);
+  assert.strictEqual(Library.readBookLink('#text=x'), null);
 });
 
 test('the timing of dreams is checked', () => {
@@ -505,24 +485,35 @@ test('the sentences of dreams are grammatical and always the same for a hexagon'
   await testAsync('a link carries a text, and leads to the book that holds it', async () => {
     const post = 'A first paragraph, with “curly quotes”, an em dash — and an émigré.\n\nA second paragraph.';
     const short = await Library.makeLink('https://example.org/Babel/#old', post);
-    const plain = await Library.makeLink('https://example.org/Babel/', post, true);
-    assert(short.startsWith('https://example.org/Babel/#book=:'));
-    assert.strictEqual(plain, 'https://example.org/Babel/#book=' + encodeURIComponent(post));
-    assert.strictEqual(await Library.readLink(new URL(short).hash), post);
-    assert.strictEqual(await Library.readLink(new URL(plain).hash), post);
+    const plain = await Library.makeLink('https://example.org/Babel/', post, { plain: true });
+    assert(short.startsWith('https://example.org/Babel/#text=:'));
+    assert.strictEqual(plain, 'https://example.org/Babel/#text=' + encodeURIComponent(post));
+    assert.deepStrictEqual(await Library.readLink(new URL(short).hash), { text: post, typed: false, random: false });
+    assert.deepStrictEqual(await Library.readLink(new URL(plain).hash), { text: post, typed: false, random: false });
+    // a short text is linked plainly, being shorter so
+    assert.strictEqual(await Library.makeLink('https://example.org/', 'IN THE BEGINNING'), 'https://example.org/#text=IN%20THE%20BEGINNING');
     // a link built by hand, as a browser leaves it once pasted in its address bar
-    assert.strictEqual(await Library.readLink('#book=Call%20me%20Ishmael.'), 'Call me Ishmael.');
-    assert.strictEqual(await Library.readLink('#book=50%25 off, 100% sure'), '50% off, 100% sure');
-    assert.strictEqual(await Library.readLink('#floor=ABC'), null);
+    assert.strictEqual((await Library.readLink('#text=Call%20me%20Ishmael.')).text, 'Call me Ishmael.');
+    assert.strictEqual((await Library.readLink('#text=50%25 off, 100% sure')).text, '50% off, 100% sure');
+    assert.strictEqual(await Library.readLink('#book=3f6bb9d6f78e0293b56a'), null);
     assert.strictEqual(await Library.readLink(''), null);
+    // options: as typed, and random characters after the text; an "&" in the text stays in it
+    const typed = await Library.makeLink('https://example.org/', 'A & B', { typed: true, random: true });
+    assert.strictEqual(typed, 'https://example.org/#text=A%20%26%20B&typed&random');
+    assert.deepStrictEqual(await Library.readLink(new URL(typed).hash), { text: 'A & B', typed: true, random: true });
+    assert.deepStrictEqual(await Library.readLink('#text=:' + short.split(':').pop() + '&random&typed'), { text: post, typed: true, random: true });
     // the book: the text from the first page, words whole, paragraphs indented, the rest blank
     const b = lib.bookOfText(post);
     const lines = lib.pageLines(b.content, 0).map((l) => l.trimEnd());
     assert.deepStrictEqual(lines.slice(0, 3), ['   A FIRST PARAGRAPH, WITH "CURLY QUOTES", AN EM DASH — AND AN', 'EMIGRE.', '   A SECOND PARAGRAPH.']);
     assert(lib.pageLines(b.content, 1).every((l) => !l.trim()), 'the second page is blank');
     assert.strictEqual(Library.indexOf(lib.bookAt(b.location), b.content), 0);
+    // with random characters after it: another book, beginning the same way
+    const r = lib.bookOfText(post, true);
+    assert.notStrictEqual(key(r.location.gallery) + r.location.slot, key(b.location.gallery) + b.location.slot);
+    assert.deepStrictEqual(lib.pageLines(r.content, 0).slice(0, 3).map((l) => l.trimEnd()), lines.slice(0, 3));
     // the same text, whichever form of link carried it, is the same book
-    const again = lib.bookOfText(await Library.readLink(new URL(plain).hash));
+    const again = lib.bookOfText((await Library.readLink(new URL(plain).hash)).text);
     assert.strictEqual(key(again.location.gallery) + key(again.location.floor) + again.location.slot, key(b.location.gallery) + key(b.location.floor) + b.location.slot);
     const big = 'WORD '.repeat(200000);
     assert((await Library.makeLink('https://example.org/', big)).length < big.length / 50, 'repetitive text compresses');

@@ -110,50 +110,58 @@ Every vestibule has one. There is no menu in the Library, so the Catalogue is al
 
 **Current position.** Where you are: how far from where you woke (or, after a jump, from where you arrived), and how far east of the seam and above it, with the percentage of the way round. After a jump through the Catalogue, it says how far the jump went, measured the shorter way round, such as `2.2 × 10^946,956 hexagons west and 1.9 × 10^946,957 floors down`. A small map of the whole Library, drawn to its proportions (it is about 2.4 times taller than it is long), shows where you are, and where the last jump began. The tab also explains the seam, shows the hexagon's address and can copy it in full, and lists the controls.
 
-**Find a text.** Type or paste anything into it. Small letters are read as capitals, accents are removed, line breaks and tabs become spaces, and `--` becomes a long dash. Other characters become their nearest equivalents in the alphabet: curly quotation marks become straight ones, Æ becomes AE, ß becomes SS, ½ becomes 1/2, a ligature such as ﬁ becomes FI, and so on. What has no equivalent is left out (the screen lists it). The Catalogue then runs the shelving backwards. It composes the book that begins with your text, with the rest of the book either random characters or blank, and the inverse permutation gives the hexagon, wall, shelf and volume where that book stands. Since every possible book exists exactly once, it is certainly there. It is also almost always astronomically far away, so the screen gives the distance as a power of ten. You can read the book on the spot, with your text highlighted, copy its address, or go there: you are set down in front of it, and the volume stands a little out of its row.
+**Find a text.** Type or paste anything into it. Small letters are read as capitals, accents are removed, line breaks and tabs become spaces, and `--` becomes a long dash. Other characters become their nearest equivalents in the alphabet: curly quotation marks become straight ones, Æ becomes AE, ß becomes SS, ½ becomes 1/2, a ligature such as ﬁ becomes FI, and so on. What has no equivalent is left out (the screen lists it). The Catalogue then runs the shelving backwards. It composes the book that begins with your text, with the rest of the book either random characters or blank, and the inverse permutation gives the hexagon, wall, shelf and volume where that book stands. Since every possible book exists exactly once, it is certainly there. It is also almost always astronomically far away, so the screen gives the distance as a power of ten. You can read the book on the spot, with your text highlighted, copy its address or a link to it (see [Links to books](#links-to-books)), or go there: you are set down in front of it, and the volume stands a little out of its row.
 
 **Find a book.** The Catalogue can also find a whole book: any book of the Library's own collection (see [Your books](#your-books)), which it lists with a search box, most read first, by title or by author, or a plain-text file of your own. It sets the text in pages, the way a book of this Library holds them: from the first page, 64 characters to a line and 32 lines to a page, with words kept whole and each paragraph starting on a new, indented line. The rest of the 512 pages are blank (or random characters, if you prefer). It then finds the one book of the Library that holds exactly those pages, and you can read it on the spot, go and take it down from its shelf, or copy a link to it (see [Links to books](#links-to-books)). A text longer than one book is set in several parts, one after the other, and each part is found separately.
 
 **Go to a hexagon.** Move any number of hexagons east or west and floors up or down. Paste a full address, as copied from the Current position tab, to return to a hexagon you have bookmarked, even after closing the page. An address copied from a Library with another seed is refused, since its books stand elsewhere. Or go somewhere at random. After a jump, the Current position tab counts your steps from where you arrived.
 
-A fifth tab, **About**, tells the reader about the Library. Its text is in `js/about.js`, written in Markdown like this README, and can be edited like `config.js`: in any text editor, then save and reload the page. A link to a book in that text, such as `[a book](#book=:eNpc…)`, leads to the book in the same Library, whether the Library was opened from your computer or on the web: it may be written `#book=…`, `/#book=…` or with the Library's full address.
+A fifth tab, **About**, tells the reader about the Library. Its text is in `js/about.js`, written in Markdown like this README, and can be edited like `config.js`: in any text editor, then save and reload the page. A link in that text to a text or a book of the collection, such as `[a text](#text=:eNpc…)` or `[a book](#book=3f6bb9d6f78e0293b56a)`, leads to its book in the same Library, whether the Library was opened from your computer or on the web: it may be written `#text=…`, `/#text=…` or with the Library's full address.
 
 ## Links to books
 
 A book's address cannot serve as a link: it is as long as the book itself (1,048,576 symbols, about a megabyte). This is because shelving is a bijection, so there are exactly as many addresses as books, and addresses cannot on average be shorter than what they point to.
 
-A link to a book carries the book's text instead, after the `#` of the Library's address, a part that browsers never send to the server:
+There are two other kinds of links instead, both written after the `#` of the Library's address, a part that browsers never send to the server: links to texts, and links to the books of the collection.
 
-    https://babel.pellegr.in/#book=<the text>
+### Links to texts
 
-Whoever opens the link is set down in the Library before the book that holds exactly that text, the volume standing a little out of its row. That book is the text set in pages as the Catalogue's **Find a book** sets it (from the first page, words kept whole, a new indented line for each paragraph), with the rest of its pages blank. The Library runs the shelving backwards to find it, so the same text always leads to the same book, and a link keeps leading to the book that holds its text even if the seed or the configuration change.
+A link to a text carries the text itself:
 
-**Building a link.** The text after `book=` takes one of two forms; both lead to the same book.
+    https://babel.pellegr.in/#text=<the text>
+
+Whoever opens the link is set down in the Library before the book that holds exactly that text, the volume standing a little out of its row. That book is the text set in pages as the Catalogue's **Find a book** sets it (from the first page, words kept whole, a new indented line for each paragraph), with the rest of its pages blank. The Library runs the shelving backwards to find it, so the same text always leads to the same book, and a link keeps leading to the book that holds its text even if the seed or the configuration change. Such a link can be built without the book ever having been found.
+
+**Building a link.** The text after `text=` takes one of two forms; both lead to the same book.
 
 - **Plain:** the text itself, percent-encoded, as a web address must write it: a space as `%20`, a line break as `%0A`, `é` as `%C3%A9`, and so on. For a short text, you can even type it "as is" into the address bar, and the browser will encode it.
 
-- **Compressed:** a colon, then the text's UTF-8 bytes compressed with zlib's deflate and written in URL-safe base64 without the trailing `=` signs. It is typically about a third as long as plain text.
+- **Compressed:** a colon, then the text's UTF-8 bytes compressed with zlib's deflate and written in URL-safe base64 without the trailing `=` signs. It is typically about a third as long as plain text, except for short texts. The Catalogue's links use whichever form is shorter.
+
+Two options may follow the text, in any order:
+
+- `&typed`: the text as typed, at the very start of the first page, rather than set in pages. This is the book the Catalogue's **Find a text** finds, and the link its **Copy a link to it** copies.
+- `&random`: the rest of the book in random characters rather than blank pages. The random characters come from the seed, so such a link leads to the same book only in a Library with the same seed and dimensions.
 
 For text you’ve copied and you'd like to link to in the Library, this terminal command creates the link and places it straight back in your clipboard:
 
 ```
-pbpaste | python3 -c "import sys,zlib,base64; t=sys.stdin.buffer.read(); print('#book=:'+base64.urlsafe_b64encode(zlib.compress(t,9)).rstrip(b'=').decode(), end='')" | pbcopy
+pbpaste | python3 -c "import sys,zlib,base64; t=sys.stdin.buffer.read(); print('#text=:'+base64.urlsafe_b64encode(zlib.compress(t,9)).rstrip(b'=').decode(), end='')" | pbcopy
 ```
 
 If the text you'd like to link to is inside the file `mytext.txt`, use this:
 
 ```
-python3 -c "import sys,zlib,base64; t=sys.stdin.buffer.read(); print('#book=:'+base64.urlsafe_b64encode(zlib.compress(t,9)).rstrip(b'=').decode())" < mytext.txt
+python3 -c "import sys,zlib,base64; t=sys.stdin.buffer.read(); print('#text=:'+base64.urlsafe_b64encode(zlib.compress(t,9)).rstrip(b'=').decode())" < mytext.txt
 ```
 
 Separate paragraphs with a blank line (`%0A%0A`); a single line break then counts as a space. In a text with no blank line at all, each line is taken as a paragraph. The text is otherwise read as the Catalogue reads any text: in capitals, without accents, with curly quotation marks made straight, and so on. A blog post of a few thousand words makes a link of a few thousand characters, well within what browsers accept; a whole novel would be too long for some browsers, which stop at about 80,000 characters.
 
-### Short links
+### Links to books of the collection
 
-Two kinds of links are only a few dozen characters long, and carry no text at all:
+A link to a book of the collection (see [Your books](#your-books)) carries no text, only the name of the book's file in `books/compressed/`: `#book=` and 20 characters, such as `https://babel.pellegr.in/#book=3f6bb9d6f78e0293b56a` for *Pride and Prejudice*. A book too long for one volume is set in several parts: `#book=…/3` leads to the third. And `&random` may follow, as for texts. The Catalogue's **Find a book** copies these links. Without `&random`, they lead to the same book whatever the seed.
 
-- **A book of the collection:** `#shelf=` followed by the name of its file in `books/compressed/`, such as `https://babel.pellegr.in/#shelf=3f6bb9d6f78e0293b56a` for *Pride and Prejudice*, or `#shelf=…/3` for the third part of a book too long for one volume. The Catalogue's **Find a book** copies these links. Like text links, they lead to the same book whatever the seed.
-- **Any place you walked to:** each visit begins in a hexagon drawn from a random 128-bit *start number* rather than from the whole Library. That gives 2^128 ≈ 3.4 × 10^38 possible starting points, far more than anyone could ever tell apart. A place reached by walking from there is then named by the start number and the steps taken: `#at=`, then a fingerprint of the configuration, the start number, the hexagons east (negative for west), the floors up (negative for down) and, for a book, its number in the hexagon. For example, `https://babel.pellegr.in/#at=31uH.T1rAJz8_WwfPbaP6D9mUQg.3.-1.17` (64 characters). **Copy a link to it**, while reading a book, and **Copy a link to this hexagon**, in the Current position tab, copy these links. They still work after a jump through **Go to a hexagon** by a number of hexagons or at random, but not after a jump to a text, a book or an address. Unlike text links, they depend on the seed and the dimensions in `config.js`: the fingerprint changes with them, and a Library with other settings refuses such a link rather than lead somewhere else.
+A book that a link or the Catalogue has led you to can be shared again from the reading view: **Copy a link to it** copies the link that leads to it.
 
 ## Your books
 
@@ -175,7 +183,7 @@ The sentences are grammatical but not necessarily sensible. A small English gram
 
 ## Files
 
-In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-25.1`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
+In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-27.1`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
 
 | Path | Contents |
 |---|---|
@@ -195,7 +203,6 @@ In `index.html`, every file name is followed by `?v=` and a version, such as `js
 | `js/main.js` | Start-up, reading, sleep |
 | `lib/` | three.js r147 and its `Reflector` (MIT licence, see `lib/three.LICENSE`) |
 | `tests/library.test.js` | Tests of the mathematics |
-| `obsidian/publish.js` | For an Obsidian Publish site: a link under every note to its book in the Library |
 | `books/index.js`, `books/compressed/` | The collection, as the Catalogue reads it, written by `books/download_gutenberg_top1024.py` from the `.txt` files in `books/uncompressed/` (which are not published) |
 
 ## Testing
