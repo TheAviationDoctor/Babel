@@ -1,7 +1,7 @@
 /*
  * The reader: first-person movement, the spiral stair, and the gaze that picks a book.
  *
- * Position is kept relative to the current cell (cg, cf): x along the gallery,
+ * Position is kept relative to the current cell (ch, cf): x along the floor (east),
  * y height above this floor, z across. Crossing half a cell east or west, or half
  * a storey up or down, moves the reader into the neighbouring cell.
  */
@@ -36,7 +36,7 @@
       this.camera = camera;
       this.dom = dom;
       this.radius = 0.24;
-      this.cg = 0; this.cf = 0;
+      this.ch = 0; this.cf = 0;
       this.x = 0; this.y = 0; this.z = 0;
       this.yaw = 0; this.pitch = 0;
       this.speed = 1.35;
@@ -51,14 +51,14 @@
       this._bindInput();
     }
 
-    /** Places the reader on the walkway of hexagon (cg, cf) (by default the anchor), looking across the shaft. */
-    placeAtStart(cg, cf) {
+    /** Places the reader on the walkway of hexagon (ch, cf) (by default the anchor), looking across the shaft. */
+    placeAtStart(ch, cf) {
       const d = this.d;
       const mid = (d.shaftA + d.aIn) / 2;
       this.x = -mid * 0.95; this.y = 0; this.z = 0.0;
       this.yaw = -Math.PI / 2 + 0.55; // looking east across the shaft, towards a wall of books
       this.pitch = -0.08;
-      this.cg = cg || 0; this.cf = cf || 0;
+      this.ch = ch || 0; this.cf = cf || 0;
     }
 
     /* ---------------- input ---------------- */
@@ -222,7 +222,7 @@
 
     /**
      * Something in a cell (a box [x0, y0, z0, x1, y1, z1] in the coordinates of the cell
-     * beside gallery 0), seen from inside the cell or through its open door.
+     * beside hexagon 0), seen from inside the cell or through its open door.
      */
     _pickInCell(box, openness) {
       const d = this.d;
@@ -266,9 +266,9 @@
     }
 
     /**
-     * Stands the reader in front of a book of the hexagon in cell (cg, cf), facing it.
+     * Stands the reader in front of a book of the hexagon in cell (ch, cf), facing it.
      */
-    faceBook(cg, cf, wall, shelf, volume) {
+    faceBook(ch, cf, wall, shelf, volume) {
       const d = this.d;
       const j = d.shelvedSides[wall], phi = (j * Math.PI) / 3;
       const nx = Math.cos(phi), nz = Math.sin(phi), tx = Math.sin(phi), tz = -Math.cos(phi);
@@ -281,7 +281,7 @@
         if (this.ground(x, z, 0) === 0) break;
         xc *= 0.85;
       }
-      this.cg = cg; this.cf = cf; this.x = x; this.y = 0; this.z = z;
+      this.ch = ch; this.cf = cf; this.x = x; this.y = 0; this.z = z;
       const bookX = nx * (d.aIn + 0.03) + tx * (d.rowLen / 2 - (volume + 0.5) * d.bookT);
       const bookZ = nz * (d.aIn + 0.03) + tz * (d.rowLen / 2 - (volume + 0.5) * d.bookT);
       const bookY = d.base + (d.shelves - 1 - shelf) * d.pitch + d.board + d.bookH / 2;
@@ -351,8 +351,8 @@
 
     _rebase() {
       const d = this.d;
-      if (this.x > d.Dx / 2) { this.x -= d.Dx; this.cg += 1; }
-      else if (this.x < -d.Dx / 2) { this.x += d.Dx; this.cg -= 1; }
+      if (this.x > d.Dx / 2) { this.x -= d.Dx; this.ch += 1; }
+      else if (this.x < -d.Dx / 2) { this.x += d.Dx; this.ch -= 1; }
       if (this.y > d.Hf / 2) { this.y -= d.Hf; this.cf += 1; }
       else if (this.y < -d.Hf / 2) { this.y += d.Hf; this.cf -= 1; }
     }
@@ -402,7 +402,7 @@
 
     /** Plain-words description of where the reader is relative to the waking hexagon. */
     whereabouts() {
-      const g = this.cg, f = this.cf;
+      const g = this.ch, f = this.cf;
       const n = (k, one, many) => `${Math.abs(k).toLocaleString('en')} ${Math.abs(k) === 1 ? one : many}`;
       const parts = [];
       if (g) parts.push(`${n(g, 'hexagon', 'hexagons')} ${g > 0 ? 'east' : 'west'}`);

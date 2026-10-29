@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=Libre+Bodoni:ital,wght@0,400;0,500;1,400&display=swap">
-<link rel="stylesheet" href="css/style.css?v=2026-10-29.3">
+<link rel="stylesheet" href="css/style.css?v=2026-10-29.4">
 </head>
 <body>
 <canvas id="view" aria-label="The Library, seen from the eyes of a librarian"></canvas>
@@ -160,7 +160,7 @@
 
     <div id="panel-go" class="panel" role="tabpanel" aria-labelledby="tab-go" hidden>
       <section class="go">
-        <h3>Along the gallery, and up or down</h3>
+        <h3>East or west, and up or down</h3>
         <form id="go-offset" class="row offset" autocomplete="off">
           <label><input id="go-east" type="text" inputmode="numeric" value="0"> hexagons east</label>
           <label><input id="go-up" type="text" inputmode="numeric" value="0"> floors up</label>
@@ -173,7 +173,7 @@
         <h3>To an address</h3>
         <form id="go-address" autocomplete="off">
           <label for="go-address-text">Paste a full address, as copied from this catalogue</label>
-          <textarea id="go-address-text" rows="3" spellcheck="false" placeholder="Seed: …&#10;Floor: …&#10;Gallery: …"></textarea>
+          <textarea id="go-address-text" rows="3" spellcheck="false" placeholder="Seed: …&#10;Floor: …&#10;Hexagon: …"></textarea>
           <p id="go-address-error" class="error" hidden></p>
           <div class="row"><button type="submit" class="primary">Go</button></div>
         </form>
@@ -209,20 +209,20 @@
   whenever any of them changes: browsers and GitHub Pages keep copies of files for a while,
   and a new page read with an old script would not start.
 -->
-<script src="lib/three.min.js?v=2026-10-29.3"></script>
-<script src="lib/Reflector.js?v=2026-10-29.3"></script>
-<script src="config.js?v=2026-10-29.3"></script>
-<script src="js/about.js?v=2026-10-29.3"></script>
-<script src="js/library.js?v=2026-10-29.3"></script>
-<script src="js/textures.js?v=2026-10-29.3"></script>
-<script src="js/architecture.js?v=2026-10-29.3"></script>
-<script src="js/world.js?v=2026-10-29.3"></script>
-<script src="js/player.js?v=2026-10-29.3"></script>
-<script src="js/markdown.js?v=2026-10-29.3"></script>
-<script src="js/terminal.js?v=2026-10-29.3"></script>
-<script src="js/quotes.js?v=2026-10-29.3"></script>
-<script src="js/dream.js?v=2026-10-29.3"></script>
-<script src="js/main.js?v=2026-10-29.3"></script>
+<script src="lib/three.min.js?v=2026-10-29.4"></script>
+<script src="lib/Reflector.js?v=2026-10-29.4"></script>
+<script src="config.js?v=2026-10-29.4"></script>
+<script src="js/about.js?v=2026-10-29.4"></script>
+<script src="js/library.js?v=2026-10-29.4"></script>
+<script src="js/textures.js?v=2026-10-29.4"></script>
+<script src="js/architecture.js?v=2026-10-29.4"></script>
+<script src="js/world.js?v=2026-10-29.4"></script>
+<script src="js/player.js?v=2026-10-29.4"></script>
+<script src="js/markdown.js?v=2026-10-29.4"></script>
+<script src="js/terminal.js?v=2026-10-29.4"></script>
+<script src="js/quotes.js?v=2026-10-29.4"></script>
+<script src="js/dream.js?v=2026-10-29.4"></script>
+<script src="js/main.js?v=2026-10-29.4"></script>
 <script>
   // If the Library has not started a few seconds after the page has loaded (a script missing,
   // or not matching the others), say so rather than leave the screen black.

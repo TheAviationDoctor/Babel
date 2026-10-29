@@ -4,7 +4,7 @@
  *
  * Positions are relative: the cell the reader stands in is always at the origin,
  * so the Library can be walked for ever without losing numerical precision.
- * Absolute addresses (floor and gallery numbers, each about half a million symbols
+ * Absolute addresses (floor and hexagon numbers, each about half a million symbols
  * long) are computed from the waking hexagon plus the reader's offset.
  */
 (function () {
@@ -27,31 +27,31 @@
       this.assets = assets;
       this.d = assets.dims;
       this.lib = library;
-      this.cells = new Map(); // key "dg,df" → cell
+      this.cells = new Map(); // key "dh,df" → cell
       this.pool = [];
-      this.galleryCache = new Map();
+      this.hexagonCache = new Map();
       this.floorCache = new Map();
       this.center = null;
       this.root = new THREE.Group();
       scene.add(this.root);
       this._bookLayout = this._layoutBooks();
       this.hover = null;
-      this.view = { nearFloors: 1, nearGalleries: 3, farFloors: 6, farGalleries: 1 };
-      this.doors = new Map(); // "dg,df" → { target: 0 or 1, t: 0…1 } for doors that have been touched
-      this.lamps = new Map(); // "dg,df" → { target: 0 or 1, t: 0…1 } for night lamps that have been switched
+      this.view = { nearFloors: 1, nearHexagons: 3, farFloors: 6, farHexagons: 1 };
+      this.doors = new Map(); // "dh,df" → { target: 0 or 1, t: 0…1 } for doors that have been touched
+      this.lamps = new Map(); // "dh,df" → { target: 0 or 1, t: 0…1 } for night lamps that have been switched
     }
 
     /* ---------------- doors of the cells ---------------- */
 
-    doorState(dg, df) { return this.doors.get(dg + ',' + df) || null; }
+    doorState(dh, df) { return this.doors.get(dh + ',' + df) || null; }
 
-    /** How far open (0 shut … 1 open) the door of the cell beside vestibule (dg, df) is. */
-    doorOpenness(dg, df) {
-      const s = this.doorState(dg, df);
+    /** How far open (0 shut … 1 open) the door of the cell beside vestibule (dh, df) is. */
+    doorOpenness(dh, df) {
+      const s = this.doorState(dh, df);
       return s ? s.t : 0;
     }
 
-    isDoorOpen(dg, df) { return this.doorOpenness(dg, df) > 0.9; }
+    isDoorOpen(dh, df) { return this.doorOpenness(dh, df) > 0.9; }
 
     /* ---------------- the book the catalogue found ---------------- */
 
@@ -62,18 +62,18 @@
       this.mark = mark;
       for (const m of [old, mark]) {
         if (!m) continue;
-        const cell = this.cell(m.dg, m.df);
-        if (cell) this._dress(cell, cell.dg, cell.df);
+        const cell = this.cell(m.dh, m.df);
+        if (cell) this._dress(cell, cell.dh, cell.df);
       }
     }
 
-    isMarked(dg, df, slot) {
+    isMarked(dh, df, slot) {
       const m = this.mark;
-      return !!m && m.dg === dg && m.df === df && m.slot === slot;
+      return !!m && m.dh === dh && m.df === df && m.slot === slot;
     }
 
-    toggleDoor(dg, df) {
-      const key = dg + ',' + df;
+    toggleDoor(dh, df) {
+      const key = dh + ',' + df;
       let s = this.doors.get(key);
       if (!s) { s = { target: 0, t: 0 }; this.doors.set(key, s); }
       s.target = s.target ? 0 : 1;
@@ -82,14 +82,14 @@
 
     /* ---------------- night lamps of the cells ---------------- */
 
-    /** Whether the night lamp of the cell beside vestibule (dg, df) is on (or turning on). Lamps start lit. */
-    isLampOn(dg, df) {
-      const s = this.lamps.get(dg + ',' + df);
+    /** Whether the night lamp of the cell beside vestibule (dh, df) is on (or turning on). Lamps start lit. */
+    isLampOn(dh, df) {
+      const s = this.lamps.get(dh + ',' + df);
       return s ? s.target === 1 : true;
     }
 
-    toggleLamp(dg, df) {
-      const key = dg + ',' + df;
+    toggleLamp(dh, df) {
+      const key = dh + ',' + df;
       let s = this.lamps.get(key);
       if (!s) { s = { target: 1, t: 1 }; this.lamps.set(key, s); }
       s.target = s.target ? 0 : 1;
@@ -97,8 +97,8 @@
     }
 
     /** How brightly (0 … 1) the night lamp of that cell shines. */
-    lampBrightness(dg, df) {
-      const s = this.lamps.get(dg + ',' + df);
+    lampBrightness(dh, df) {
+      const s = this.lamps.get(dh + ',' + df);
       return s ? s.t * s.t : 1; // a filament dims quickly, then glows out
     }
 
@@ -121,7 +121,7 @@
     }
 
     _applyDoor(cell) {
-      const t = this.doorOpenness(cell.dg, cell.df);
+      const t = this.doorOpenness(cell.dh, cell.df);
       const e = t * t * (3 - 2 * t);
       cell.door.rotation.y = e * Math.PI * 0.5 * 0.97;
     }
@@ -132,8 +132,8 @@
      * keeps a faint glow.
      */
     _applyLight(cell) {
-      const b = this.lampBrightness(cell.dg, cell.df);
-      const t = this.doorOpenness(cell.dg, cell.df), e = t * t * (3 - 2 * t);
+      const b = this.lampBrightness(cell.dh, cell.df);
+      const t = this.doorOpenness(cell.dh, cell.df), e = t * t * (3 - 2 * t);
       const L = cell.light, dark = 1 - b;
       const spill = 0.05 + 0.95 * e; // the vestibule's light, through the doorway
       const fill = b + dark * 0.3 * e; // light bouncing about the cell
@@ -152,12 +152,12 @@
     }
 
     /** Sets the waking hexagon (absolute addresses) and clears everything cached. */
-    setAnchor(gallery, floor) {
-      this.anchor = { gallery, floor };
+    setAnchor(hexagon, floor) {
+      this.anchor = { hexagon, floor };
       if (this.doors) this.doors.clear();
       if (this.lamps) this.lamps.clear();
       this.mark = null;
-      this.galleryCache.clear();
+      this.hexagonCache.clear();
       this.floorCache.clear();
       for (const cell of this.cells.values()) this._release(cell);
       this.cells.clear();
@@ -167,12 +167,12 @@
     /** Replaces the Library (a new seed) — the geometry stays, the books change. */
     setLibrary(library) { this.lib = library; }
 
-    gallery(dg) {
-      let e = this.galleryCache.get(dg);
+    hexagon(dh) {
+      let e = this.hexagonCache.get(dh);
       if (!e) {
-        const digits = this.lib.offsetGallery(this.anchor.gallery, dg);
-        e = { digits, key: this.lib.galleryKey(digits) };
-        this.galleryCache.set(dg, e);
+        const digits = this.lib.offsetHexagon(this.anchor.hexagon, dh);
+        e = { digits, key: this.lib.hexagonKey(digits) };
+        this.hexagonCache.set(dh, e);
       }
       return e;
     }
@@ -187,13 +187,13 @@
       return e;
     }
 
-    /** Absolute location object of a book in cell (dg, df). */
-    location(dg, df, slot) {
-      return { gallery: this.gallery(dg).digits, floor: this.floor(df).digits, slot };
+    /** Absolute location object of a book in cell (dh, df). */
+    location(dh, df, slot) {
+      return { hexagon: this.hexagon(dh).digits, floor: this.floor(df).digits, slot };
     }
 
-    fingerprint(dg, df) {
-      return this.lib.fingerprintFromKeys(this.gallery(dg).key, this.floor(df).key);
+    fingerprint(dh, df) {
+      return this.lib.fingerprintFromKeys(this.hexagon(dh).key, this.floor(df).key);
     }
 
     /** Canonical position of every slot: matrices before per-book jitter. */
@@ -300,7 +300,7 @@
       const books = new THREE.InstancedMesh(geo, M.books, S);
       books.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       group.add(books);
-      return { group, books, tint, variant, tints: new Float32Array(S * 3), dg: 0, df: 0, door, interior, niche, signs, light };
+      return { group, books, tint, variant, tints: new Float32Array(S * 3), dh: 0, df: 0, door, interior, niche, signs, light };
     }
 
     _acquire() { return this.pool.pop() || this._createCell(); }
@@ -310,11 +310,11 @@
       this.pool.push(cell);
     }
 
-    /** Dresses a cell for hexagon (dg, df): which books exist, and how each one looks. */
-    _dress(cell, dg, df) {
-      cell.dg = dg; cell.df = df;
+    /** Dresses a cell for hexagon (dh, df): which books exist, and how each one looks. */
+    _dress(cell, dh, df) {
+      cell.dh = dh; cell.df = df;
       const lib = this.lib;
-      const g = this.gallery(dg), f = this.floor(df);
+      const g = this.hexagon(dh), f = this.floor(df);
       const count = lib.booksInHexagon(g.digits, f.digits);
       const fp = lib.fingerprintFromKeys(g.key, f.key);
       cell.fingerprint = fp;
@@ -340,7 +340,7 @@
         cell.books.setMatrixAt(slot, m);
       }
       const mk = this.mark;
-      if (mk && mk.dg === dg && mk.df === df && mk.slot < count) {
+      if (mk && mk.dh === dh && mk.df === df && mk.slot < count) {
         const L = this._bookLayout[mk.slot];
         cell.books.getMatrixAt(mk.slot, m);
         m.elements[12] -= L.nx * 0.07;
@@ -360,59 +360,59 @@
       cell.variant.needsUpdate = true;
     }
 
-    _wanted(pg, pf) {
+    _wanted(ph, pf) {
       const v = this.view, out = [];
       for (let df = pf - v.farFloors; df <= pf + v.farFloors; df++) {
         const near = Math.abs(df - pf) <= v.nearFloors;
-        const span = near ? v.nearGalleries : v.farGalleries;
-        for (let dg = pg - span; dg <= pg + span; dg++) out.push([dg, df]);
+        const span = near ? v.nearHexagons : v.farHexagons;
+        for (let dh = ph - span; dh <= ph + span; dh++) out.push([dh, df]);
       }
       return out;
     }
 
     /** Moves the visible window to centre on the reader's cell. */
-    update(pg, pf) {
+    update(ph, pf) {
       const d = this.d;
-      const changed = !this.center || this.center[0] !== pg || this.center[1] !== pf;
+      const changed = !this.center || this.center[0] !== ph || this.center[1] !== pf;
       if (!changed) return;
-      this.center = [pg, pf];
-      const wanted = this._wanted(pg, pf);
+      this.center = [ph, pf];
+      const wanted = this._wanted(ph, pf);
       const keep = new Set(wanted.map(([g, f]) => g + ',' + f));
       for (const [key, cell] of this.cells) {
         if (!keep.has(key)) { this._release(cell); this.cells.delete(key); }
       }
-      for (const [dg, df] of wanted) {
-        const key = dg + ',' + df;
+      for (const [dh, df] of wanted) {
+        const key = dh + ',' + df;
         let cell = this.cells.get(key);
         if (!cell) {
           cell = this._acquire();
-          this._dress(cell, dg, df);
+          this._dress(cell, dh, df);
           this.cells.set(key, cell);
           this.root.add(cell.group);
         }
-        cell.group.position.set((dg - pg) * d.Dx, (df - pf) * d.Hf, 0);
+        cell.group.position.set((dh - ph) * d.Dx, (df - pf) * d.Hf, 0);
         // cells can only be seen from close by, through their door
-        cell.interior.visible = Math.abs(df - pf) <= 1 && Math.abs(dg - pg) <= 3;
+        cell.interior.visible = Math.abs(df - pf) <= 1 && Math.abs(dh - ph) <= 3;
         cell.door.visible = Math.abs(df - pf) <= 1;
         cell.niche.visible = Math.abs(df - pf) <= 1;
         cell.signs.visible = Math.abs(df - pf) <= 1;
       }
-      this._trimCaches(pg, pf);
+      this._trimCaches(ph, pf);
       this.clearHover();
     }
 
-    _trimCaches(pg, pf) {
-      for (const k of this.galleryCache.keys()) if (Math.abs(k - pg) > 12) this.galleryCache.delete(k);
+    _trimCaches(ph, pf) {
+      for (const k of this.hexagonCache.keys()) if (Math.abs(k - ph) > 12) this.hexagonCache.delete(k);
       for (const k of this.floorCache.keys()) if (Math.abs(k - pf) > 12) this.floorCache.delete(k);
     }
 
-    cell(dg, df) { return this.cells.get(dg + ',' + df) || null; }
+    cell(dh, df) { return this.cells.get(dh + ',' + df) || null; }
 
     /** Brightens one book (the one under the reader's gaze). */
-    setHover(dg, df, slot) {
-      if (this.hover && this.hover.dg === dg && this.hover.df === df && this.hover.slot === slot) return;
+    setHover(dh, df, slot) {
+      if (this.hover && this.hover.dh === dh && this.hover.df === df && this.hover.slot === slot) return;
       this.clearHover();
-      const cell = this.cell(dg, df);
+      const cell = this.cell(dh, df);
       if (!cell || slot >= cell.count) return;
       for (let k = 0; k < 3; k++) cell.tint.array[slot * 3 + k] = Math.min(1, cell.tints[slot * 3 + k] * 1.6 + 0.05);
       cell.tint.needsUpdate = true;
@@ -425,14 +425,14 @@
       m.elements[14] -= L.nz * 0.05;
       cell.books.setMatrixAt(slot, m);
       cell.books.instanceMatrix.needsUpdate = true;
-      this.hover = { dg, df, slot, cell, saved };
+      this.hover = { dh, df, slot, cell, saved };
     }
 
     clearHover() {
       const h = this.hover;
       if (!h) return;
       const cell = h.cell;
-      if (cell.dg === h.dg && cell.df === h.df) {
+      if (cell.dh === h.dh && cell.df === h.df) {
         for (let k = 0; k < 3; k++) cell.tint.array[h.slot * 3 + k] = cell.tints[h.slot * 3 + k];
         cell.tint.needsUpdate = true;
         cell.books.setMatrixAt(h.slot, h.saved);

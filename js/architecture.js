@@ -5,7 +5,7 @@
  * Coordinates are metres. Each "cell" holds one hexagon centred on the origin and
  * the vestibule that leaves it through its east door (+x) towards the next hexagon.
  * The two free sides of every hexagon face east and west, so each floor is one
- * endless gallery; the spiral stair in every vestibule joins the floors.
+ * endless row of hexagons; the spiral stair in every vestibule joins the floors.
  *
  * Every hexagon is identical, so lighting is computed in the shaders from the
  * fragment's position within its cell: the two lamps of each hexagon light it the
@@ -52,7 +52,7 @@
     d.hallW = Math.min(1.4, d.sIn - 0.3);
     d.doorH = Math.min(2.0, d.roomH - 0.12);
     d.hallLen = 4.4;
-    d.Dx = 2 * d.a + d.hallLen; // distance between hexagon centres along a gallery
+    d.Dx = 2 * d.a + d.hallLen; // distance between hexagon centres along a floor
     d.hallX0 = d.a;
     d.hallX1 = d.Dx - d.a;
     // a wooden lintel across the top of the doorway at each end of the vestibule, bearing a
@@ -64,7 +64,7 @@
     d.signDepth = 0.018;
     d.signY = d.doorH + d.lintelH / 2;
 
-    // lamps: two per hexagon, placed across the gallery axis, above the walkway
+    // lamps: two per hexagon, placed across the floor's east–west axis, above the walkway
     const mid = (d.shaftA + d.aIn) / 2;
     d.lampZ = mid / (SQ3 / 2);
     d.lampY = d.roomH - 0.3;

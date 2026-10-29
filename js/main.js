@@ -70,7 +70,7 @@
     player = new Babel.Player(assets.dims, camera, renderer.domElement);
     player.sensitivity = lib.config.lookSensitivity || 1;
     player.onTap = () => { if (mode === 'walking') interact(); };
-    player.doorOpen = (off) => world.isDoorOpen(player.cg + off, player.cf);
+    player.doorOpen = (off) => world.isDoorOpen(player.ch + off, player.cf);
 
     // The mirror in the nearest vestibule. Its camera sees layer 1, where the reader's own figure lives.
     const d = assets.dims;
@@ -159,27 +159,27 @@
   /** Wakes the reader in a hexagon chosen at random, a different one on every visit. */
   function wake() {
     const loc = lib.randomLocation();
-    world.setAnchor(loc.gallery, loc.floor);
+    world.setAnchor(loc.hexagon, loc.floor);
     if (terminal) terminal.reset();
     player.origin = 'woke';
     player.placeAtStart();
     world.update(0, 0);
   }
 
-  /** Goes to hexagon (dg, df) relative to the anchor; with `face`, stands before that book. */
-  function goToCell(dg, df, face) {
-    if (face) player.faceBook(dg, df, face.wall, face.shelf, face.volume);
-    else player.placeAtStart(dg, df);
-    world.update(player.cg, player.cf);
+  /** Goes to hexagon (dh, df) relative to the anchor; with `face`, stands before that book. */
+  function goToCell(dh, df, face) {
+    if (face) player.faceBook(dh, df, face.wall, face.shelf, face.volume);
+    else player.placeAtStart(dh, df);
+    world.update(player.ch, player.cf);
     startWalking();
   }
 
-  /** Goes to a hexagon anywhere, given its absolute floor and gallery addresses. */
-  function goToAddress(gallery, floor, face, mark) {
-    world.setAnchor(gallery, floor);
+  /** Goes to a hexagon anywhere, given its floor and hexagon numbers. */
+  function goToAddress(hexagon, floor, face, mark) {
+    world.setAnchor(hexagon, floor);
     terminal.reset();
     player.origin = 'arrived';
-    if (mark) world.setMark(Object.assign({ dg: 0, df: 0 }, mark));
+    if (mark) world.setMark(Object.assign({ dh: 0, df: 0 }, mark));
     goToCell(0, 0, face);
   }
 
@@ -218,7 +218,7 @@
     } else {
       loc = lib.bookOfText(link.text, link.random).location;
     }
-    const go = () => goToAddress(loc.gallery, loc.floor, lib.slotParts(loc.slot), { slot: loc.slot, start: 0, length, link: hash });
+    const go = () => goToAddress(loc.hexagon, loc.floor, lib.slotParts(loc.slot), { slot: loc.slot, start: 0, length, link: hash });
     if (travelling) journey(go); else go();
     toast(`Before you, a little out of its row, stands the book the link leads to. ${isTouch ? 'Tap it' : 'Press E'} to read it.`, 6000);
     return true;
@@ -226,7 +226,7 @@
 
   function goToRandom() {
     const loc = lib.randomLocation();
-    goToAddress(loc.gallery, loc.floor, null);
+    goToAddress(loc.hexagon, loc.floor, null);
     toast('You arrive in a hexagon chosen at random.');
   }
 
@@ -247,7 +247,7 @@
     if (ref.part > n) { toast(`This link leads to part ${ref.part} of a book that has ${n === 1 ? 'only one part' : `only ${n} parts`}.`, 7000); return false; }
     const r = lib.findText(set.parts[ref.part - 1], { fill: ref.random ? 'random' : 'blank' });
     const title = book ? (n > 1 ? `${book.title}, part ${ref.part} of ${n}` : book.title) : '';
-    const go = () => goToAddress(r.location.gallery, r.location.floor, lib.slotParts(r.location.slot),
+    const go = () => goToAddress(r.location.hexagon, r.location.floor, lib.slotParts(r.location.slot),
       { slot: r.location.slot, start: 0, length: 0, title, link: hash });
     if (travelling) journey(go); else go();
     toast(`Before you, a little out of its row, stands ${title || 'the book the link leads to'}. ${isTouch ? 'Tap it' : 'Press E'} to read it.`, 6000);
@@ -263,7 +263,7 @@
 
   /** The reader's hexagon, as absolute addresses. */
   function here() {
-    return { gallery: world.gallery(player.cg).digits.slice(), floor: world.floor(player.cf).digits.slice() };
+    return { hexagon: world.hexagon(player.ch).digits.slice(), floor: world.floor(player.cf).digits.slice() };
   }
 
   /** Makes a journey (`move` takes the reader somewhere) and remembers how far it went, for the catalogue. */
@@ -271,10 +271,10 @@
     const from = here();
     move();
     const to = here();
-    const dg = lib.galleryDifference(from.gallery, to.gallery), df = lib.floorDifference(from.floor, to.floor);
-    if (dg.sign === 0 && df.sign === 0) return;
-    const was = lib.position(from.gallery, from.floor);
-    lastJourney = { dg, df, from: { east: was.east.fraction, up: was.up.fraction } };
+    const dh = lib.hexagonDifference(from.hexagon, to.hexagon), df = lib.floorDifference(from.floor, to.floor);
+    if (dh.sign === 0 && df.sign === 0) return;
+    const was = lib.position(from.hexagon, from.floor);
+    lastJourney = { dh, df, from: { east: was.east.fraction, up: was.up.fraction } };
   }
 
   /* ---------------- modes ---------------- */
@@ -316,30 +316,30 @@
   function interact() {
     if (!gaze) return;
     if (gaze.kind === 'door') {
-      const dg = player.cg + gaze.cellOffset, df = player.cf;
-      const state = world.doorState(dg, df);
+      const dh = player.ch + gaze.cellOffset, df = player.cf;
+      const state = world.doorState(dh, df);
       const closing = state && state.target === 1;
       if (closing && player.inDoorway(gaze.cellOffset)) { toast('Step out of the doorway first.'); return; }
-      world.toggleDoor(dg, df);
+      world.toggleDoor(dh, df);
       gazeKey = '';
       return;
     }
     if (gaze.kind === 'terminal') { terminal.open(); return; }
     if (gaze.kind === 'lamp') {
-      world.toggleLamp(player.cg + gaze.cellOffset, player.cf);
+      world.toggleLamp(player.ch + gaze.cellOffset, player.cf);
       gazeKey = '';
       return;
     }
-    if (gaze.kind === 'bed') { fallAsleep(player.cg + gaze.cellOffset, player.cf); return; }
+    if (gaze.kind === 'bed') { fallAsleep(player.ch + gaze.cellOffset, player.cf); return; }
     openBook(gaze);
   }
 
   /** Opens the book the reader is looking at on the shelves. */
   function openBook(target) {
-    const dg = player.cg + target.off, df = player.cf;
-    const mark = world.mark && world.isMarked(dg, df, target.slot) ? world.mark : null;
+    const dh = player.ch + target.off, df = player.cf;
+    const mark = world.mark && world.isMarked(dh, df, target.slot) ? world.mark : null;
     openBookAt({
-      location: world.location(dg, df, target.slot), slot: target.slot,
+      location: world.location(dh, df, target.slot), slot: target.slot,
       highlight: mark && mark.length ? { start: mark.start, length: mark.length } : null, returnTo: 'walking',
       link: (mark && mark.link) || null, // the link that led to it, if a link (or the catalogue) did
     });
@@ -351,7 +351,7 @@
   function openBookAt(o) {
     const content = o.content || lib.bookAt(o.location);
     if (!content) { toast('This shelf is empty. The Library ends here.'); return; }
-    const fp = lib.hexagonFingerprint(o.location.gallery, o.location.floor);
+    const fp = lib.hexagonFingerprint(o.location.hexagon, o.location.floor);
     const { wall, shelf, volume } = lib.slotParts(o.slot);
     const c = lib.config;
     reading = {
@@ -477,25 +477,25 @@
   let dream = null; // the dream's shader, made the first time the reader sleeps
   let sleep = null; // the state of the sleep under way, if any
 
-  /** Four unsigned 32-bit integers from a hexagon's address (its gallery and floor numbers). */
-  function hexagonSeed(dg, df) {
+  /** Four unsigned 32-bit integers from a hexagon's address (its hexagon and floor numbers). */
+  function hexagonSeed(dh, df) {
     const hash = BabelCore.util.hashBytes;
-    const g = world.gallery(dg).digits, f = world.floor(df).digits;
+    const g = world.hexagon(dh).digits, f = world.floor(df).digits;
     const a = hash(g, 0x6472656d, 0x6865780a); // the address alone, whatever the Library's seed
     const b = hash(f, a[0], a[1]);
     const c = hash(g, b[0] ^ 0x51ee9, b[1]);
     return [b[0], b[1], c[0], c[1]];
   }
 
-  /** Lies down on the bed of the cell beside gallery dg of floor df. */
-  function fallAsleep(dg, df) {
+  /** Lies down on the bed of the cell beside hexagon dh of floor df. */
+  function fallAsleep(dh, df) {
     if (sleep || mode !== 'walking') return;
     if (!dream) {
       try { dream = new Babel.Dream(); } catch (e) { toast('This browser cannot dream.'); return; }
     }
     const now = performance.now() / 1000;
     sleep = {
-      phase: 'falling', start: now, seed: hexagonSeed(dg, df), quote: -1,
+      phase: 'falling', start: now, seed: hexagonSeed(dh, df), quote: -1,
       duration: lib.config.quoteDuration || 10, interval: lib.config.quoteInterval === undefined ? 5 : lib.config.quoteInterval,
       pixelRatio: renderer.getPixelRatio(), dreaming: false,
     };
@@ -706,14 +706,14 @@
     }
   }
 
-  /** How well lit the reader is (1 in the galleries), for their reflection in the mirrors. */
+  /** How well lit the reader is (1 in the hexagons), for their reflection in the mirrors. */
   function lightOnReader() {
     const d = assets.dims;
     for (const off of [0, -1]) {
       const hx = player.x - off * d.Dx;
       if (hx > d.cellX0 - 0.1 && hx < d.cellX1 + 0.1 && player.z < -d.hallW / 2 && player.z > d.cellZ1 - 0.1) {
-        const dg = player.cg + off, df = player.cf;
-        const b = world.lampBrightness(dg, df), t = world.doorOpenness(dg, df);
+        const dh = player.ch + off, df = player.cf;
+        const b = world.lampBrightness(dh, df), t = world.doorOpenness(dh, df);
         return b + (1 - b) * (0.03 + 0.2 * t * t * (3 - 2 * t));
       }
     }
@@ -727,7 +727,7 @@
     last = now;
     adaptQuality(rawDt);
     player.update(dt);
-    world.update(player.cg, player.cf);
+    world.update(player.ch, player.cf);
     world.tick(dt);
     figureLight.intensity = 1.1 * lightOnReader();
 
@@ -740,7 +740,7 @@
     // the sink mirror of the nearest cell, while the reader is in it or at its open door
     const off = Math.abs(player.x - d.sinkMirror.x) < Math.abs(player.x - (d.sinkMirror.x - d.Dx)) ? 0 : -1;
     const sx = d.sinkMirror.x + off * d.Dx;
-    const cellShown = world.doorOpenness(player.cg + off, player.cf) > 0.05 || player.z < d.cellZ0;
+    const cellShown = world.doorOpenness(player.ch + off, player.cf) > 0.05 || player.z < d.cellZ0;
     sinkReflector.visible = cellShown && Math.abs(player.y) < 1 && Math.abs(player.x - sx) < 3 && player.z < 0;
     sinkReflector.position.set(sx, d.sinkMirror.y0 + d.sinkMirror.h / 2, d.cellZ0 - 0.014);
     figure.position.set(player.x, player.y, player.z);
@@ -758,14 +758,14 @@
 
   function updateGaze() {
     const book = player.pick(lib);
-    const door = player.pickDoor((off) => world.doorOpenness(player.cg + off, player.cf));
+    const door = player.pickDoor((off) => world.doorOpenness(player.ch + off, player.cf));
     const term = player.pickTerminal();
-    const lamp = player.pickLamp((off) => world.doorOpenness(player.cg + off, player.cf));
-    const bed = player.pickBed((off) => world.doorOpenness(player.cg + off, player.cf));
+    const lamp = player.pickLamp((off) => world.doorOpenness(player.ch + off, player.cf));
+    const bed = player.pickBed((off) => world.doorOpenness(player.ch + off, player.cf));
     const nearest = (hit, ...others) => hit && others.every((o) => !o || hit.t < o.t);
     if (nearest(bed, book, door, lamp, term)) {
-      const dg = player.cg + bed.cellOffset, df = player.cf;
-      const key = `bed,${dg},${df}`;
+      const dh = player.ch + bed.cellOffset, df = player.cf;
+      const key = `bed,${dh},${df}`;
       if (key === gazeKey) return;
       gazeKey = key;
       world.clearHover();
@@ -777,9 +777,9 @@
       return;
     }
     if (lamp && (!book || lamp.t < book.t) && (!door || lamp.t < door.t)) {
-      const dg = player.cg + lamp.cellOffset, df = player.cf;
-      const on = world.isLampOn(dg, df);
-      const key = `lamp,${dg},${df},${on}`;
+      const dh = player.ch + lamp.cellOffset, df = player.cf;
+      const on = world.isLampOn(dh, df);
+      const key = `lamp,${dh},${df},${on}`;
       if (key === gazeKey) return;
       gazeKey = key;
       world.clearHover();
@@ -791,7 +791,7 @@
       return;
     }
     if (term && (!book || term.t < book.t) && (!door || term.t < door.t)) {
-      const key = `terminal,${player.cg + term.cellOffset},${player.cf}`;
+      const key = `terminal,${player.ch + term.cellOffset},${player.cf}`;
       if (key === gazeKey) return;
       gazeKey = key;
       world.clearHover();
@@ -804,10 +804,10 @@
       return;
     }
     if (door && (!book || door.t < book.t)) {
-      const dg = player.cg + door.cellOffset, df = player.cf;
-      const state = world.doorState(dg, df);
+      const dh = player.ch + door.cellOffset, df = player.cf;
+      const state = world.doorState(dh, df);
       const opening = !(state && state.target === 1);
-      const key = `door,${dg},${df},${opening}`;
+      const key = `door,${dh},${df},${opening}`;
       if (key === gazeKey) return;
       gazeKey = key;
       world.clearHover();
@@ -819,18 +819,18 @@
       return;
     }
     const target = book;
-    const key = target ? `${player.cg + target.off},${player.cf},${target.slot}` : '';
+    const key = target ? `${player.ch + target.off},${player.cf},${target.slot}` : '';
     if (key === gazeKey) return;
     gazeKey = key;
     gaze = target ? Object.assign({ kind: 'book' }, target) : null;
     if (!target) { world.clearHover(); $('gaze').hidden = true; return; }
-    const dg = player.cg + target.off, df = player.cf;
-    world.setHover(dg, df, target.slot);
-    const cell = world.cell(dg, df);
+    const dh = player.ch + target.off, df = player.cf;
+    world.setHover(dh, df, target.slot);
+    const cell = world.cell(dh, df);
     if (!cell || target.slot >= cell.count) { $('gaze').hidden = true; gaze = null; return; }
     $('gaze-title').hidden = false;
     $('gaze-title').textContent = lib.spineTitle(cell.fingerprint, target.slot);
-    const sought = world.isMarked(dg, df, target.slot) ? `The book you sought${world.mark.title ? ` (${world.mark.title})` : ''}: ` : '';
+    const sought = world.isMarked(dh, df, target.slot) ? `The book you sought${world.mark.title ? ` (${world.mark.title})` : ''}: ` : '';
     $('gaze-where').textContent = `${sought}Wall ${target.wall + 1}, shelf ${target.shelf + 1}, volume ${target.volume + 1}`;
     $('gaze-hint').textContent = isTouch ? 'Tap to read' : 'Press E or click to read';
     $('gaze').hidden = false;

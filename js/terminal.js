@@ -10,7 +10,7 @@
  *
  * It talks to the rest of the game through a small context object (see main.js):
  *   ctx.lib(), ctx.world, ctx.player, ctx.dims, ctx.setMode(mode), ctx.startWalking(),
- *   ctx.openBookAt(options), ctx.goToCell(dg, df, face), ctx.goToAddress(gallery, floor, face),
+ *   ctx.openBookAt(options), ctx.goToCell(dh, df, face), ctx.goToAddress(hexagon, floor, face),
  *   ctx.goToRandom(), ctx.toast(text), ctx.copyText(text, done), ctx.linkBase(),
  *   ctx.lastJourney() (how far the last jump through the catalogue went, or null)
  */
@@ -286,7 +286,7 @@
       $('certain-link').addEventListener('click', () => this._copyLink(this.certainLink));
       $('certain-copy').addEventListener('click', () => {
         const loc = this.certain.location;
-        this.ctx.copyText(this.lib.hexagonAddressText(loc.gallery, loc.floor), 'Copied the address of that hexagon.');
+        this.ctx.copyText(this.lib.hexagonAddressText(loc.hexagon, loc.floor), 'Copied the address of that hexagon.');
       });
       $('books-files').addEventListener('click', () => $('books-files-input').click());
       $('shelf-filter').addEventListener('input', () => this._filterShelf());
@@ -301,7 +301,7 @@
       if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => this._fitMap()).catch(() => {});
       $('term-copy').addEventListener('click', () => {
         const w = this.ctx.world, p = this.ctx.player;
-        this.ctx.copyText(this.lib.hexagonAddressText(w.gallery(p.cg).digits, w.floor(p.cf).digits), 'Copied the address of this hexagon.');
+        this.ctx.copyText(this.lib.hexagonAddressText(w.hexagon(p.ch).digits, w.floor(p.cf).digits), 'Copied the address of this hexagon.');
       });
     }
 
@@ -462,13 +462,13 @@
     _whereHTML(loc, from) {
       const lib = this.lib, world = this.ctx.world, player = this.ctx.player;
       const { wall, shelf, volume } = lib.slotParts(loc.slot);
-      const dg = lib.galleryDifference(world.gallery(player.cg).digits, loc.gallery);
+      const dh = lib.hexagonDifference(world.hexagon(player.ch).digits, loc.hexagon);
       const df = lib.floorDifference(world.floor(player.cf).digits, loc.floor);
-      const parts = [stretch(lib, dg, 'hexagon', 'hexagons', 'east', 'west'), stretch(lib, df, 'floor', 'floors', 'up', 'down')].filter(Boolean);
+      const parts = [stretch(lib, dh, 'hexagon', 'hexagons', 'east', 'west'), stretch(lib, df, 'floor', 'floors', 'up', 'down')].filter(Boolean);
       const far = parts.length ? `${parts.join(' and ')} from here` : 'in this very hexagon';
       const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       return `<strong>Wall ${wall + 1}, shelf ${shelf + 1}, volume ${volume + 1}${from ? ', ' + from : ''}</strong>, ${far}. ` +
-        `Its floor is <span class="addr">${esc(lib.addressText(loc.floor, 16))}</span> and its gallery <span class="addr">${esc(lib.addressText(loc.gallery, 16))}</span>.`;
+        `It stands on floor <span class="addr">${esc(lib.addressText(loc.floor, 16))}</span>, in hexagon <span class="addr">${esc(lib.addressText(loc.hexagon, 16))}</span> of that floor.`;
     }
 
     _readCertain() {
@@ -482,7 +482,7 @@
       const { wall, shelf, volume } = this.lib.slotParts(loc.slot);
       const length = this.query.symbols.length;
       const h = this.certainLink, link = h && h.url ? h.url.slice(h.url.indexOf('#')) : null;
-      this.ctx.goToAddress(loc.gallery, loc.floor, { wall, shelf, volume }, { slot: loc.slot, start: 0, length, link });
+      this.ctx.goToAddress(loc.hexagon, loc.floor, { wall, shelf, volume }, { slot: loc.slot, start: 0, length, link });
     }
 
     /* ---------------- finding a whole book ---------------- */
@@ -729,11 +729,11 @@
         go.addEventListener('click', () => {
           const loc = r.location, face = this.lib.slotParts(loc.slot);
           const title = n > 1 ? `${b.meta.title}, part ${k + 1} of ${n}` : b.meta.title;
-          this.ctx.goToAddress(loc.gallery, loc.floor, face, { slot: loc.slot, start: 0, length: 0, title, link: linkOf() });
+          this.ctx.goToAddress(loc.hexagon, loc.floor, face, { slot: loc.slot, start: 0, length: 0, title, link: linkOf() });
         });
         copy.addEventListener('click', () => {
           const loc = r.location, { wall, shelf, volume } = this.lib.slotParts(loc.slot);
-          this.ctx.copyText(this.lib.hexagonAddressText(loc.gallery, loc.floor), `Copied the address of its hexagon. The book is on wall ${wall + 1}, shelf ${shelf + 1}, volume ${volume + 1}.`);
+          this.ctx.copyText(this.lib.hexagonAddressText(loc.hexagon, loc.floor), `Copied the address of its hexagon. The book is on wall ${wall + 1}, shelf ${shelf + 1}, volume ${volume + 1}.`);
         });
         row.append(read, go, copy);
         if (linkable) row.append(link);
@@ -759,7 +759,7 @@
       }
       $('go-offset-error').hidden = true;
       const p = this.ctx.player;
-      this.ctx.goToCell(p.cg + east, p.cf + up, null);
+      this.ctx.goToCell(p.ch + east, p.cf + up, null);
     }
 
     _goAddress() {
@@ -778,13 +778,13 @@
         err.hidden = false;
         return;
       }
-      this.ctx.goToAddress(a.gallery, a.floor, null);
+      this.ctx.goToAddress(a.hexagon, a.floor, null);
     }
 
     /** The first tab: where the reader is, from where they woke and from the seam, and the address. */
     _renderHere() {
       const w = this.ctx.world, p = this.ctx.player, lib = this.lib;
-      const g = w.gallery(p.cg).digits, f = w.floor(p.cf).digits;
+      const g = w.hexagon(p.ch).digits, f = w.floor(p.cf).digits;
       const n = (m, one, many) => `${amount(m)} ${m.exact === 1 ? one : many}`;
       $('here-whereabouts').textContent = p.whereabouts().sentence;
       const pos = lib.position(g, f);
@@ -794,10 +794,10 @@
       // the last jump through the catalogue, measured the shorter way round
       const j = this.ctx.lastJourney ? this.ctx.lastJourney() : null;
       const part = (d, one, many, pos, neg) => (d.sign === 0 ? '' : `${n(lib.magnitude(d.digits), one, many)} ${d.sign > 0 ? pos : neg}`);
-      const parts = j ? [part(j.dg, 'hexagon', 'hexagons', 'east', 'west'), part(j.df, 'floor', 'floors', 'up', 'down')].filter(Boolean) : [];
+      const parts = j ? [part(j.dh, 'hexagon', 'hexagons', 'east', 'west'), part(j.df, 'floor', 'floors', 'up', 'down')].filter(Boolean) : [];
       // a short hop is too small to show on the map, and has no shorter way round to speak of
       const far = parts.length && (Math.abs(j.from.east - pos.east.fraction) > 0.02 || Math.abs(j.from.up - pos.up.fraction) > 0.02);
-      const huge = j && [j.dg, j.df].some((d) => d.sign !== 0 && lib.magnitude(d.digits).exact === null);
+      const huge = j && [j.dh, j.df].some((d) => d.sign !== 0 && lib.magnitude(d.digits).exact === null);
       $('here-journey').hidden = !parts.length;
       if (parts.length) {
         $('here-journey').innerHTML = ` Your last journey through the catalogue took you ${parts.join(' and ')}${huge ? ', the shorter way round' : ''}.` +
@@ -806,7 +806,7 @@
 
       // the map of the whole Library seen from the side, drawn to its proportions (within reason)
       const d = this.ctx.dims;
-      const log10Ratio = lib.stats.log10Floors - lib.stats.log10GalleriesPerFloor + Math.log10(d.Hf / d.Dx);
+      const log10Ratio = lib.stats.log10Floors - lib.stats.log10HexagonsPerFloor + Math.log10(d.Hf / d.Dx);
       this._aspect = 1 / Math.min(8, Math.max(1 / 8, Math.pow(10, log10Ratio))); // width ÷ height
       const place = (el, at) => { el.style.left = `${100 * at.east}%`; el.style.bottom = `${100 * at.up}%`; };
       place($('seam-here'), { east: pos.east.fraction, up: pos.up.fraction });

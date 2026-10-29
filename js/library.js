@@ -11,11 +11,11 @@
  *     written as an "index" v in [0, N^M), itself stored as M base-N digits
  *     (least significant digit first). The index decomposes as
  *
- *         v = hexagon × S + slot          (S = books per hexagon)
- *         hexagon = floor × L + gallery   (L = N^m galleries per floor)
+ *         v = place × S + slot            (S = books per hexagon)
+ *         place = floor × L + hexagon     (L hexagons along each floor)
  *
- *     so every hexagon has an exact address: a floor number and a gallery
- *     number, each about M/2 symbols long.
+ *     so every hexagon has an exact address: the number of its floor and its
+ *     number along that floor, each about M/2 symbols long.
  *
  *   • The contents of the book at index v are obtained by a seed-keyed
  *     permutation of the M-symbol space: an unbalanced Feistel network
@@ -440,40 +440,40 @@
       }
       this.cosmeticKey = hashString('babel/cosmetic/' + this.seed);
 
-      // Largest hexagon number: Hmax = floor((N^M − 1) / S).
+      // The last hexagon's place in the whole Library: floor((N^M − 1) / S).
       const top = new Uint8Array(this.M).fill(N - 1);
       this.lastBookSlot = divSmall(top, this.S, N); // slot of the very last book in the Library
-      this.hexagonMax = top;
-      this.hexDigits = Math.max(2, significantLength(top));
-      // Split hexagon numbers into a gallery number (the hexagon's place along its floor) and
-      // a floor number: hexagon = floor × L + gallery, with L hexagons along every floor. L is
-      // chosen so that there are as many floors as hexagons along each, or twice as many when
-      // the number of hexagons is an odd power of 2: with an alphabet of 2^b symbols, L is 2
-      // to the power of half the bits of the last hexagon's number, rounded down. With any
-      // other alphabet, L is a power of N, splitting the number between two of its symbols.
-      // Either way L = N^galleryShift × galleryFactor, the factor being smaller than N.
+      this.lastPlace = top;
+      this.placeDigits = Math.max(2, significantLength(top));
+      // Split each place into a floor number and a hexagon number (the hexagon's number along
+      // its floor): place = floor × L + hexagon, with L hexagons along every floor. L is chosen
+      // so that there are as many floors as hexagons along each, or twice as many when the
+      // number of hexagons is an odd power of 2: with an alphabet of 2^b symbols, L is 2 to the
+      // power of half the bits of the last place, rounded down. With any other alphabet, L is a
+      // power of N, splitting the place between two of its symbols.
+      // Either way L = N^hexagonShift × hexagonFactor, the factor being smaller than N.
       if (this.bitsPerSymbol) {
         const b = this.bitsPerSymbol, len = significantLength(top);
         const hexBits = len === 0 ? 0 : (len - 1) * b + (32 - Math.clz32(top[len - 1]));
         const a = Math.max(1, Math.floor(hexBits / 2));
-        this.galleryShift = Math.floor(a / b);
-        this.galleryFactor = 2 ** (a % b);
+        this.hexagonShift = Math.floor(a / b);
+        this.hexagonFactor = 2 ** (a % b);
       } else {
-        this.galleryShift = Math.floor(this.hexDigits / 2);
-        this.galleryFactor = 1;
+        this.hexagonShift = Math.floor(this.placeDigits / 2);
+        this.hexagonFactor = 1;
       }
-      this.galleryDigits = this.galleryShift + (this.galleryFactor > 1 ? 1 : 0);
-      // L, as digits (one digit longer than a gallery number), and the last gallery number, L − 1
-      this.galleryCount = new Uint8Array(this.galleryDigits + 1);
-      this.galleryCount[this.galleryShift] = this.galleryFactor;
-      const lastGallery = this.galleryCount.slice();
-      addSmall(lastGallery, -1, N);
-      this.galleryMax = lastGallery.slice(0, this.galleryDigits);
-      // the last hexagon's floor and gallery, and the number of floors (one digit longer than a floor number)
+      this.hexagonDigits = this.hexagonShift + (this.hexagonFactor > 1 ? 1 : 0);
+      // L, as digits (one digit longer than a hexagon number), and the last hexagon number, L − 1
+      this.hexagonCount = new Uint8Array(this.hexagonDigits + 1);
+      this.hexagonCount[this.hexagonShift] = this.hexagonFactor;
+      const lastHexagon = this.hexagonCount.slice();
+      addSmall(lastHexagon, -1, N);
+      this.hexagonMax = lastHexagon.slice(0, this.hexagonDigits);
+      // the floor and hexagon numbers of the last place, and the number of floors (one digit longer than a floor number)
       const split = this._split(top, top.length);
       this.floorDigits = Math.max(1, significantLength(split.floor));
       this.floorMax = split.floor.slice(0, this.floorDigits);
-      this.galleryMaxOnTopFloor = split.gallery;
+      this.hexagonMaxOnTopFloor = split.hexagon;
       this.floorCount = new Uint8Array(this.floorDigits + 1);
       this.floorCount.set(this.floorMax);
       addSmall(this.floorCount, 1, N);
@@ -483,12 +483,12 @@
       this.stats = {
         log10Books: this.M * log10N,
         log10Hexagons: this.M * log10N - Math.log10(this.S),
-        log10GalleriesPerFloor: this.galleryShift * log10N + Math.log10(this.galleryFactor),
-        log10Floors: this.M * log10N - Math.log10(this.S) - this.galleryShift * log10N - Math.log10(this.galleryFactor),
+        log10HexagonsPerFloor: this.hexagonShift * log10N + Math.log10(this.hexagonFactor),
+        log10Floors: this.M * log10N - Math.log10(this.S) - this.hexagonShift * log10N - Math.log10(this.hexagonFactor),
         symbolsPerBook: this.M,
         booksPerHexagon: this.S,
         alphabetSize: N,
-        galleryAddressLength: this.galleryDigits,
+        hexagonAddressLength: this.hexagonDigits,
         floorAddressLength: this.floorDigits,
       };
     }
@@ -553,9 +553,9 @@
 
     /* ---------------- Addresses ---------------- */
 
-    /** Builds a location object. gallery and floor are digit arrays. */
-    location(gallery, floor, slot) {
-      return { gallery, floor, slot };
+    /** Builds a location object. hexagon and floor are digit arrays. */
+    location(hexagon, floor, slot) {
+      return { hexagon, floor, slot };
     }
 
     /** Splits a slot number into wall, shelf and volume (all 0-based). */
@@ -572,16 +572,16 @@
       return (wall * c.shelvesPerWall + shelf) * c.booksPerShelf + volume;
     }
 
-    /** Hexagon number digits (length hexDigits) from gallery and floor: floor × L + gallery. */
-    hexagonNumber(gallery, floor) {
-      const q = this.galleryShift, h = new Uint8Array(this.hexDigits + 1);
-      h.set(gallery.subarray(0, q));
-      if (this.galleryFactor === 1) h.set(floor, q);
+    /** A hexagon's place in the whole Library (placeDigits digits): floor × L + hexagon. */
+    placeOf(hexagon, floor) {
+      const q = this.hexagonShift, h = new Uint8Array(this.placeDigits + 1);
+      h.set(hexagon.subarray(0, q));
+      if (this.hexagonFactor === 1) h.set(floor, q);
       else {
-        // from digit q up, floor × 2^r plus the gallery's top digit: a factor above 1 comes
+        // from digit q up, floor × 2^r plus the hexagon's top digit: a factor above 1 comes
         // only with an alphabet of 2^b symbols, so this is a shift of bits
-        const b = this.bitsPerSymbol, r = Math.log2(this.galleryFactor), mask = this.N - 1;
-        let carry = gallery[q];
+        const b = this.bitsPerSymbol, r = Math.log2(this.hexagonFactor), mask = this.N - 1;
+        let carry = hexagon[q];
         for (let i = 0; i < floor.length; i++) {
           const x = (floor[i] << r) + carry;
           h[q + i] = x & mask;
@@ -589,42 +589,42 @@
         }
         if (q + floor.length < h.length) h[q + floor.length] = carry;
       }
-      return h.slice(0, this.hexDigits);
+      return h.slice(0, this.placeDigits);
     }
 
-    /** Gallery and floor of a hexagon number (digits, of which the first `length` count). */
+    /** The hexagon and floor numbers of a place (digits, of which the first `length` count). */
     _split(h, length) {
-      const q = this.galleryShift, gallery = new Uint8Array(this.galleryDigits);
-      gallery.set(h.subarray(0, q));
+      const q = this.hexagonShift, hexagon = new Uint8Array(this.hexagonDigits);
+      hexagon.set(h.subarray(0, q));
       const floor = h.slice(q, length);
-      if (this.galleryFactor > 1) {
-        // floor ÷ 2^r, the remainder being the gallery's top digit (a shift of bits, as above)
-        const b = this.bitsPerSymbol, r = Math.log2(this.galleryFactor), low = this.galleryFactor - 1;
+      if (this.hexagonFactor > 1) {
+        // floor ÷ 2^r, the remainder being the hexagon's top digit (a shift of bits, as above)
+        const b = this.bitsPerSymbol, r = Math.log2(this.hexagonFactor), low = this.hexagonFactor - 1;
         let rem = 0;
         for (let i = floor.length - 1; i >= 0; i--) {
           const x = (rem << b) + floor[i];
           floor[i] = x >>> r;
           rem = x & low;
         }
-        gallery[q] = rem;
+        hexagon[q] = rem;
       }
-      return { gallery, floor };
+      return { hexagon, floor };
     }
 
     /** True if the hexagon lies within the Library (only false at the very end of the last floor). */
-    hexagonExists(gallery, floor) {
+    hexagonExists(hexagon, floor) {
       const c = compareDigits(floor, this.floorMax);
       if (c < 0) return true;
       if (c > 0) return false;
-      return compareDigits(gallery, this.galleryMaxOnTopFloor) <= 0;
+      return compareDigits(hexagon, this.hexagonMaxOnTopFloor) <= 0;
     }
 
     /** Index digits of the book at a location, or null if that shelf position is empty
      *  (which only happens in the final hexagon, when S does not divide N^M). */
     indexOf(loc) {
-      if (!this.hexagonExists(loc.gallery, loc.floor)) return null;
+      if (!this.hexagonExists(loc.hexagon, loc.floor)) return null;
       const v = new Uint8Array(this.M);
-      v.set(this.hexagonNumber(loc.gallery, loc.floor));
+      v.set(this.placeOf(loc.hexagon, loc.floor));
       const carry = mulSmallAdd(v, this.S, loc.slot, this.N);
       if (carry !== 0) return null;
       return v;
@@ -634,9 +634,9 @@
     locate(indexDigits) {
       const h = indexDigits.slice();
       const slot = divSmall(h, this.S, this.N);
-      // h now fits in hexDigits digits
-      const { gallery, floor } = this._split(h, this.hexDigits);
-      return { gallery, floor: floor.slice(0, this.floorDigits), slot };
+      // h now fits in placeDigits digits
+      const { hexagon, floor } = this._split(h, this.placeDigits);
+      return { hexagon, floor: floor.slice(0, this.floorDigits), slot };
     }
 
     /** Contents of the book at a location (Uint8Array of symbol values), or null if empty. */
@@ -650,8 +650,8 @@
       return this.locate(this.indexOfContent(content));
     }
 
-    /** gallery + delta, modulo the number of galleries per floor. Returns a new array. */
-    offsetGallery(gallery, delta) { return this._wrap(gallery, delta, this.galleryCount); }
+    /** hexagon + delta, modulo the number of hexagons per floor. Returns a new array. */
+    offsetHexagon(hexagon, delta) { return this._wrap(hexagon, delta, this.hexagonCount); }
 
     /** floor + delta, modulo the number of floors. Returns a new array. */
     offsetFloor(floor, delta) { return this._wrap(floor, delta, this.floorCount); }
@@ -725,13 +725,13 @@
 
     /* ---------------- Cosmetics (not part of the bijection) ---------------- */
 
-    /** Hash of a gallery address (cache it: it costs one pass over the address). */
-    galleryKey(gallery) { return hashBytes(gallery, this.cosmeticKey[0], this.cosmeticKey[1]); }
+    /** Hash of a hexagon number (cache it: it costs one pass over the number). */
+    hexagonKey(hexagon) { return hashBytes(hexagon, this.cosmeticKey[0], this.cosmeticKey[1]); }
 
     /** Hash of a floor address. */
     floorKey(floor) { return hashBytes(floor, this.cosmeticKey[2], this.cosmeticKey[3]); }
 
-    /** A 64-bit fingerprint of a hexagon from its gallery and floor keys. */
+    /** A 64-bit fingerprint of a hexagon from the keys of its hexagon and floor numbers. */
     fingerprintFromKeys(gk, fk) {
       const a = fmix32((gk[0] ^ Math.imul(fk[1], 0x9e3779b1)) >>> 0);
       const b = fmix32((gk[1] + fk[0] + 0x7f4a7c15) >>> 0);
@@ -739,16 +739,16 @@
     }
 
     /** A 64-bit fingerprint of a hexagon, used for spine titles and colours. */
-    hexagonFingerprint(gallery, floor) {
-      return this.fingerprintFromKeys(this.galleryKey(gallery), this.floorKey(floor));
+    hexagonFingerprint(hexagon, floor) {
+      return this.fingerprintFromKeys(this.hexagonKey(hexagon), this.floorKey(floor));
     }
 
     /** Number of books in a hexagon: S everywhere except at the very end of the Library. */
-    booksInHexagon(gallery, floor) {
+    booksInHexagon(hexagon, floor) {
       const c = compareDigits(floor, this.floorMax);
       if (c < 0) return this.S;
       if (c > 0) return 0;
-      const d = compareDigits(gallery, this.galleryMaxOnTopFloor);
+      const d = compareDigits(hexagon, this.hexagonMaxOnTopFloor);
       if (d < 0) return this.S;
       if (d > 0) return 0;
       return this.lastBookSlot + 1;
@@ -1053,21 +1053,21 @@
       return { sign: isZero(d) ? 0 : 1, digits: d };
     }
 
-    /** Shortest signed number of galleries from gallery a to gallery b (galleries wrap around). */
-    galleryDifference(a, b) { return this._difference(a, b, this.galleryCount); }
+    /** Shortest signed number of hexagons from hexagon a to hexagon b along a floor (which wraps around). */
+    hexagonDifference(a, b) { return this._difference(a, b, this.hexagonCount); }
 
     /** Shortest signed number of floors from floor a to floor b (floors wrap around). */
     floorDifference(a, b) { return this._difference(a, b, this.floorCount); }
 
     /**
-     * Where a hexagon lies in the whole Library, measured from the seam: gallery 0 of floor 0,
+     * Where a hexagon lies in the whole Library, measured from the seam: hexagon 0 of floor 0,
      * where the numbers begin again (the Library has no edge; it closes on itself both ways).
      * Returns { east, up }, each the size of the number (as magnitude() gives it) and the
      * fraction of the way round, from 0 to 1.
      */
-    position(gallery, floor) {
+    position(hexagon, floor) {
       return {
-        east: Object.assign(this.magnitude(gallery), { fraction: this._fraction(gallery, this.galleryCount) }),
+        east: Object.assign(this.magnitude(hexagon), { fraction: this._fraction(hexagon, this.hexagonCount) }),
         up: Object.assign(this.magnitude(floor), { fraction: this._fraction(floor, this.floorCount) }),
       };
     }
@@ -1104,12 +1104,12 @@
       const map = this.charIndex;
       const chars = Array.from(text);
       if (chars.length !== length) {
-        throw new Error(`A ${what} address has ${length.toLocaleString('en')} symbols; this one has ${chars.length.toLocaleString('en')}. A space at its start or end may have been lost.`);
+        throw new Error(`The ${what} number of an address has ${length.toLocaleString('en')} symbols; this one has ${chars.length.toLocaleString('en')}. A space at its start or end may have been lost.`);
       }
       const out = new Uint8Array(length);
       for (let i = 0; i < length; i++) {
         const v = map.get(chars[i]);
-        if (v === undefined) throw new Error(`The ${what} address contains ${JSON.stringify(chars[i])}, which is not in the alphabet.`);
+        if (v === undefined) throw new Error(`The ${what} number of the address contains ${JSON.stringify(chars[i])}, which is not in the alphabet.`);
         out[length - 1 - i] = v;
       }
       return out;
@@ -1118,9 +1118,9 @@
     /** Reads a full hexagon address as copied from the catalogue. */
     parseHexagonAddress(text) {
       const lines = String(text).replace(/\r\n?/g, '\n').split('\n');
-      let seed = null, floor = null, gallery = null;
+      let seed = null, floor = null, hexagon = null;
       for (let i = 0; i < lines.length; i++) {
-        const m = /^\s*(seed|floor|gallery)\s*:(.*)$/i.exec(lines[i]);
+        const m = /^\s*(seed|floor|hexagon)\s*:(.*)$/i.exec(lines[i]);
         if (!m) continue;
         const key = m[1].toLowerCase();
         let value = m[2];
@@ -1128,19 +1128,19 @@
         else value = value.replace(/^ /, '');
         if (key === 'seed') seed = value.trim();
         else if (key === 'floor') floor = value;
-        else gallery = value;
+        else hexagon = value;
       }
-      if (floor === null || gallery === null) throw new Error('Paste an address with a "Floor:" line and a "Gallery:" line, as copied from this catalogue.');
+      if (floor === null || hexagon === null) throw new Error('Paste an address with a "Floor:" line and a "Hexagon:" line, as copied from this catalogue.');
       const f = this.parseAddress(floor, this.floorDigits, 'floor');
-      const g = this.parseAddress(gallery, this.galleryDigits, 'gallery');
+      const g = this.parseAddress(hexagon, this.hexagonDigits, 'hexagon');
       if (compareDigits(f, this.floorMax) > 0) throw new Error('That floor is above the last floor of the Library.');
-      if (compareDigits(g, this.galleryMax) > 0) throw new Error('That gallery is past the last hexagon of a floor.');
-      return { seed, floor: f, gallery: g };
+      if (compareDigits(g, this.hexagonMax) > 0) throw new Error('That hexagon is past the last hexagon of a floor.');
+      return { seed, floor: f, hexagon: g };
     }
 
     /** The full address of a hexagon as text, in the form parseHexagonAddress reads. */
-    hexagonAddressText(gallery, floor) {
-      return `Seed: ${this.seed}\nFloor:\n${this.addressText(floor)}\nGallery:\n${this.addressText(gallery)}\n`;
+    hexagonAddressText(hexagon, floor) {
+      return `Seed: ${this.seed}\nFloor:\n${this.addressText(floor)}\nHexagon:\n${this.addressText(hexagon)}\n`;
     }
 
     /* ---------------- Text ---------------- */

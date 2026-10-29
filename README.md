@@ -31,7 +31,7 @@ On a phone or tablet, drag on the right of the screen to look, hold and slide on
 
 ## Is the Library infinite?
 
-No. The Library is *finite*, meaning it has a fixed number of unique books, hexagons, and floors. But it is *boundless* (it has no hard edge) and is *cyclic* in both directions. Walk past the last hexagon of a floor, or take the stairs up or down to the last floor, and you are back at the first, just like an ant walking endlessly on the surface of a torus (which the Library is, topologically speaking). Positions are measured from the *seam*, which is where the numbers of the galleries roll over: east–west between the last hexagon of a floor and the first, and up–down between the last floor and the first. The Catalogue's **Current position** tab (see [The Catalogue](#the-Catalogue)) gives your position from the seam. Walking barely changes your position, since each hexagon is only `4 × 10^-1,104,782%` of the way round.
+No. The Library is *finite*, meaning it has a fixed number of unique books, hexagons, and floors. But it is *boundless* (it has no hard edge) and is *cyclic* in both directions. Walk past the last hexagon of a floor, or take the stairs up or down to the last floor, and you are back at the first, just like an ant walking endlessly on the surface of a torus (which the Library is, topologically speaking). Positions are measured from the *seam*, which is where the numbers of the hexagons and the floors roll over: east–west between the last hexagon of a floor and the first, and up–down between the last floor and the first. The Catalogue's **Current position** tab (see [The Catalogue](#the-Catalogue)) gives your position from the seam. Walking barely changes your position, since each hexagon is only `4 × 10^-1,104,782%` of the way round.
 
 ## So how big is the Library?
 
@@ -47,17 +47,17 @@ Using the default settings from `config.js`:
 
 - For perspective: there are about `10^80` atoms in the observable universe. Imagine every atom contained an entire universe, each with just as many atoms as ours. Then imagine every atom in *that* nested universe contained another universe, etc. You would need nearly 28,000 levels of Matrioshka universes before the *cumulative* number of atoms reached the number of books or hexagons in the Library.
 
-- There are `2^3,670,011 ≈ 2.49 × 10^1,104,783` hexagons per floor, all arranged in one long stretch of galleries punctuated by vertical shafts, and `2^3,670,012 ≈ 4.97 × 10^1,104,783` floors. That's twice as many floors as hexagons per floor, as even as it gets: the `2^7,340,023` hexagons, an odd power of 2, cannot be split into two equal powers of 2.
+- There are `2^3,670,011 ≈ 2.49 × 10^1,104,783` hexagons per floor, all arranged in one long row punctuated by vertical shafts, and `2^3,670,012 ≈ 4.97 × 10^1,104,783` floors. That's twice as many floors as hexagons per floor, as even as it gets: the `2^7,340,023` hexagons, an odd power of 2, cannot be split into two equal powers of 2.
 
-- A floor is only 2.61 meters high against 8.83 meters in length per hexagon, so with twice as many floors as hexagons per floor, the Library is about 1.7 times longer than it is tall: seen from the side, nearly a square. (Of the shapes the number of hexagons allows, this is the nearest to a square: with 8 times as many floors, it would be 2.4 times taller than long.) The Library spans `2.3 × 10^1,104,768` light-years from east to west and `1.4 × 10^1,104,768` light-years from top to bottom. For perspective, the Library could fit our observable universe `2.5 × 10^1,104,757` times from east to west and `1.5 × 10^1,104,757` times from top to bottom. At walking pace, traversing one floor's gallery would take about `5 × 10^1,104,776` years.
+- A floor is only 2.61 meters high against 8.83 meters in length per hexagon, so with twice as many floors as hexagons per floor, the Library is about 1.7 times longer than it is tall: seen from the side, nearly a square. (Of the shapes the number of hexagons allows, this is the nearest to a square: with 8 times as many floors, it would be 2.4 times taller than long.) The Library spans `2.3 × 10^1,104,768` light-years from east to west and `1.4 × 10^1,104,768` light-years from top to bottom. For perspective, the Library could fit our observable universe `2.5 × 10^1,104,757` times from east to west and `1.5 × 10^1,104,757` times from top to bottom. At walking pace, walking the length of one floor would take about `5 × 10^1,104,776` years.
 
 ## Is the Library three-dimensional?
 
 At the mesoscopic (human) scale, it feels like it is.
 
-At the macroscopic scale, however, it is two-dimensional. You can only traverse the galleries east-west and the floors up-down. There is no north–south direction. The whole building is only one hexagon wide, shaped like a vertical sheet a few metres thick but astronomically long and tall.
+At the macroscopic scale, however, it is two-dimensional. You can only walk east–west along a floor, and up–down from floor to floor. There is no north–south direction. The whole building is only one hexagon wide, shaped like a vertical sheet a few metres thick but astronomically long and tall.
 
-Note that in the original story, Borges never says which sides of the hexagons are free. If the doorless sides met at 120° instead of 180°, galleries could branch, and the Library could be a 3D honeycomb. That would mean splitting each book’s index into three coordinates instead of two.
+Note that in the original story, Borges never says which sides of the hexagons are free. If the doorless sides met at 120° instead of 180°, the rows of hexagons could branch, and the Library could be a 3D honeycomb. That would mean splitting each book’s index into three coordinates instead of two.
 
 ## Configuration
 
@@ -93,16 +93,16 @@ Borges's own figures would be 410 pages, 40 lines, 80 characters, a 25-symbol al
 
 **Addresses.** Every shelf position has an index *v* between 0 and *N*^*M* − 1 (*N* symbols, *M* characters per book), written as *M* base-*N* digits. It decomposes as
 
-    v = hexagon × S + slot              (S books per hexagon; slot = wall, shelf, volume)
-    hexagon = floor × L + gallery       (L hexagons along each floor)
+    v = place × S + slot                (S books per hexagon; slot = wall, shelf, volume)
+    place = floor × L + hexagon         (L hexagons along each floor)
 
-so each hexagon has a floor number and a gallery number. L is chosen to make the floors as many as the hexagons along each: since the alphabet has 2^7 symbols, every hexagon number is a string of bits, and the gallery number takes the lower half of them, the floor number the upper half. By default the hexagon numbers have 7,340,023 bits, an odd number, and the floor number has the odd bit: there are 2^3,670,011 hexagons along every gallery, about 10^1,104,783, and twice as many floors, 2^3,670,012. Both numbers are 524,288 symbols long. (With an alphabet whose size is not a power of 2, the numbers are split between two symbols instead, as evenly as that allows.) The Catalogue's Current position tab shows the current hexagon's address, written in the Library's own alphabet, and can copy it in full.
+so each hexagon has a place in the whole Library, made of a floor number and a hexagon number (its number along that floor). L is chosen to make the floors as many as the hexagons along each: since the alphabet has 2^7 symbols, every place is a string of bits, and the hexagon number takes the lower half of them, the floor number the upper half. By default the places have 7,340,023 bits, an odd number, and the floor number has the odd bit: there are 2^3,670,011 hexagons along every floor, about 10^1,104,783, and twice as many floors, 2^3,670,012. Both numbers are 524,288 symbols long. (With an alphabet whose size is not a power of 2, the numbers are split between two symbols instead, as evenly as that allows.) The Catalogue's Current position tab copies the current hexagon's full address, written in the Library's own alphabet.
 
 **Contents.** The book at index *v* is obtained by a permutation of the space of all books, keyed by the seed: a four-round Feistel network on the book's two halves. Each round adds, symbol by symbol and modulo *N*, a pseudorandom stream generated from a hash of the other half. A Feistel network can be run backwards whatever its round functions are, so the map from shelf to contents is a bijection. No two shelves hold the same book and no possible book is missing. Neighbouring books share nothing visible. Opening one takes a few hundredths of a second, and all the arithmetic on the huge numbers is done digit by digit, without big-integer multiplication.
 
 Because the map can be inverted, any text can be located: `findText` in `js/library.js` returns the hexagon, wall, shelf, volume and page of a book containing any given passage. The Catalogue in every vestibule uses it (see below).
 
-**Shape.** Both the galleries and the floors wrap around: walk east for 2^3,670,011 hexagons and you are back where you started. The Library is finite, and from inside it has no edge. This is close to the hypothesis the narrator offers at the end of the story. When the number of books is not a multiple of the books per hexagon, as with Borges's figures, the very last hexagon is only partly filled.
+**Shape.** Both the floors and the hexagons along them wrap around: walk east for 2^3,670,011 hexagons and you are back where you started. The Library is finite, and from inside it has no edge. This is close to the hypothesis the narrator offers at the end of the story. When the number of books is not a multiple of the books per hexagon, as with Borges's figures, the very last hexagon is only partly filled.
 
 **Cosmetics.** Spine colours and the letters on the spines come from a separate hash of the hexagon's address. They are not part of the bijection and, as in the story, they say nothing about what the pages contain.
 
@@ -179,7 +179,7 @@ Under **Other books**, anyone can also show the Catalogue a `.txt` file of their
 
 Lie down on the bed of a cell (look at it and press `E`, click or tap) to sleep. The Library fades to black, and a dream comes out of the black: shapes like smoke seen through a kaleidoscope, now and then with the ghost of the Library's hexagons, of rings or of a spiral, in muted colours. Sentences fade in over it, one after another. Each one stays for `dreams.quoteDuration` seconds, then fades out, and the next one begins to fade in `dreams.quoteInterval` seconds later, while the dream melts into its next scene. Click, tap or press `Esc` to wake.
 
-The visuals and text inside a dream are deterministically seeded from the address of the hexagon you sleep in (its gallery and floor numbers). The same hexagon always dreams the same dream, in the same order, and every other hexagon dreams another.
+The visuals and text inside a dream are deterministically seeded from the address of the hexagon you sleep in (its hexagon and floor numbers). The same hexagon always dreams the same dream, in the same order, and every other hexagon dreams another.
 
 The sentences are grammatical but not necessarily sensible. A small English grammar (verbs agreeing with their subjects, *a* and *an*, plurals, tenses, relative clauses) builds them from some 450 single words drawn from the lexical fields of Algernon Blackwood, Jorge Luis Borges, Italo Calvino, Ted Chiang, Julio Cortázar, Brian Evenson, Thomas Ligotti, H. P. Lovecraft, Arthur Machen, Guy de Maupassant, China Miéville, Edgar Allan Poe, Clark Ashton Smith and Jeff VanderMeer. No phrase, name or invented place of theirs is used. No copyrighted materials are used.
 
