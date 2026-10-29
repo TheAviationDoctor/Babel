@@ -16,6 +16,8 @@ function test(name, fn) {
 }
 
 const key = (a) => Buffer.from(a).toString('hex');
+/** The value of a small number written as digits (least significant first) in base N. */
+const valueOf = (digits, N) => digits.reduceRight((v, d) => v * N + d, 0);
 
 /** Enumerates every shelf position of a small library and checks the map is a bijection. */
 function exhaustive(raw) {
@@ -32,7 +34,7 @@ function exhaustive(raw) {
     if (util.compareDigits(f, lib.floorMax) === 0) break;
     f = lib.offsetFloor(f, 1);
   }
-  const galleries = N ** lib.galleryDigits;
+  const galleries = valueOf(lib.galleryCount, N);
   for (const floor of floors) {
     let g = new Uint8Array(lib.galleryDigits);
     for (let gi = 0; gi < galleries; gi++) {
@@ -90,6 +92,29 @@ test('4-symbol alphabet (power of two), 6-symbol books, 8 per hexagon (4,096 boo
     hexagon: { wallsWithShelves: 2, shelvesPerWall: 2, booksPerShelf: 2 },
   });
   assert.strictEqual(r.empty, 0);
+});
+
+test('4-symbol alphabet, 6-symbol books, 4 per hexagon (1,024 hexagons: 32 floors of 32)', () => {
+  const r = exhaustive({
+    seed: 'square', alphabet: 'ABCD',
+    book: { pagesPerBook: 1, linesPerPage: 1, charactersPerLine: 6 },
+    hexagon: { wallsWithShelves: 1, shelvesPerWall: 1, booksPerShelf: 4 },
+  });
+  assert.strictEqual(r.empty, 0);
+  assert.strictEqual(r.floors, 32);
+  assert.strictEqual(r.galleries, 32);
+});
+
+test('8-symbol alphabet, 4-symbol books, 6 per hexagon (683 hexagons, the last floor partly built)', () => {
+  const r = exhaustive({
+    seed: 'eight', alphabet: 'ABCDEFG ',
+    book: { pagesPerBook: 1, linesPerPage: 2, charactersPerLine: 2 },
+    hexagon: { wallsWithShelves: 1, shelvesPerWall: 2, booksPerShelf: 3 },
+  });
+  // 4,096 = 682 × 6 + 4: 683 hexagons, 32 along each floor (2^5, half of the 10 bits of 682, rounded down)
+  assert.strictEqual(r.galleries, 32);
+  assert.strictEqual(r.floors, 22);
+  assert.strictEqual(r.empty + r.total, r.floors * r.galleries * 6);
 });
 
 test('7-symbol alphabet, 4-symbol books, 10 per hexagon (2,401 books)', () => {
@@ -282,6 +307,25 @@ test('distances between hexagons take the shorter way round', () => {
   assert.strictEqual(b.sign, 1); assert.strictEqual(lib.magnitude(b.digits).exact, 5);
 });
 
+test('there are as many floors as hexagons along each, or twice as many', () => {
+  // 2^7,340,023 hexagons, an odd power of 2: 2^3,670,011 along each floor, and 2^3,670,012 floors
+  const ratio = lib.stats.log10Floors - lib.stats.log10GalleriesPerFloor;
+  assert.ok(Math.abs(ratio - Math.log10(2)) < 1e-6, ratio);
+  assert.strictEqual(lib.galleryMax[lib.galleryDigits - 1], 3);
+  assert.strictEqual(lib.floorMax[lib.floorDigits - 1], 7);
+  // past the last hexagon of a floor, the first again
+  assert.strictEqual(key(lib.offsetGallery(lib.galleryMax, 1)), key(new Uint8Array(lib.galleryDigits)));
+  assert.strictEqual(key(lib.offsetGallery(new Uint8Array(lib.galleryDigits), -1)), key(lib.galleryMax));
+  // an address past the last hexagon of a floor is refused
+  const past = lib.galleryMax.slice();
+  past[past.length - 1] = lib.N - 1;
+  assert.throws(() => lib.parseHexagonAddress(lib.hexagonAddressText(past, lib.floorMax)), /past the last hexagon/);
+  // so is the first alphabet's, of 64 symbols (once 8 floors for every hexagon along one)
+  const first = new Library({ alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + '0123456789' + '.,;:!?\'"-\u2014()[]_*&/$%\u00A3\u00B0\u2020\u00A7#+=' + ' ' });
+  const r64 = first.stats.log10Floors - first.stats.log10GalleriesPerFloor;
+  assert.ok(Math.abs(r64 - Math.log10(2)) < 1e-6, r64);
+});
+
 test('full addresses can be copied and read back', () => {
   const s = lib.wakingLocation(5);
   const back = lib.parseHexagonAddress(lib.hexagonAddressText(s.gallery, s.floor));
@@ -359,27 +403,27 @@ test('positions are measured from the seam, as a fraction of the way round', () 
   assert.strictEqual(p.east.exact, 0);
   assert.strictEqual(p.east.fraction, 0);
   assert.strictEqual(p.up.fraction, 0);
-  g[g.length - 1] = lib.N / 2; // halfway round
+  g[g.length - 1] = (lib.galleryMax[lib.galleryMax.length - 1] + 1) / 2; // halfway round
   f[f.length - 1] = (lib.floorMax[lib.floorMax.length - 1] + 1) / 2; // halfway up
   p = lib.position(g, f);
   assert.ok(Math.abs(p.east.fraction - 0.5) < 1e-12, p.east.fraction);
   assert.ok(Math.abs(p.up.fraction - 0.5) < 1e-12, p.up.fraction);
   assert.ok(Math.abs(p.east.log10 - (lib.stats.log10GalleriesPerFloor - Math.log10(2))) < 1e-6);
-  p = lib.position(new Uint8Array(lib.galleryDigits).fill(lib.N - 1), lib.floorMax);
-  // the last hexagon is 1 − 64^−524,287 of the way round: 1, as near as a double can tell
+  p = lib.position(lib.galleryMax, lib.floorMax);
+  // the last hexagon is 1 − 2^−3,670,011 of the way round: 1, as near as a double can tell
   assert.ok(p.east.fraction > 0.999999 && p.east.fraction <= 1, p.east.fraction);
   assert.ok(p.up.fraction > 0.999999 && p.up.fraction <= 1, p.up.fraction);
   // a small library whose number of floors is not a power of its alphabet
   const small = new Library({ seed: 's', alphabet: 'ABC', book: { pagesPerBook: 1, linesPerPage: 1, charactersPerLine: 7 }, hexagon: { wallsWithShelves: 1, shelvesPerWall: 1, booksPerShelf: 5 } });
   const floors = small.floorMax.reduceRight((v, d) => v * 3 + d, 0) + 1;
-  const galleries = 3 ** small.galleryDigits;
+  const galleries = valueOf(small.galleryCount, 3);
   for (let n = 0; n < floors; n++) {
     const digits = new Uint8Array(small.floorDigits);
     for (let i = 0, v = n; i < digits.length; i++, v = Math.floor(v / 3)) digits[i] = v % 3;
     const q = small.position(new Uint8Array(small.galleryDigits), digits);
     assert.ok(Math.abs(q.up.fraction - n / floors) < 1e-12, `floor ${n} of ${floors}: ${q.up.fraction}`);
   }
-  const last = small.position(new Uint8Array(small.galleryDigits).fill(2), small.floorMax);
+  const last = small.position(small.galleryMax, small.floorMax);
   assert.ok(Math.abs(last.east.fraction - (galleries - 1) / galleries) < 1e-12);
 });
 
