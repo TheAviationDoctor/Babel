@@ -258,12 +258,6 @@
 
   const fmt = (n) => n.toLocaleString('en');
 
-  function controlsHTML() {
-    if (isTouch) return 'Drag on the right of the screen to look. Hold and slide on the left to walk. Tap a book to read it, a door to open it, the catalogue to use it, or a bed to sleep.';
-    return 'Look with the mouse. Walk with <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or the arrow keys, and hold <kbd>Shift</kbd> to hurry (or turn on <kbd>Caps Lock</kbd> to hurry until you turn it off). ' +
-      'Press <kbd>E</kbd> to take down the book you are looking at, open a door, use the catalogue or lie down on a bed. <kbd>Esc</kbd> lets go of the mouse; click to take it back.';
-  }
-
 
   /* ---------------- journeys ---------------- */
 
@@ -619,7 +613,6 @@
   /* ---------------- interface wiring ---------------- */
 
   function bindInterface() {
-    $('controls-hint').innerHTML = controlsHTML();
     // a link to a book, pasted into the address bar while the Library is open
     window.addEventListener('hashchange', () => { goToLinkedBook(true); });
 

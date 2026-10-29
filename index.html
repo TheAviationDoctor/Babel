@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=Libre+Bodoni:ital,wght@0,400;0,500;1,400&display=swap">
-<link rel="stylesheet" href="css/style.css?v=2026-10-29.2">
+<link rel="stylesheet" href="css/style.css?v=2026-10-29.3">
 </head>
 <body>
 <canvas id="view" aria-label="The Library, seen from the eyes of a librarian"></canvas>
@@ -67,33 +67,18 @@
     </header>
 
     <div id="panel-here" class="panel" role="tabpanel" aria-labelledby="tab-here" tabindex="-1">
-      <section class="here-now">
-        <p id="here-whereabouts" class="lead"></p>
-        <p id="here-seam" class="lead"></p>
-        <p id="here-journey" class="note" hidden></p>
-      </section>
-      <section class="go">
-        <h3>The seam</h3>
-        <div class="seam">
-          <div id="seam-map" class="seam-map" role="img" aria-label="Map of the whole Library">
-            <span id="seam-was" class="seam-was" hidden></span>
-            <span id="seam-here" class="seam-here"></span>
-          </div>
-          <p class="note">The Library has no edge. Walk east past the last hexagon of a floor and you are back at the first; climb past the last floor and you are on the first again. The seam is where these numbers roll over, like an odometer. Nothing marks it, and positions are counted east and up from it, as longitude is counted from Greenwich. The map shows the whole Library, east to the right and up to the top: its border is the seam, and each side joins the side opposite. The dot is this hexagon.</p>
+      <p class="lead here-text"><span id="here-whereabouts"></span> <span id="here-seam"></span><span id="here-journey" hidden></span></p>
+      <div id="seam-frame" class="seam-frame">
+        <span class="seam-side seam-top">Upper seam</span>
+        <span id="seam-west" class="seam-side seam-west">Western seam</span>
+        <div id="seam-map" class="seam-map" role="img" aria-label="Map of the whole Library, seen from the side">
+          <span id="seam-was" class="seam-was" hidden><svg viewBox="0 0 20 18" aria-hidden="true"><polygon points="5,1 15,1 19.5,9 15,17 5,17 0.5,9"/></svg></span>
+          <span id="seam-here" class="seam-here"><svg viewBox="0 0 20 18" aria-hidden="true"><polygon points="5,1 15,1 19.5,9 15,17 5,17 0.5,9"/></svg></span>
         </div>
-      </section>
-      <section class="go">
-        <h3>The address of this hexagon</h3>
-        <p class="note">Seed <span class="addr" id="term-seed"></span></p>
-        <p class="note">Floor <span class="addr" id="term-floor"></span></p>
-        <p class="note">Gallery <span class="addr" id="term-gallery"></span></p>
-        <p class="note" id="term-lengths"></p>
-        <div class="row"><button id="term-copy" type="button">Copy its full address</button></div>
-      </section>
-      <section class="go">
-        <h3>Walking</h3>
-        <p class="note controls" id="controls-hint"></p>
-      </section>
+        <span id="seam-east" class="seam-side seam-east">Eastern seam</span>
+        <span class="seam-side seam-bottom">Lower seam</span>
+      </div>
+      <div class="row"><button id="term-copy" type="button">Copy the current hexagon's address</button></div>
     </div>
 
     <div id="panel-find" class="panel" role="tabpanel" aria-labelledby="tab-find" hidden>
@@ -224,20 +209,20 @@
   whenever any of them changes: browsers and GitHub Pages keep copies of files for a while,
   and a new page read with an old script would not start.
 -->
-<script src="lib/three.min.js?v=2026-10-29.2"></script>
-<script src="lib/Reflector.js?v=2026-10-29.2"></script>
-<script src="config.js?v=2026-10-29.2"></script>
-<script src="js/about.js?v=2026-10-29.2"></script>
-<script src="js/library.js?v=2026-10-29.2"></script>
-<script src="js/textures.js?v=2026-10-29.2"></script>
-<script src="js/architecture.js?v=2026-10-29.2"></script>
-<script src="js/world.js?v=2026-10-29.2"></script>
-<script src="js/player.js?v=2026-10-29.2"></script>
-<script src="js/markdown.js?v=2026-10-29.2"></script>
-<script src="js/terminal.js?v=2026-10-29.2"></script>
-<script src="js/quotes.js?v=2026-10-29.2"></script>
-<script src="js/dream.js?v=2026-10-29.2"></script>
-<script src="js/main.js?v=2026-10-29.2"></script>
+<script src="lib/three.min.js?v=2026-10-29.3"></script>
+<script src="lib/Reflector.js?v=2026-10-29.3"></script>
+<script src="config.js?v=2026-10-29.3"></script>
+<script src="js/about.js?v=2026-10-29.3"></script>
+<script src="js/library.js?v=2026-10-29.3"></script>
+<script src="js/textures.js?v=2026-10-29.3"></script>
+<script src="js/architecture.js?v=2026-10-29.3"></script>
+<script src="js/world.js?v=2026-10-29.3"></script>
+<script src="js/player.js?v=2026-10-29.3"></script>
+<script src="js/markdown.js?v=2026-10-29.3"></script>
+<script src="js/terminal.js?v=2026-10-29.3"></script>
+<script src="js/quotes.js?v=2026-10-29.3"></script>
+<script src="js/dream.js?v=2026-10-29.3"></script>
+<script src="js/main.js?v=2026-10-29.3"></script>
 <script>
   // If the Library has not started a few seconds after the page has loaded (a script missing,
   // or not matching the others), say so rather than leave the screen black.

@@ -230,21 +230,31 @@ mark { background: rgba(227, 169, 90, 0.55); color: var(--ink); box-shadow: 0 0 
 .intro { display: grid; gap: 0.7rem; }
 .intro .status { max-width: 46em; }
 
-/* the first tab: where the reader is */
+/* the first tab: where the reader is, and the map of the whole Library, as large as the screen allows */
 #panel-here:focus { outline: none; }
-.here-now { display: grid; gap: 0.6rem; }
-.here-now .lead { font-size: 1.02rem; line-height: 1.6; max-width: 46em; overflow-wrap: anywhere; }
-.here-now .note { max-width: 46em; }
-.seam { display: flex; flex-wrap: wrap; gap: 1rem 1.6rem; align-items: flex-start; }
-.seam .note { flex: 1 1 22rem; max-width: 46em; }
+#panel-here { gap: 1rem; }
+.here-text { font-size: 1.02rem; line-height: 1.6; max-width: 52em; overflow-wrap: anywhere; }
+.seam-frame {
+  display: grid; grid-template-columns: auto auto auto; grid-template-rows: auto auto auto;
+  gap: 0.4rem; justify-content: center; align-items: center; justify-items: center;
+}
+.seam-side { color: var(--glow-dim); font-size: 0.75rem; letter-spacing: 0.1em; white-space: nowrap; line-height: 1; }
+.seam-top { grid-area: 1 / 2; }
+.seam-bottom { grid-area: 3 / 2; }
+.seam-west { grid-area: 2 / 1; writing-mode: vertical-rl; transform: rotate(180deg); }
+.seam-east { grid-area: 2 / 3; writing-mode: vertical-rl; }
 .seam-map {
-  position: relative; flex: none; box-sizing: border-box; margin: 0.3rem 0.4rem;
+  grid-area: 2 / 2; position: relative; box-sizing: border-box; width: 18rem; height: 10rem;
   border: 1px dashed rgba(212, 227, 220, 0.5); background: rgba(212, 227, 220, 0.04);
 }
-.seam-here, .seam-was { position: absolute; width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box; transform: translate(-50%, 50%); }
-.seam-here { background: var(--signal); box-shadow: 0 0 10px var(--signal); }
-.seam-was { border: 1px solid var(--glow-dim); }
-.glass .controls { color: var(--glow-dim); max-width: 46em; }
+.seam-here, .seam-was { position: absolute; width: 22px; height: 20px; transform: translate(-50%, 50%); line-height: 0; }
+.seam-here svg, .seam-was svg { width: 100%; height: 100%; overflow: visible; }
+.seam-here polygon { fill: var(--signal); }
+.seam-here svg { filter: drop-shadow(0 0 5px var(--signal)); }
+.seam-was polygon { fill: none; stroke: var(--glow-dim); stroke-width: 1.5; }
+.seam-here { animation: seam-blink 2.4s ease-in-out infinite; }
+@keyframes seam-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.15; } }
+@media (prefers-reduced-motion: reduce) { .seam-here { animation: none; } }
 
 /* the About tab: the Markdown of about.js */
 #panel-about:focus { outline: none; }

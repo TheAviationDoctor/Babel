@@ -297,6 +297,8 @@
       $('go-offset').addEventListener('submit', (e) => { e.preventDefault(); this._goOffset(); });
       $('go-address').addEventListener('submit', (e) => { e.preventDefault(); this._goAddress(); });
       $('go-random').addEventListener('click', () => this.ctx.goToRandom());
+      window.addEventListener('resize', () => this._fitMap());
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => this._fitMap()).catch(() => {});
       $('term-copy').addEventListener('click', () => {
         const w = this.ctx.world, p = this.ctx.player;
         this.ctx.copyText(this.lib.hexagonAddressText(w.gallery(p.cg).digits, w.floor(p.cf).digits), 'Copied the address of this hexagon.');
@@ -308,6 +310,7 @@
         $(t).setAttribute('aria-selected', String(t === tab));
         $(p).hidden = p !== panel;
       }
+      if (tab === 'tab-here') this._fitMap();
       if (tab === 'tab-books') this._openShelf();
       if (tab === 'tab-about') this._renderAbout();
     }
@@ -785,8 +788,8 @@
       const n = (m, one, many) => `${amount(m)} ${m.exact === 1 ? one : many}`;
       $('here-whereabouts').textContent = p.whereabouts().sentence;
       const pos = lib.position(g, f);
-      $('here-seam').innerHTML = `This hexagon lies ${n(pos.east, 'hexagon', 'hexagons')} east of the seam (${percent(pos.east.fraction)} of the way round)` +
-        ` and ${n(pos.up, 'floor', 'floors')} above it (${percent(pos.up.fraction)} of the way up).`;
+      $('here-seam').innerHTML = `This hexagon lies ${n(pos.east, 'hexagon', 'hexagons')} east of the Western seam (${percent(pos.east.fraction)} of the way round)` +
+        ` and ${n(pos.up, 'floor', 'floors')} above the Lower seam (${percent(pos.up.fraction)} of the way up).`;
 
       // the last jump through the catalogue, measured the shorter way round
       const j = this.ctx.lastJourney ? this.ctx.lastJourney() : null;
@@ -797,27 +800,39 @@
       const huge = j && [j.dg, j.df].some((d) => d.sign !== 0 && lib.magnitude(d.digits).exact === null);
       $('here-journey').hidden = !parts.length;
       if (parts.length) {
-        $('here-journey').innerHTML = `Your last journey through the catalogue took you ${parts.join(' and ')}${huge ? ', the shorter way round' : ''}.` +
-          (far ? ' The ring on the map is where it began.' : '');
+        $('here-journey').innerHTML = ` Your last journey through the catalogue took you ${parts.join(' and ')}${huge ? ', the shorter way round' : ''}.` +
+          (far ? ' The outlined hexagon on the map is where it began.' : '');
       }
 
-      // the map of the whole Library, drawn to its proportions (within reason)
+      // the map of the whole Library seen from the side, drawn to its proportions (within reason)
       const d = this.ctx.dims;
       const log10Ratio = lib.stats.log10Floors - lib.stats.log10GalleriesPerFloor + Math.log10(d.Hf / d.Dx);
-      const ratio = Math.min(3, Math.max(1 / 3, Math.pow(10, log10Ratio))); // height ÷ width
-      const map = $('seam-map');
-      map.style.width = `${ratio >= 1 ? 9 / ratio : 9}rem`;
-      map.style.height = `${ratio >= 1 ? 9 : 9 * ratio}rem`;
+      this._aspect = 1 / Math.min(8, Math.max(1 / 8, Math.pow(10, log10Ratio))); // width ÷ height
       const place = (el, at) => { el.style.left = `${100 * at.east}%`; el.style.bottom = `${100 * at.up}%`; };
       place($('seam-here'), { east: pos.east.fraction, up: pos.up.fraction });
       $('seam-was').hidden = !far;
       if (far) place($('seam-was'), j.from);
+      this._fitMap();
+    }
 
-      $('term-seed').textContent = lib.seed;
-      $('term-floor').textContent = lib.addressText(f, 28);
-      $('term-gallery').textContent = lib.addressText(g, 28);
-      $('term-lengths').textContent = `The full address is ${fmt(f.length)} symbols for the floor and ${fmt(g.length)} for the gallery. ` +
-        'Copy it to come back here later from "Go to a hexagon", even after closing the page.';
+    /** Makes the map as large as the catalogue's screen allows, keeping the Library's proportions. */
+    _fitMap() {
+      const panel = $('panel-here'), screen = $('terminal'), map = $('seam-map');
+      if (panel.hidden || screen.hidden || !this._aspect) return;
+      const glass = panel.closest('.glass'), css = getComputedStyle(screen), west = $('seam-west'), east = $('seam-east');
+      // the width of the panel, less the names of the western and eastern seams beside the map
+      const gap = parseFloat(getComputedStyle($('seam-frame')).columnGap) || 0;
+      const across = panel.clientWidth - west.offsetWidth - east.offsetWidth - 2 * gap;
+      // the height of the screen, less everything else on the glass (measured without the map
+      // and the names beside it, which are as tall as their words)
+      map.style.width = map.style.height = '0px';
+      west.style.display = east.style.display = 'none';
+      const room = screen.clientHeight - parseFloat(css.paddingTop) - parseFloat(css.paddingBottom) - glass.scrollHeight;
+      west.style.display = east.style.display = '';
+      const least = 120; // pixels: on a screen too small, the map keeps this width and the glass scrolls
+      const width = Math.max(least, Math.floor(Math.min(across, room * this._aspect)));
+      map.style.width = `${width}px`;
+      map.style.height = `${Math.round(width / this._aspect)}px`;
     }
   }
 
