@@ -48,7 +48,17 @@
   const DEFAULT_CONFIG = {
     seed: 'borges',
     book: { pagesPerBook: 512, linesPerPage: 32, charactersPerLine: 64 },
-    alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + '0123456789' + '.,;:!?\'"-\u2014()[]_*&/$%\u00A3\u00B0\u2020\u00A7#+=' + ' ',
+    alphabet:
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZ' +
+      'abcdefghijklmnopqrstuvwxyz' +
+      '\u00C0\u00C7\u00C9\u00C6\u0152' +
+      '\u00E0\u00E2\u00E6\u00E7\u00E9\u00E8\u00EA\u00EB\u00EE\u00EF\u00F4\u0153\u00F9\u00FB\u00FC' +
+      '\u00E1\u00ED\u00F3\u00FA\u00F1' +
+      '\u00E4\u00F6' +
+      '0123456789' +
+      '.,;:!?\'"-\u2014()[]_*&/$%\u00A3\u00B0\u2020\u00A7#+=' +
+      '\u2018\u2019\u201C\u201D\u00AB\u00BB\u00BF\u00A1\u2013\u00BD\u00D7' +
+      ' ',
     hexagon: { wallsWithShelves: 4, shelvesPerWall: 4, booksPerShelf: 32 },
     view: { lookSensitivity: 1, fieldOfView: 72 },
     dreams: { quoteDuration: 10, quoteInterval: 5 },
@@ -403,6 +413,8 @@
       this.charIndex = new Map();
       this.alphabet.forEach((c, i) => { this.charIndex.set(c, i); });
       this.glyphs.forEach((g, i) => { if (!this.charIndex.has(g)) this.charIndex.set(g, i); });
+      // whether letters keep their case (an alphabet of capitals only makes them capitals)
+      this.bothCases = this.alphabet.some((c) => /\p{Lu}/u.test(c)) && this.alphabet.some((c) => /\p{Ll}/u.test(c));
       this.M = cfg.symbolsPerBook;
       this.S = cfg.booksPerHexagon;
       this.seed = cfg.seed;
@@ -696,7 +708,8 @@
     /** The letters on a book's spine: they do not indicate what the pages say. */
     spineTitle(fingerprint, slot) {
       const rng = this.bookRng(fingerprint, slot);
-      let letters = this.alphabet.filter((c) => /\p{Lu}/u.test(c)); // capitals, as on old spines
+      // capitals without accents, as on old spines
+      let letters = this.alphabet.filter((c) => /\p{Lu}/u.test(c) && c.normalize('NFD').length === 1);
       if (letters.length === 0) letters = this.alphabet.filter((c) => /\p{L}/u.test(c));
       if (letters.length === 0) letters = this.alphabet.filter((c) => c.trim() !== '');
       if (letters.length === 0) letters = this.alphabet;
@@ -715,45 +728,54 @@
     /* ---------------- Searching ---------------- */
 
     /**
-     * Turns any text into symbols of the alphabet, as a catalogue would: accents are
-     * removed, letters change case if only the other case is in the alphabet, line breaks
-     * and tabs become spaces, control pictures (␀ ␉ …) stand for their control characters,
-     * and anything else is left out (and reported).
+     * Turns any text into symbols of the alphabet, as a catalogue would. Line breaks and
+     * tabs become spaces, -- becomes a long dash, and control pictures (␀ ␉ …) stand for
+     * their control characters. A character the alphabet lacks becomes, the first that
+     * fits: the same letter without its accents (Ê → E), its nearest equivalent (ß → ss,
+     * … → ..., curly quotation marks → straight ones), or its compatibility form (ﬁ → fi,
+     * ¼ → 1/4); in an alphabet of one case only, letters then change case. Anything else
+     * is left out, and reported. Returns { symbols, text, dropped, recased, substituted,
+     * substitutions: [[from, to], …] }.
      */
     prepareText(raw) {
       const map = this.charIndex;
-      const has = (c) => map.has(c) || map.has(c.toUpperCase()) || map.has(c.toLowerCase());
-      const fits = (str) => Array.from(str).every(has);
-      let src = String(raw);
+      const strip = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').normalize('NFC');
+      const fits = (s) => s !== '' && Array.from(s).every((c) => map.has(c));
+      const otherCase = (c) => (c.toUpperCase() !== c ? c.toUpperCase() : c.toLowerCase());
+      const recase = (s) => Array.from(s).map((c) => (map.has(c) ? c : otherCase(c))).join('');
+      const substitutions = new Map();
+      let src = String(raw).normalize('NFC').replace(/\r\n?|\n|\t/g, ' ');
       // two hyphens are how typewriters, and plain-text editions, write a long dash
-      if (map.has('\u2014') && !map.has('\u2013')) src = src.replace(/--/g, '\u2014');
-      // other characters become their nearest equivalents in the alphabet, if it has them
-      let text = '', substituted = false;
-      for (const ch of src) {
-        if (has(ch)) { text += ch; continue; }
-        const subs = TYPOGRAPHY[ch];
-        const sub = subs === undefined ? undefined : [].concat(subs).find(fits);
-        if (sub !== undefined) { text += sub; substituted = true; continue; }
-        // ligatures (ﬁ), fractions, full-width and other compatibility forms
-        const k = ch.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/\u2044/g, '/');
-        if (k !== ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '') && k && fits(k)) { text += k; substituted = true; continue; }
-        text += ch;
-      }
-      text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\r\n?|\n|\t/g, ' ');
+      if (map.has('\u2014') && src.includes('--')) { src = src.replace(/--/g, '\u2014'); substitutions.set('--', '\u2014'); }
       const out = [], dropped = new Set();
       let recased = false;
-      for (const ch of text) {
-        let v = map.get(ch);
-        if (v === undefined) {
-          for (const alt of [ch.toUpperCase(), ch.toLowerCase()]) {
-            if (alt !== ch && map.has(alt)) { v = map.get(alt); recased = true; break; }
+      for (const ch of src) {
+        let to = map.has(ch) ? ch : undefined;
+        if (to === undefined) {
+          const bare = strip(ch);
+          if (bare === '') continue; // an accent with no letter to carry it
+          // ligatures (ﬁ), fractions, full-width and other compatibility forms
+          const compat = ch.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/\u2044/g, '/');
+          const candidates = [bare].concat(TYPOGRAPHY[ch] === undefined ? [] : TYPOGRAPHY[ch], compat !== bare ? [compat] : []);
+          to = candidates.find(fits);
+          if (to === undefined) {
+            to = [ch].concat(candidates).map(recase).find(fits);
+            if (to !== undefined && !this.bothCases) recased = true;
           }
+          if (to === undefined) { dropped.add(ch); continue; }
+          // a change of case alone is reported as such; anything else, character by character
+          if ((this.bothCases || to !== recase(ch)) && !substitutions.has(ch)) substitutions.set(ch, to);
         }
-        if (v === undefined) { dropped.add(ch); continue; }
-        out.push(v);
+        for (const c of to) out.push(map.get(c));
       }
       const symbols = Uint8Array.from(out);
-      return { symbols, text: this.toText(symbols), dropped: [...dropped], recased, substituted };
+      return { symbols, text: this.toText(symbols), dropped: [...dropped], recased, substituted: substitutions.size > 0, substitutions: [...substitutions] };
+    }
+
+    /** The symbols of a text whose every character is in the alphabet (as prepareText leaves it). */
+    _symbolsOf(text) {
+      const map = this.charIndex;
+      return Uint8Array.from(Array.from(text), (c) => map.get(c));
     }
 
     /** Whether a character stands for a control character of the alphabet when shown. */
@@ -764,20 +786,20 @@
      * then the text in lines of exactly `charactersPerLine` characters, broken between
      * words and padded with spaces, each paragraph indented. A text longer than one book
      * is split into parts, each with its own title page. Returns { parts: [Uint8Array],
-     * dropped, recased, substituted, characters }.
+     * dropped, recased, substituted, substitutions, characters }.
      */
     typeset(rawText, meta) {
       meta = meta || {};
       const c = this.config, W = c.charactersPerLine, L = c.linesPerPage, P = c.pagesPerBook;
       const spaceIndex = this.alphabet.indexOf(' ');
       const text = String(rawText).replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
-      const dropped = new Set();
-      let recased = false, substituted = false;
+      const dropped = new Set(), substitutions = new Map();
+      let recased = false;
       const prep = (t) => {
         const p = this.prepareText(t);
         p.dropped.forEach((ch) => dropped.add(ch));
+        p.substitutions.forEach(([from, to]) => { if (!substitutions.has(from)) substitutions.set(from, to); });
         recased = recased || p.recased;
-        substituted = substituted || p.substituted;
         return p.text;
       };
       if (spaceIndex < 0) {
@@ -785,7 +807,7 @@
         const p = this.prepareText(text), symbols = p.symbols;
         const parts = [];
         for (let i = 0; i < Math.max(1, symbols.length); i += this.M) parts.push(symbols.subarray(i, i + this.M));
-        return { parts, dropped: p.dropped, recased: p.recased, substituted: p.substituted, characters: symbols.length };
+        return { parts, dropped: p.dropped, recased: p.recased, substituted: p.substituted, substitutions: p.substitutions, characters: symbols.length };
       }
       // paragraphs: blank lines separate them if there are any; otherwise each line is one
       const blocks = /\n[ \t]*\n/.test(text) ? text.split(/\n[ \t]*\n+/) : text.split('\n');
@@ -836,7 +858,7 @@
       for (let k = 0; k < partCount; k++) {
         if (!titled) {
           const body = lines.slice(k * linesPerPart, (k + 1) * linesPerPart);
-          parts.push(this.prepareText(body.join('')).symbols.subarray(0, this.M));
+          parts.push(this._symbolsOf(body.join('')).subarray(0, this.M));
           continue;
         }
         const page = [];
@@ -849,9 +871,9 @@
         while (page.length < L) page.push(pad(''));
         const body = lines.slice(k * linesPerPart, (k + 1) * linesPerPart);
         const str = page.slice(0, L).join('') + body.join('');
-        parts.push(this.prepareText(str).symbols.subarray(0, this.M));
+        parts.push(this._symbolsOf(str).subarray(0, this.M));
       }
-      return { parts, dropped: [...dropped], recased, substituted, characters };
+      return { parts, dropped: [...dropped], recased, substituted: substitutions.size > 0, substitutions: [...substitutions], characters };
     }
 
     /**

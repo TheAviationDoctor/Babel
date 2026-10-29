@@ -216,21 +216,26 @@ test('a non-power-of-two alphabet and a hexagon size that does not divide the nu
 console.log('\nThe catalogue');
 
 test('texts are prepared as the catalogue searches them', () => {
-  assert.strictEqual(lib.N, 64);
-  const p = lib.prepareText('Ça va, Señor?\nOui: 42! [sic]~→');
-  assert.strictEqual(p.text, 'CA VA, SENOR? OUI: 42! [SIC]');
+  assert.strictEqual(lib.N, 128);
+  // letters keep their case, and their accents where the alphabet has them
+  const p = lib.prepareText('Ça va, Señor?\nOui: 42! [sic]~→ Être, Ōsaka');
+  assert.strictEqual(p.text, 'Ça va, Señor? Oui: 42! [sic] Etre, Osaka');
   assert.deepStrictEqual(p.dropped.sort(), ['~', '→']);
-  assert.strictEqual(p.recased, true);
-  const q = lib.prepareText('\u201CQuoted\u201D \u2014 \u2018so\u2019\u2026');
-  assert.strictEqual(q.text, '"QUOTED" \u2014 \'SO\'...');
-  assert.strictEqual(q.substituted, true);
-  const r = lib.prepareText('Cæsar--and Œdipus, ½ ﬁne; 3º N, £5 † ‡ Straße');
-  assert.strictEqual(r.text, 'CAESAR\u2014AND OEDIPUS, 1/2 FINE; 3° N, £5 † †† STRASSE');
+  assert.strictEqual(p.recased, false);
+  assert.deepStrictEqual(p.substitutions, [['Ê', 'E'], ['Ō', 'O']]);
+  const q = lib.prepareText('\u201CQuoted\u201D \u2014 \u2018so\u2019\u2026 «oui» ¿qué? 1914–1918, ½ × 2');
+  assert.strictEqual(q.text, '\u201CQuoted\u201D \u2014 \u2018so\u2019... «oui» ¿qué? 1914–1918, ½ × 2');
+  assert.deepStrictEqual(q.substitutions, [['\u2026', '...']]);
+  const r = lib.prepareText('Cæsar--and Œdipus, ¼ ﬁne; 3º N, £5 † ‡ Straße, ſo');
+  assert.strictEqual(r.text, 'Cæsar\u2014and Œdipus, 1/4 fine; 3° N, £5 † †† Strasse, so');
   assert.deepStrictEqual(r.dropped, []);
-  // a smaller alphabet: letters are read as capitals
-  const caps = new Library({ seed: 'x', alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ,.? ' });
-  const c = caps.prepareText('Ça va?');
-  assert.strictEqual(c.text, 'CA VA?');
+  assert.strictEqual(r.substituted, true);
+  // an accent with no letter to carry it is left out quietly
+  assert.strictEqual(lib.prepareText('q\u0301e\u0301').text, 'qé');
+  // the Library's first alphabet, of capitals only: letters are read as capitals, without accents
+  const caps = new Library({ seed: 'x', alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + '0123456789' + '.,;:!?\'"-\u2014()[]_*&/$%\u00A3\u00B0\u2020\u00A7#+=' + ' ' });
+  const c = caps.prepareText('Ça va? \u201CCæsar\u201D--½');
+  assert.strictEqual(c.text, 'CA VA? "CAESAR"\u20141/2');
   assert.strictEqual(c.recased, true);
 });
 
@@ -306,7 +311,7 @@ test('a whole text is set in pages, with a title page', () => {
   const book = lib.bookAt(lib.findText(part, { fill: 'blank' }).location);
   assert.strictEqual(Library.indexOf(book, part), 0);
   const title = lib.pageLines(book, 0).map((l) => l.trim()).filter(Boolean);
-  assert.deepStrictEqual(title, ['A TEST', 'NOBODY', '2026']);
+  assert.deepStrictEqual(title, ['A test', 'Nobody', '2026']);
   const lines = lib.pageLines(book, 1);
   assert(lines[0].startsWith('   THE LIBRARY'), 'paragraphs are indented');
   assert(lines.every((l) => l.length === c.charactersPerLine));
@@ -505,7 +510,7 @@ test('the sentences of dreams are grammatical and always the same for a hexagon'
     // the book: the text from the first page, words whole, paragraphs indented, the rest blank
     const b = lib.bookOfText(post);
     const lines = lib.pageLines(b.content, 0).map((l) => l.trimEnd());
-    assert.deepStrictEqual(lines.slice(0, 3), ['   A FIRST PARAGRAPH, WITH "CURLY QUOTES", AN EM DASH — AND AN', 'EMIGRE.', '   A SECOND PARAGRAPH.']);
+    assert.deepStrictEqual(lines.slice(0, 3), ['   A first paragraph, with “curly quotes”, an em dash — and an', 'émigré.', '   A second paragraph.']);
     assert(lib.pageLines(b.content, 1).every((l) => !l.trim()), 'the second page is blank');
     assert.strictEqual(Library.indexOf(lib.bookAt(b.location), b.content), 0);
     // with random characters after it: another book, beginning the same way

@@ -200,11 +200,14 @@
     const controls = shown.filter((g, i) => g !== a[i]);
     const plain = a.filter((c, i) => shown[i] === c);
     const letters = plain.filter((c) => /\p{L}/u.test(c)), digits = plain.filter((c) => /\p{Nd}/u.test(c));
-    const upper = letters.filter((c) => /\p{Lu}/u.test(c)), lower = letters.filter((c) => /\p{Ll}/u.test(c));
+    const upper = letters.filter((c) => /^[A-Z]$/.test(c)), lower = letters.filter((c) => /^[a-z]$/.test(c));
+    const others = letters.filter((c) => !upper.includes(c) && !lower.includes(c));
     const rest = plain.filter((c) => !letters.includes(c) && !digits.includes(c) && c !== ' ');
     const words = [];
-    if (upper.length === 26 && lower.length === 26 && letters.length === 52) words.push('the 26 letters, in capitals and in small letters');
-    else if (letters.length) words.push(letters.length === 26 ? 'the 26 letters' : `${letters.length} letters`);
+    if (upper.length === 26 && lower.length === 26) words.push('the 26 letters, in capitals and in small letters');
+    else if (upper.length === 26 && !lower.length) words.push('the 26 letters');
+    else if (upper.length + lower.length) words.push(`${upper.length + lower.length} of the letters A to Z`);
+    if (others.length) words.push(others.length <= 40 ? `${others.length} more letters (${others.join(' ')})` : `${others.length} more letters`);
     if (digits.length) words.push(digits.length === 10 ? 'the ten digits' : `the digits ${digits.join(' ')}`);
     if (rest.length) words.push(rest.join(' '));
     if (a.includes(' ')) words.push('space');
@@ -214,6 +217,15 @@
     }
     return words.length > 1 ? words.slice(0, -1).join(', ') + ' and ' + words[words.length - 1] : words.join('');
   }
+
+  /** "“ß” as “ss”, “…” as “...”": what the catalogue put in place of characters the alphabet lacks. */
+  function equivalents(substitutions) {
+    const shown = substitutions.slice(0, 8).map(([from, to]) => `“${from}” as “${to}”`);
+    return shown.join(', ') + (substitutions.length > 8 ? ' and others' : '');
+  }
+
+  /** "capitals" or "small letters": the one case of an alphabet that has only one. */
+  const oneCase = (lib) => (lib.alphabet.some((c) => /\p{Lu}/u.test(c)) ? 'capitals' : 'small letters');
 
   const TABS = [['tab-here', 'panel-here'], ['tab-find', 'panel-find'], ['tab-books', 'panel-books'], ['tab-go', 'panel-go'], ['tab-about', 'panel-about']];
 
@@ -371,8 +383,8 @@
       if (!raw) parts.push(`Up to ${fmt(lib.M)} characters, in the Library's alphabet: ${alphabetWords(lib)}.`);
       else {
         parts.push(`${fmt(p.symbols.length)} ${p.symbols.length === 1 ? 'character' : 'characters'}.`);
-        if (p.recased) parts.push('Letters are searched for as capitals.');
-        if (p.substituted) parts.push('Some characters are read as their nearest equivalents in the alphabet, such as straight quotation marks for curly ones.');
+        if (p.recased) parts.push(`Letters are searched for as ${oneCase(lib)}.`);
+        if (p.substitutions.length) parts.push(`Some characters are read as their nearest equivalents in the alphabet: ${equivalents(p.substitutions)}.`);
         if (p.dropped.length) {
           const shown = p.dropped.slice(0, 12).map((c) => `“${c}”`).join(' ');
           parts.push(`Not in the alphabet, so left out: ${shown}${p.dropped.length > 12 ? ' and others' : ''}.`);
@@ -682,8 +694,8 @@
       else how.push(`It is too long for one book, so it is set in ${n} parts, one after the other.`);
       how.push('Then the catalogue runs the shelving backwards and finds the book that holds exactly those pages. Every possible book stands somewhere, exactly once.');
       if (b.trimmed) how.push("Project Gutenberg's licence, before and after the text, is left out.");
-      if (set.recased) how.push('Letters are set as capitals.');
-      if (set.substituted) how.push('Some characters are set as their nearest equivalents in the alphabet: -- as —, Æ as AE, ½ as 1/2, curly quotation marks as straight ones, and so on.');
+      if (set.recased) how.push(`Letters are set as ${oneCase(lib)}.`);
+      if (set.substitutions.length) how.push(`Some characters are set as their nearest equivalents in the alphabet: ${equivalents(set.substitutions)}.`);
       if (set.dropped.length) {
         const shown = set.dropped.slice(0, 12).map((ch) => (ch === '\t' ? 'tab' : `“${ch}”`)).join(' ');
         how.push(`Not in the alphabet, so left out: ${shown}${set.dropped.length > 12 ? ' and others' : ''}.`);
