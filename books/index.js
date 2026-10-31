@@ -958,5 +958,6 @@ window.BABEL_BOOKS = [
 {"file":"pg75840.txt","title":"The trail of the serpent","author":"M. E. Braddon","year":"","language":"English","characters":865758,"rank":1021,"shelf":"a7b26706e61f7002327a"},
 {"file":"pg67138.txt","title":"The Sun Also Rises","author":"Ernest Hemingway","year":"","language":"English","characters":395521,"rank":1022,"shelf":"4b9699c31be25f62d644"},
 {"file":"pg5610.txt","title":"The Cardinal's snuff-box","author":"Henry Harland","year":"","language":"English","characters":325038,"rank":1023,"shelf":"7d9dbf1adccf3b6f4771"},
-{"file":"pg76462.txt","title":"The adventures of Heine","author":"Edgar Wallace","year":"","language":"English","characters":527776,"rank":1024,"shelf":"1a6d53b764be563c4dc2"}
+{"file":"pg76462.txt","title":"The adventures of Heine","author":"Edgar Wallace","year":"","language":"English","characters":527776,"rank":1024,"shelf":"1a6d53b764be563c4dc2"},
+{"file":"pg1291.txt","title":"Herodias","author":"Gustave Flaubert","year":"","language":"English","characters":98981,"rank":null,"shelf":"fec91d0b7ce01ae76fa5"}
 ];
