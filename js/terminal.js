@@ -557,11 +557,10 @@
     async _openShelf() {
       if (this._shelfShown) return;
       this._shelfShown = true;
-      $('shelf-status').textContent = 'Opening the shelves…';
+      $('shelf-intro').textContent = 'Opening the shelves…';
       const books = await collection.load();
       if (!books.length) {
         $('shelf-intro').textContent = 'This Library has no collection of books yet. To give it one, put plain-text files (.txt) in its books/uncompressed folder and run python3 books/shelve.py.';
-        $('shelf-status').textContent = '';
         $('shelf-list').hidden = true;
         document.querySelector('#panel-books .shelf-tools').hidden = true;
         return;
@@ -612,9 +611,11 @@
         li.hidden = !ok;
         if (ok) shown++;
       }
-      $('shelf-status').textContent = words.length
-        ? (shown ? `${fmt(shown)} of ${fmt(books.length)} books.` : 'No book of the collection matches.')
-        : `${fmt(books.length)} books.`;
+      // how many books there are, and how many match the search, in the line above it
+      const index = `An index of ${fmt(books.length)} literary classics`;
+      $('shelf-intro').textContent = !words.length ? `${index}. Pick one and find it in the Library.`
+        : shown ? `${index}, of which ${fmt(shown)} ${shown === 1 ? 'matches' : 'match'} your search. Pick one and find it in the Library.`
+          : `${index}, none of which matches your search.`;
     }
 
     /** Takes a book of the collection down from its shelf, then finds it in the Library. */
@@ -780,17 +781,12 @@
     _fitMap() {
       const panel = $('panel-here'), screen = $('terminal'), map = $('seam-map');
       if (panel.hidden || screen.hidden || !this._aspect) return;
-      const glass = panel.closest('.glass'), css = getComputedStyle(screen), west = $('seam-west'), east = $('seam-east');
-      // the width of the panel, less the names of the western and eastern seams beside the map
-      const gap = parseFloat(getComputedStyle($('seam-frame')).columnGap) || 0;
-      const across = panel.clientWidth - west.offsetWidth - east.offsetWidth - 2 * gap;
-      // the height of the screen, less everything else on the glass (measured without the map
-      // and the names beside it, which are as tall as their words)
-      map.style.width = map.style.height = '0px';
-      west.style.display = east.style.display = 'none';
-      const room = screen.clientHeight - parseFloat(css.paddingTop) - parseFloat(css.paddingBottom) - glass.scrollHeight;
-      west.style.display = east.style.display = '';
-      const least = 120; // pixels: on a screen too small, the map keeps this width and the glass scrolls
+      // the room the tab leaves the map's frame, less the names of the seams around the map
+      const frame = $('seam-frame'), css = getComputedStyle(frame);
+      const gapX = parseFloat(css.columnGap) || 0, gapY = parseFloat(css.rowGap) || 0;
+      const across = frame.clientWidth - $('seam-west').offsetWidth - $('seam-east').offsetWidth - 2 * gapX;
+      const room = frame.clientHeight - frame.querySelector('.seam-top').offsetHeight - frame.querySelector('.seam-bottom').offsetHeight - 2 * gapY;
+      const least = 120; // pixels: on a screen too small, the map keeps this width and the tab scrolls
       const width = Math.max(least, Math.floor(Math.min(across, room * this._aspect)));
       map.style.width = `${width}px`;
       map.style.height = `${Math.round(width / this._aspect)}px`;

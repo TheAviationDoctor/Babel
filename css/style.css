@@ -200,7 +200,13 @@ mark { background: rgba(227, 169, 90, 0.55); color: var(--ink); box-shadow: 0 0 
 .tabs { display: flex; flex-wrap: wrap; gap: 0 0.3rem; order: 3; width: 100%; border-bottom: 1px solid rgba(212, 227, 220, 0.14); }
 .tabs button { border: 0; border-radius: 0; padding: 0.5em 0.9em; color: var(--glow-dim); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
 .tabs button[aria-selected="true"] { color: var(--glow); border-bottom-color: var(--signal); background: transparent; }
-.panel { display: grid; gap: 1.4rem; }
+.panel { display: grid; gap: 1.4rem; align-content: start; }
+/* Every tab the same size, so that the catalogue keeps its size from one tab to the next:
+   as tall as the screen allows (up to a point), the map filling its tab, and any longer
+   tab scrolling within, under the tabs. */
+#terminal .glass { height: min(100%, 52rem); display: flex; flex-direction: column; overflow: hidden; }
+#terminal .glass-head { flex: none; }
+#terminal .panel { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0.15rem; margin: -0.15rem; }
 .glass label { color: var(--glow-dim); }
 .glass textarea, .glass input[type="text"], .glass input[type="search"], .glass input[type="password"], .glass select {
   font-family: var(--type); font-size: 1rem; color: var(--glow);
@@ -236,7 +242,9 @@ mark { background: rgba(227, 169, 90, 0.55); color: var(--ink); box-shadow: 0 0 
 
 /* the first tab: where the reader is, and the map of the whole Library, as large as the screen allows */
 #panel-here:focus { outline: none; }
-#panel-here { gap: 1rem; }
+#panel-here { display: flex; flex-direction: column; gap: 1rem; }
+#panel-here > * { flex: none; }
+#panel-here > .seam-frame { flex: 1 1 0; min-height: 0; }
 .here-text { font-size: 1.02rem; line-height: 1.6; max-width: 52em; overflow-wrap: anywhere; }
 .seam-frame {
   display: grid; grid-template-columns: auto auto auto; grid-template-rows: auto auto auto;
@@ -305,6 +313,10 @@ mark { background: rgba(227, 169, 90, 0.55); color: var(--ink); box-shadow: 0 0 
 .books.shelf li { padding: 0.55rem 0; }
 .books.shelf cite { font-size: var(--step-0); }
 .books.shelf { max-height: min(26rem, 52vh); overflow: auto; overscroll-behavior: contain; padding-right: 0.6rem; border-bottom: 1px solid rgba(212, 227, 220, 0.14); }
+/* in the Read tab, the list of the collection takes the room the tab leaves it */
+#panel-books { display: flex; flex-direction: column; }
+#panel-books > * { flex: none; }
+#panel-books > .books.shelf { flex: 1 1 auto; min-height: min(12rem, 40vh); max-height: none; }
 .result h3 cite { font-style: normal; }
 .parts { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
 .parts li { display: grid; gap: 0.5rem; }
