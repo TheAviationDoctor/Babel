@@ -1,20 +1,19 @@
 # Babel
 
-A Web-based walkable simulation of Jorge Luis Borges's *[Library of Babel](https://en.wikipedia.org/wiki/The_Library_of_Babel)* adapted from his 1941 eponymous story. It contains every book that was ever written, and every book that wasn't.
+A Web-based walkable simulation of Jorge Luis Borges's *[Library of Babel](https://en.wikipedia.org/wiki/The_Library_of_Babel)* adapted from his 1941 eponymous story. It contains every book that was ever written, and every book that wasn't. Every future idea or life experience of yours is already written somewhere in there; nihil sub sōle novum. The complication, of course, is knowing where to look.
 
 ## Features
 
-- Permanent book locations (deterministic generation from a seed)
-- Fully configurable (seed, book length, alphabet, bookshelves, look sensitivity, field of view)
-- Fully walkable
+- Permanent book locations (deterministically generated from a seed)
+- Configurable environment (seed, book format, alphabet, bookshelves, look sensitivity, field of view)
 - Interactive objects (books, terminal, doors, beds, bedside lamps)
-- Search for and teleport to any book
+- Reverse-search any text and teleport to the corresponding book
 - Copy and share book locations
-- Read ~1K literature classics (all copyright-free) from the terminal index
+- Read from an index of ~1K literature classics (all copyright-free)
 
 ## Getting started
 
-No installation required: everything is self-contained HTML/JS/CSS. Visit the Library online at https://babel.pellegr.in/, or download the repo and open `index.html` locally in a recent browser. It even runs offline (except for a couple of Google Fonts which will then revert to your browser's defaults). Edit the `config.js` file to configure the Library as you wish.
+No installation required: everything is self-contained HTML/JS/CSS. Just visit the Library online at https://babel.pellegr.in/, or download the repo and open `index.html` locally in a recent browser. It even runs offline (except for a couple of Google Fonts which will then revert to your browser's defaults). Edit the `config.js` file to configure the Library as you wish.
 
 | | |
 |---|---|
@@ -31,33 +30,57 @@ On a phone or tablet, drag on the right of the screen to look, hold and slide on
 
 ## Is the Library infinite?
 
-No. The Library is *finite*, meaning it has a fixed number of unique books, hexagons, and floors. But it is *boundless* (it has no hard edge) and is *cyclic* in both directions. Walk past the last hexagon of a floor, or take the stairs up or down to the last floor, and you are back at the first, just like an ant walking endlessly on the surface of a torus (which the Library is, topologically speaking). Positions are measured from the *seam*, which is where the numbers of the hexagons and the floors roll over: east–west between the last hexagon of a floor and the first, and up–down between the last floor and the first. The Catalogue's **Current position** tab (see [The Catalogue](#the-Catalogue)) gives your position from the seam. Walking barely changes your position, since each hexagon is only `4 × 10^-1,104,782%` of the way round.
+No. The Library is *finite* in that it contains a fixed number of unique books, hexagons, and floors. But it is *boundless* (no hard edge) and is *cyclic* in both directions. Walk past the last hexagon of a floor, or take the stairs up or down to the last floor, and you are back at the first, just like an ant walking endlessly on the surface of a torus (which the Library is, topologically speaking).
+
+Positions are measured from the *seam*, which is where the numbers of the hexagons and the floors roll over: east–west between the last hexagon of a floor and the first, and up–down between the last floor and the first. The Catalogue's **Current position** tab (see [The Catalogue](#the-Catalogue)) shows your distance from every seam. Walking barely changes your position, since each hexagon is only `4 × 10^-1,104,782%` of the way round.
 
 ## So how big is the Library?
 
 Using the default settings from `config.js`:
 
-- Each book holds `2^6 = 64` characters per line, `2^5 = 32` lines per page, and `2^9 = 512` pages. That's a total of `2^20 = 1,048,576` characters per book. That's about twice the length of a typical English novel, which gives plenty of headroom to capture most books ever published.
+- Each book holds `2^6 = 64` characters × `2^5 = 32` lines × `2^9 = 512` pages which yields `2^20 = 1,048,576` characters per book. That's about twice the length of a typical English novel, which gives plenty of headroom to capture most published literature.
 
-- The alphabet contains `2^7 = 128` symbols: the `26` letters A–Z in capitals and in small letters, `27` accented letters and ligatures (for French and Spanish, the umlauts ä and ö, and five accented capitals), `10` digits 0–9, `38` punctuation marks and signs, and the space. They were chosen by counting every character of the ~1K classics in the Library's collection, and hold 99.9% of the 697 million characters of its 871 English books exactly as printed, small letters, accents and curly quotation marks included.
+- The alphabet contains `2^7 = 128` symbols: `26` uppercase and `26` lowercase letters from the modern latin alphabet (A–Z); `27` accented letters and ligatures from French and Spanish, plus the umlauts ä and ö, and five accented capitals; `10` base-10 digits (0–9); `38` punctuation marks and signs; and the standard space. Those symbols were chosen by enumerating and de-duplicating all 697 million characters from Gutenberg.org's top 871 most-read books of all time. The chosen symbols hold 99.9% of the resulting set exactly as printed.
 
 - There are therefore `128^(2^20) = 2^7,340,032 ≈ 6.33 × 10^2,209,569` unique books in the Library. That's one followed by over 2.2 million zeros. If you kept repeating the word 'trillion' once per second, it would take you just over 51 hours to verbalize that number.
 
-- Each hexagonal room holds `2^2 = 4` bookshelves of `2^2 = 4` shelves each and `2^5 = 32` books per shelf. That's a total of `2^9 = 512` books per hexagon. So, the Library has `2^7,340,032 / 2^9 = 2^7,340,023 ≈ 1.24 × 10^2,209,567` hexagons. Barely two order of magnitude fewer hexagons than books. For all intents and purposes, they are the same number.
+- The Library is arranged into floors, and each floor into a single east-west gallery of hexagon-shaped rooms. Each hexagon holds `2^2 = 4` bookshelves × `2^2 = 4` shelves × `2^5 = 32` books = `2^9 = 512` books per hexagon. Therefore, the Library has `2^7,340,032 / 2^9 = 2^7,340,023 ≈ 1.24 × 10^2,209,567` hexagons. Barely two order of magnitude fewer hexagons than books; for all intents and purposes, they are the same number.
 
-- For perspective: there are about `10^80` atoms in the observable universe. Imagine every atom contained an entire universe, each with just as many atoms as ours. Then imagine every atom in *that* nested universe contained another universe, etc. You would need nearly 28,000 levels of Matrioshka universes before the *cumulative* number of atoms reached the number of books or hexagons in the Library.
+> [!TIP] 
+> There are about `10^80` atoms in our observable universe. Imagine every atom contained an entire universe, each with just as many atoms as ours. Then imagine every atom in *that* nested universe contained another universe, and so on. You would need nearly `28,000` levels of Matrioshka universes before the *cumulative* number of atoms approximated the number of books or hexagons in the Library.
 
-- There are `2^3,670,011 ≈ 2.49 × 10^1,104,783` hexagons per floor, all arranged in one long row punctuated by vertical shafts, and `2^3,670,012 ≈ 4.97 × 10^1,104,783` floors. That's twice as many floors as hexagons per floor, as even as it gets: the `2^7,340,023` hexagons, an odd power of 2, cannot be split into two equal powers of 2.
+- There are `2^3,670,011 ≈ 2.49 × 10^1,104,783` hexagons per floor and `2^3,670,012 ≈ 4.97 × 10^1,104,783` floors. That's twice as many floors as hexagons per floor, which is as even as it gets: the `2^7,340,023` hexagons are an odd power of 2, and thus cannot be split into two equal powers of 2.
 
-- A floor is only 2.61 meters high against 8.83 meters in length per hexagon, so with twice as many floors as hexagons per floor, the Library is about 1.7 times longer than it is tall: seen from the side, nearly a square. (Of the shapes the number of hexagons allows, this is the nearest to a square: with 8 times as many floors, it would be 2.4 times taller than long.) The Library spans `2.3 × 10^1,104,768` light-years from east to west and `1.4 × 10^1,104,768` light-years from top to bottom. For perspective, the Library could fit our observable universe `2.5 × 10^1,104,757` times from east to west and `1.5 × 10^1,104,757` times from top to bottom. At walking pace, walking the length of one floor would take about `5 × 10^1,104,776` years.
+- A floor is 2.61 meters high, and a hexagon (with its vestibule) 8.83 meters long, so despite having twice as many floors as hexagons per floor, the Library is about 1.7 times longer than it is tall. Seen from the side, the Library would look like a rectangle. Of the possible shape arrangements that the number of hexagons allows, this one is the nearest to being a square.
+
+> [!TIP] 
+> The Library spans `2.3 × 10^1,104,768` light-years from east to west and `1.4 × 10^1,104,768` light-years from top to bottom. The Library could fit our observable universe `2.5 × 10^1,104,757` times from east to west and `1.5 × 10^1,104,757` times from top to bottom. At walking pace, walking the length of one floor would take about `5 × 10^1,104,776` years.
 
 ## Is the Library three-dimensional?
 
-At the mesoscopic (human) scale, it feels like it is.
+At the mesoscopic (human) scale, it feels like it is: you can walk forward and back, left and right, and take the stairs up and down.
 
-At the macroscopic scale, however, it is two-dimensional. You can only walk east–west along a floor, and up–down from floor to floor. There is no north–south direction. The whole building is only one hexagon wide, shaped like a vertical sheet a few metres thick but astronomically long and tall.
+At the macroscopic scale, however, it is essentially two-dimensional. You can only walk east–west along a floor, and up–down between floors. There is no north–south direction. The whole building is only one hexagon wide, shaped like a vertical sheet a few metres thick but astronomically long and tall.
 
 Note that in the original story, Borges never says which sides of the hexagons are free. If the doorless sides met at 120° instead of 180°, the rows of hexagons could branch, and the Library could be a 3D honeycomb. That would mean splitting each book’s index into three coordinates instead of two.
+
+## Motivation
+
+Here I explain what motivated me to build this Library.
+
+I was mindblown by Borges' *La biblioteca de Babel* when I first read it at a young age. The story itself is rather brief (only ten pages) relative to its ambition and reads more like a stub of an idea, but its implications loom large for the imaginative reader. Central to the story is the *quest for meaning* (defined here as syntactically correct and semantically sensible permutations of text) in a gibberish-dominated universe (for which the Library is but a scaled metaphor).
+
+A first practical implication from Borges' story is the apparent paradox of boundlessness in a finite spacetime. The Library has no hard edge; walk past any east-west or top-bottom seam and you will keep rolling over. But time is finite, so your exploration is constrained by either your resoluteness or biological lifespan (whichever is shorter). In *[A Short Stay in Hell](https://en.wikipedia.org/wiki/A_Short_Stay_in_Hell)*, author Steven L. Peck explores this theme, thought a bit awkwardly for my taste. An avid book reader dies and gets cast into a version of hell that is the Library of Babel, in which he must find a book flawlessly narrating his life's story to buy his ticket to heaven. The twist, of course, is that the protagonist is immortal, so all that matters is his resoluteness to search, which gets tested over unfathomable aeons. Lovecraft's words come to mind: *That is not dead which can eternal lie, and with strange aeons even death may die.*
+
+Proverbially, humans call this *finding a needle in a haystack*. The odds of finding that needle are astronomically small. Given this very Library's default configuration, one should expect to find a cogent short four-word sentence (such as `A cat sat up`) in one in every `10^17` books, or one hundred quadrillion books. Scanning each book at a thousand characters per second, one would need about three trillion years, or ~200 times the age of our universe. I find poetic absurdity in the asymmetry between the size of such a trivial needle and that of the haystack.
+
+Adjacent is the (perhaps superficially) mind-blowing implication that every text that is *yet to be written* is already contained in the Library. Like the ultimate physical instantion of the biblical aphorism *nil sub sole novum*, the Library teaches us that information-wise, there is nothing ever truly novel in this universe. All future concepts and ideas, all latent literature and poetry, all unborn love letters and technical manuals —and yes, even your entire life story— are just waiting to be discovered on some galactically distant bookshelf, like relics being unearthed from the grounds of all possibilities. Of course, the odds are squarely in favor of those texts remaining undiscovered. Which makes the Library analogous to our universe in one more way: paraphrasing Carl Sagan in *Contact*, the Library is a pretty big place; if it's just the books within human reach, it seems like an awful waste of space.
+
+Another implication relates to meaning *itself*. With deterministic certainty, although comically and cosmically low odds, one may chance upon a book containing some sensical sentence. Alternatively, one may use the Library's reverse-search function and cheat one's way to any desired text. But what then? No author purposedly wrote those words; no librarian deliberately curated them. They are a random byproduct of the [infinite monkey theorem](https://en.wikipedia.org/wiki/Infinite_monkey_theorem). The clearest illustration of this point is that every truth and its contrary are contained in the Library. `The sun rises in the east.` and `The sun rises in the west.` are present in exactly `1.08 × 10^2,209,521` books each, but their mere existence does not make either statement true or false, respectively. That makes the galactic abundance of ideas in the Library orthogonal to their relevance, like empty calories from AI slop. There is, in fact, an analogy here with Large Language Models, which optimize for plausibility over insightfulness. Given a high-enough temperature setting, they may create any meaningless permutation of grammatically correct and semantically sensical text, like a marginally less wasteful Library of Babel.
+
+A final angle I have to offer to this is that the search for meaning in one's life is a characteristically *anthropogenic* pursuit. Animals and plants, inert matter and energy, and the universe at large, do not seem to care about meaning, purpose, or morality. In fact, one could argue that many humans don't either, and just go through the motions of life seemingly unencumbered by existential angst (charitably, they may be the wise ones in this context). And thus, perhaps, that human longing for meaning is a red herring, an accidental and undesirable byproduct of Homo sapiens' cognitive evolution. This view is consistent with Peter Zapffe's "existential elk" reinterpretation of Nietzsche's *Übermensch* in his essay *[The Last Messiah](https://en.wikipedia.org/wiki/The_Last_Messiah)*. Put simply, we've grown too self-aware for our own good, and we create elaborate contraptions (for which the Library is again a metaphor) to isolate, anchor, distract, or sublimate ourselves away from the dread of cosmic absurdity.
+
+One final thought: I did not mean for this Library to be just a depressing allegory for the human condition. I wanted to create a version that still played on the core concept (a quasi-infinite number of permutations of symbols), yet produced *meaning*. This is why I added a reverse-search feature to find whatever text you, dear Visitor, would like to link to and share with others, as well as an ever-growing index of copyright-free literary classics for anyone to read. Those two features combined turn an abstract concept into a practical Library. And it's free, which is a good deal considering it contains *all the books*!
 
 ## Configuration
 
