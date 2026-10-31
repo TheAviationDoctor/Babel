@@ -203,7 +203,7 @@
    *   …/#secret=<the text, compressed, encrypted>  a secret link: see below
    *
    * The book it leads to holds exactly that text, as typed, from the very start of its
-   * first page, the rest of its pages blank: the book the catalogue's "Find a text" finds.
+   * first page, the rest of its pages blank: the book the catalogue's "Search" finds.
    * The link carries everything the book holds, so it keeps leading to the same book
    * whatever the seed or configuration of the Library.
    *
@@ -1019,7 +1019,7 @@
 
     /**
      * The book that holds a text exactly as typed, from the very start of its first page,
-     * the rest of its pages blank: the book "Find a text" finds, and links to texts lead to.
+     * the rest of its pages blank: the book "Search" finds, and links to texts lead to.
      * Returns { location, content, length } (length: the symbols the text takes), or null if
      * the text holds nothing the Library can write, or is longer than a book.
      */
