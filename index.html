@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=Libre+Bodoni:ital,wght@0,400;0,500;1,400&display=swap">
-<link rel="stylesheet" href="css/style.css?v=2026-10-31.4">
+<link rel="stylesheet" href="css/style.css?v=2026-10-31.5">
 </head>
 <body>
 <canvas id="view" aria-label="The Library, seen from the eyes of a librarian"></canvas>
@@ -45,7 +45,7 @@
       <button id="show-passage" type="button" hidden>Show the passage</button>
       <button id="random-page" type="button">Open at random</button>
       <button id="copy-page" type="button">Copy page</button>
-      <button id="copy-book-link" type="button" hidden>Copy a link to it</button>
+      <button id="copy-book-link" type="button" hidden>Copy a public link</button>
       <button id="close-book" type="button" class="primary">Put the book back</button>
     </nav>
     <p class="book-keys" id="book-keys">Arrow keys turn pages. Esc puts the book back.</p>
@@ -60,8 +60,7 @@
         <button id="tab-here" type="button" role="tab" aria-selected="true" aria-controls="panel-here">Map</button>
         <button id="tab-find" type="button" role="tab" aria-selected="false" aria-controls="panel-find">Search</button>
         <button id="tab-books" type="button" role="tab" aria-selected="false" aria-controls="panel-books">Read</button>
-        <button id="tab-go" type="button" role="tab" aria-selected="false" aria-controls="panel-go">Teleport</button>
-        <button id="tab-about" type="button" role="tab" aria-selected="false" aria-controls="panel-about">About</button>
+        <button id="tab-go" type="button" role="tab" aria-selected="false" aria-controls="panel-go">Jump</button>
       </div>
       <button id="terminal-close" type="button" class="quiet">Step away</button>
     </header>
@@ -78,7 +77,10 @@
         <span id="seam-east" class="seam-side seam-east">Eastern seam</span>
         <span class="seam-side seam-bottom">Lower seam</span>
       </div>
-      <div class="row"><button id="term-copy" type="button">Copy the current hexagon's address</button></div>
+      <div class="row here-foot">
+        <button id="term-copy" type="button">Copy the current hexagon's address</button>
+        <a class="button" href="https://github.com/TheAviationDoctor/Babel" target="_blank" rel="noopener">View this project on GitHub</a>
+      </div>
     </div>
 
     <div id="panel-find" class="panel" role="tabpanel" aria-labelledby="tab-find" hidden>
@@ -100,13 +102,11 @@
         <p class="query">Your text: <span id="find-query"></span></p>
         <section class="result" aria-labelledby="certain-title">
           <h3 id="certain-title">Where it stands</h3>
-          <p class="status">The catalogue runs the shelving backwards: it composes the book that begins with your text, the rest of its pages blank, and finds the shelf it stands on. Every possible book is somewhere in the Library, exactly once.</p>
           <p id="certain-where" class="where"></p>
           <div class="row">
-            <button id="certain-read" type="button">Read it here</button>
             <button id="certain-go" type="button" class="primary">Go there</button>
-            <button id="certain-copy" type="button">Copy its address</button>
-            <button id="certain-link" type="button">Copy a link to it</button>
+            <button id="certain-copy" type="button">Copy its location</button>
+            <button id="certain-link" type="button">Copy a public link</button>
             <button id="certain-secret" type="button">Copy a secret link</button>
           </div>
           <div id="certain-secret-box"></div>
@@ -153,7 +153,7 @@
       <section class="go">
         <h3>To an address</h3>
         <form id="go-address" autocomplete="off">
-          <label for="go-address-text">Paste a full address, as copied from this catalogue</label>
+          <label for="go-address-text">Paste a full address, as copied from this catalogue:</label>
           <textarea id="go-address-text" rows="3" spellcheck="false" placeholder="Seed: …&#10;Floor: …&#10;Hexagon: …"></textarea>
           <p id="go-address-error" class="error" hidden></p>
           <div class="row"><button type="submit" class="primary">Go</button></div>
@@ -165,9 +165,6 @@
       </section>
     </div>
 
-    <div id="panel-about" class="panel" role="tabpanel" aria-labelledby="tab-about" tabindex="-1" hidden>
-      <article id="about-text" class="about"></article>
-    </div>
   </div>
 </section>
 
@@ -204,20 +201,18 @@
   whenever any of them changes: browsers and GitHub Pages keep copies of files for a while,
   and a new page read with an old script would not start.
 -->
-<script src="lib/three.min.js?v=2026-10-31.4"></script>
-<script src="lib/Reflector.js?v=2026-10-31.4"></script>
-<script src="config.js?v=2026-10-31.4"></script>
-<script src="js/about.js?v=2026-10-31.4"></script>
-<script src="js/library.js?v=2026-10-31.4"></script>
-<script src="js/textures.js?v=2026-10-31.4"></script>
-<script src="js/architecture.js?v=2026-10-31.4"></script>
-<script src="js/world.js?v=2026-10-31.4"></script>
-<script src="js/player.js?v=2026-10-31.4"></script>
-<script src="js/markdown.js?v=2026-10-31.4"></script>
-<script src="js/terminal.js?v=2026-10-31.4"></script>
-<script src="js/quotes.js?v=2026-10-31.4"></script>
-<script src="js/dream.js?v=2026-10-31.4"></script>
-<script src="js/main.js?v=2026-10-31.4"></script>
+<script src="lib/three.min.js?v=2026-10-31.5"></script>
+<script src="lib/Reflector.js?v=2026-10-31.5"></script>
+<script src="config.js?v=2026-10-31.5"></script>
+<script src="js/library.js?v=2026-10-31.5"></script>
+<script src="js/textures.js?v=2026-10-31.5"></script>
+<script src="js/architecture.js?v=2026-10-31.5"></script>
+<script src="js/world.js?v=2026-10-31.5"></script>
+<script src="js/player.js?v=2026-10-31.5"></script>
+<script src="js/terminal.js?v=2026-10-31.5"></script>
+<script src="js/quotes.js?v=2026-10-31.5"></script>
+<script src="js/dream.js?v=2026-10-31.5"></script>
+<script src="js/main.js?v=2026-10-31.5"></script>
 <script>
   // If the Library has not started a few seconds after the page has loaded (a script missing,
   // or not matching the others), say so rather than leave the screen black.

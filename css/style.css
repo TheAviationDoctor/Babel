@@ -197,6 +197,12 @@ mark { background: rgba(227, 169, 90, 0.55); color: var(--ink); box-shadow: 0 0 
 .glass button.primary:hover { background: #e6f1ec; }
 .glass button:disabled { opacity: 0.4; cursor: default; }
 .glass button.quiet { border-color: transparent; color: var(--glow-dim); }
+/* a link that looks like the buttons beside it */
+.glass a.button {
+  display: inline-block; font-family: var(--type); font-size: 0.9rem; color: var(--glow); text-decoration: none;
+  border: 1px solid rgba(212, 227, 220, 0.3); border-radius: 6px; padding: 0.5em 1em; transition: background-color 120ms ease, border-color 120ms ease;
+}
+.glass a.button:hover { background: rgba(212, 227, 220, 0.08); border-color: rgba(212, 227, 220, 0.6); }
 .tabs { display: flex; flex-wrap: wrap; gap: 0 0.3rem; order: 3; width: 100%; border-bottom: 1px solid rgba(212, 227, 220, 0.14); }
 .tabs button { border: 0; border-radius: 0; padding: 0.5em 0.9em; color: var(--glow-dim); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
 .tabs button[aria-selected="true"] { color: var(--glow); border-bottom-color: var(--signal); background: transparent; }
@@ -245,10 +251,12 @@ mark { background: rgba(227, 169, 90, 0.55); color: var(--ink); box-shadow: 0 0 
 #panel-here { display: flex; flex-direction: column; gap: 1rem; }
 #panel-here > * { flex: none; }
 #panel-here > .seam-frame { flex: 1 1 0; min-height: 0; }
+.here-foot { justify-content: space-between; }
+.here-foot > a.button { margin-left: auto; }
 .here-text { font-size: 1.02rem; line-height: 1.6; max-width: 52em; overflow-wrap: anywhere; }
 .seam-frame {
   display: grid; grid-template-columns: auto auto auto; grid-template-rows: auto auto auto;
-  gap: 0.4rem; justify-content: center; align-items: center; justify-items: center;
+  gap: 0.4rem; justify-content: center; align-content: center; align-items: center; justify-items: center;
 }
 .seam-side { color: var(--glow-dim); font-size: 0.75rem; letter-spacing: 0.1em; white-space: nowrap; line-height: 1; }
 .seam-top { grid-area: 1 / 2; }
@@ -268,35 +276,6 @@ mark { background: rgba(227, 169, 90, 0.55); color: var(--ink); box-shadow: 0 0 
 @keyframes seam-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.15; } }
 @media (prefers-reduced-motion: reduce) { .seam-here { animation: none; } }
 
-/* the About tab: the Markdown of about.js */
-#panel-about:focus { outline: none; }
-.about { min-width: 0; line-height: 1.6; overflow-wrap: break-word; } /* min-width: a wide table scrolls, not the tab */
-.about > p, .about > ul, .about > ol, .about > blockquote, .about > pre, .about > h1, .about > h2, .about > h3, .about > h4 { max-width: 46em; }
-.about > * + * { margin-top: 0.9em; }
-.about h1, .about h2, .about h3, .about h4, .about h5, .about h6 {
-  font-family: var(--display); font-style: italic; font-weight: 400; color: var(--glow); line-height: 1.25;
-}
-.about > h1, .about > h2, .about > h3, .about > h4 { margin-top: 1.6em; }
-.about > :first-child { margin-top: 0; }
-.about [data-anchor] { scroll-margin-top: 1.4rem; }
-.about h1 { font-size: clamp(1.6rem, 3.4vw, 2.2rem); }
-.about h2 { font-size: 1.45rem; }
-.about h3 { font-size: 1.2rem; }
-.about h4, .about h5, .about h6 { font-size: 1.05rem; }
-.about p, .about li { color: var(--glow-dim); }
-.about strong { color: var(--glow); }
-.about a { color: var(--signal); text-underline-offset: 0.2em; }
-.about ul, .about ol { margin-bottom: 0; padding-left: 1.5em; }
-.about li + li, .about li > ul, .about li > ol { margin-top: 0.35em; }
-.about blockquote { margin-left: 0; margin-right: 0; padding-left: 1em; border-left: 2px solid rgba(212, 227, 220, 0.3); }
-.about hr { border: 0; border-top: 1px solid rgba(212, 227, 220, 0.14); }
-.about pre { margin-bottom: 0; padding: 0.7em 0.9em; overflow-x: auto; background: rgba(0, 0, 0, 0.28); border: 1px solid rgba(212, 227, 220, 0.14); border-radius: 6px; }
-.about pre code { background: none; padding: 0; white-space: pre; }
-.about table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-size: 0.85rem; }
-.about th, .about td { padding: 0.45em 0.7em; text-align: left; vertical-align: top; border: 1px solid rgba(212, 227, 220, 0.16); color: var(--glow-dim); }
-.about th { color: var(--glow); font-weight: 400; background: rgba(212, 227, 220, 0.05); }
-/* on a phone, a table scrolls sideways rather than squeeze its columns */
-@media (max-width: 640px) { .about th, .about td { min-width: 14em; } }
 .glass .controls kbd { color: var(--glow); }
 .glass code { font-family: var(--type); color: var(--glow); background: rgba(212, 227, 220, 0.08); padding: 0 0.25em; border-radius: 3px; }
 .books { list-style: none; margin: 0; padding: 0; display: grid; }

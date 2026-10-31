@@ -229,8 +229,8 @@
     g.fillStyle = '#a9beb6';
     g.font = '26px "Courier Prime", "Courier New", monospace';
     g.fillText('Find any text.', 40, 172);
-    g.fillText('Read a book.', 40, 210);
-    g.fillText('Go to any hexagon.', 40, 248);
+    g.fillText('Read any book.', 40, 210);
+    g.fillText('Jump to any hexagon.', 40, 248);
     g.fillStyle = '#d3e3dc';
     g.fillText('Touch to begin', 40, 312);
     g.fillRect(262, 290, 14, 26);

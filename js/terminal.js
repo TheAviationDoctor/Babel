@@ -164,7 +164,7 @@
   /** "capitals" or "small letters": the one case of an alphabet that has only one. */
   const oneCase = (lib) => (lib.alphabet.some((c) => /\p{Lu}/u.test(c)) ? 'capitals' : 'small letters');
 
-  const TABS = [['tab-here', 'panel-here'], ['tab-find', 'panel-find'], ['tab-books', 'panel-books'], ['tab-go', 'panel-go'], ['tab-about', 'panel-about']];
+  const TABS = [['tab-here', 'panel-here'], ['tab-find', 'panel-find'], ['tab-books', 'panel-books'], ['tab-go', 'panel-go']];
 
   class Terminal {
     constructor(ctx) {
@@ -187,8 +187,7 @@
       if (this.book) this._placeBook();
       const tab = TABS.find(([t]) => $(t).getAttribute('aria-selected') === 'true')[0];
       if (tab === 'tab-books') this._openShelf();
-      if (tab === 'tab-about') this._renderAbout();
-      const active = { 'tab-here': $('panel-here'), 'tab-find': $('find-text'), 'tab-books': $('shelf-filter'), 'tab-go': $('go-east'), 'tab-about': $('panel-about') }[tab];
+      const active = { 'tab-here': $('panel-here'), 'tab-find': $('find-text'), 'tab-books': $('shelf-filter'), 'tab-go': $('go-east') }[tab];
       setTimeout(() => active.focus({ preventScroll: true }), 0);
     }
 
@@ -217,13 +216,12 @@
       $('find-text').addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); this.find(); }
       });
-      $('certain-read').addEventListener('click', () => this._readCertain());
       $('certain-go').addEventListener('click', () => this._goCertain());
       $('certain-link').addEventListener('click', () => this._copyLink(this.certainLink));
       $('certain-secret').addEventListener('click', () => this._toggleSecret($('certain-secret-box'), () => this.query.raw));
       $('certain-copy').addEventListener('click', () => {
         const loc = this.certain.location;
-        this.ctx.copyText(this.lib.hexagonAddressText(loc.hexagon, loc.floor), 'Copied the address of that hexagon.');
+        this.ctx.copyText(this.lib.hexagonAddressText(loc.hexagon, loc.floor), 'Copied the location of its hexagon. Paste it in the Jump tab to go there, even after closing the page.');
       });
       $('shelf-filter').addEventListener('input', () => this._filterShelf());
       $('shelf-order').addEventListener('change', () => this._renderShelf());
@@ -245,56 +243,6 @@
       }
       if (tab === 'tab-here') this._fitMap();
       if (tab === 'tab-books') this._openShelf();
-      if (tab === 'tab-about') this._renderAbout();
-    }
-
-    /** The About tab: the Markdown of js/about.js, read the first time the tab is shown. */
-    _renderAbout() {
-      if (this._aboutShown) return;
-      this._aboutShown = true;
-      const box = $('about-text');
-      const source = typeof window.BABEL_ABOUT === 'function' ? String(window.BABEL_ABOUT) : '';
-      const m = /\/\*[ \t]*START[^\n]*\n([\s\S]*?)\n?[ \t]*END[ \t]*\*\/\s*\}\s*$/.exec(source);
-      if (!m || !window.BabelMarkdown) {
-        box.textContent = source
-          ? 'The text of js/about.js could not be found between its lines START and END.'
-          : 'The file js/about.js, which holds the text of this tab, could not be read. Check that it is in the js folder, and that its text holds no star followed straight away by a slash.';
-        return;
-      }
-      box.innerHTML = window.BabelMarkdown.render(m[1]);
-      // headings take ids as on GitHub, so that links such as [Dreams](#dreams) lead to them
-      const used = new Map();
-      for (const h of box.querySelectorAll('h1, h2, h3, h4, h5, h6')) {
-        const base = h.textContent.trim().toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, '').replace(/\s/g, '-');
-        const n = used.get(base) || 0;
-        used.set(base, n + 1);
-        h.dataset.anchor = n ? `${base}-${n}` : base;
-      }
-      for (const a of box.querySelectorAll('a[href]')) {
-        const href = a.getAttribute('href');
-        const book = href.search(/#(text|book)=/);
-        if (book !== -1) {
-          // A link to a text or to a book of the collection (#text=…, #book=…), however it is
-          // written (#text=…, /#text=… or with the Library's full address), leads there in this
-          // same Library, whether it was opened from the computer or on the web.
-          const hash = href.slice(book);
-          a.setAttribute('href', hash);
-          a.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (location.hash === hash) window.dispatchEvent(new HashChangeEvent('hashchange'));
-            else location.hash = hash; // main.js follows the link when the address changes
-          });
-        } else if (href.startsWith('#')) {
-          a.addEventListener('click', (e) => {
-            e.preventDefault(); // the address bar keeps its own #… (it may be a link to a book)
-            const target = [...box.querySelectorAll('[data-anchor]')].find((h) => h.dataset.anchor === decodeURIComponent(href.slice(1)));
-            if (target) target.scrollIntoView({ block: 'start' });
-          });
-        } else {
-          a.target = '_blank';
-          a.rel = 'noopener';
-        }
-      }
     }
 
     /** Puts the text of a .txt file in the box, in place of what was there. */
@@ -510,12 +458,6 @@
         `It stands on floor <span class="addr">${esc(lib.addressText(loc.floor, 16))}</span>, in hexagon <span class="addr">${esc(lib.addressText(loc.hexagon, 16))}</span> of that floor.`;
     }
 
-    _readCertain() {
-      const r = this.certain;
-      const h = this.certainLink, link = h && h.url ? h.url.slice(h.url.indexOf('#')) : null;
-      this.ctx.openBookAt({ location: r.location, slot: r.location.slot, content: r.content, highlight: { start: 0, length: this.query.symbols.length }, returnTo: 'terminal', link });
-    }
-
     _goCertain() {
       const r = this.certain, loc = r.location;
       const { wall, shelf, volume } = this.lib.slotParts(loc.slot);
@@ -544,8 +486,6 @@
       }
       return t;
     }
-
-    _pagesOf(part) { return Math.ceil(part.length / this.lib.config.charactersPerPage); }
 
     _markCurrent() {
       for (const li of $('shelf-list').children) li.setAttribute('aria-current', String(!!this.book && li.dataset.key === this.book.entry.key));
@@ -623,6 +563,7 @@
       const ticket = (this._ticket = (this._ticket || 0) + 1);
       $('book-results').hidden = false;
       $('book-found-title').replaceChildren('Where ', el('cite', '', book.title), ' stands');
+      $('book-how').hidden = false;
       $('book-how').textContent = 'Taking it down from the shelf…';
       $('book-parts').textContent = '';
       $('book-found-title').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -654,22 +595,12 @@
     _placeBook() {
       const b = this.book;
       if (!b) return;
-      const lib = this.lib, c = lib.config, set = b.set, n = set.parts.length;
+      const lib = this.lib, set = b.set, n = set.parts.length;
       b.found = set.parts.map((part) => lib.findText(part));
 
       $('book-found-title').replaceChildren('Where ', el('cite', '', b.meta.title), ' stands');
-      const how = [`The catalogue sets the text as a book of this Library holds it, from the first page: ${fmt(c.charactersPerLine)} characters to a line and ${fmt(c.linesPerPage)} lines to a page, with words kept whole and paragraphs indented.`];
-      if (n === 1) how.push(`It fills ${fmt(this._pagesOf(set.parts[0]))} of the book's ${fmt(c.pagesPerBook)} pages.`);
-      else how.push(`It is too long for one book, so it is set in ${n} parts, one after the other.`);
-      how.push('Then the catalogue runs the shelving backwards and finds the book that holds exactly those pages. Every possible book stands somewhere, exactly once.');
-      if (b.trimmed) how.push("Project Gutenberg's licence, before and after the text, is left out.");
-      if (set.recased) how.push(`Letters are set as ${oneCase(lib)}.`);
-      if (set.substitutions.length) how.push(`Some characters are set as their nearest equivalents in the alphabet: ${equivalents(set.substitutions)}.`);
-      if (set.dropped.length) {
-        const shown = set.dropped.slice(0, 12).map((ch) => (ch === '\t' ? 'tab' : `“${ch}”`)).join(' ');
-        how.push(`Not in the alphabet, so left out: ${shown}${set.dropped.length > 12 ? ' and others' : ''}.`);
-      }
-      $('book-how').textContent = how.join(' ');
+      $('book-how').textContent = '';
+      $('book-how').hidden = true;
 
       const ol = $('book-parts');
       ol.textContent = '';
@@ -678,17 +609,15 @@
         const p = el('p', 'where');
         p.innerHTML = (n > 1 ? `Part ${k + 1} of ${n}: ` : '') + this._whereHTML(r.location, 'from the first page');
         const row = el('div', 'row');
-        const read = el('button', '', 'Read it here');
         const go = el('button', 'primary', 'Go there');
-        const copy = el('button', '', 'Copy its address');
-        const link = el('button', '', 'Copy a link to it');
-        for (const x of [read, go, copy, link]) x.type = 'button';
+        const copy = el('button', '', 'Copy its location');
+        const link = el('button', '', 'Copy a public link');
+        for (const x of [go, copy, link]) x.type = 'button';
         // a link to a book of the collection names it, and the part
         const bookHash = BabelCore.Library.bookLink(b.entry.shelf, k + 1);
         const holder = this._shortLink(bookHash);
         link.addEventListener('click', () => this._copyLink(holder));
         const linkOf = () => bookHash;
-        read.addEventListener('click', () => this.ctx.openBookAt({ location: r.location, slot: r.location.slot, content: r.content, returnTo: 'terminal', link: linkOf() }));
         go.addEventListener('click', () => {
           const loc = r.location, face = this.lib.slotParts(loc.slot);
           const title = n > 1 ? `${b.meta.title}, part ${k + 1} of ${n}` : b.meta.title;
@@ -696,9 +625,9 @@
         });
         copy.addEventListener('click', () => {
           const loc = r.location, { wall, shelf, volume } = this.lib.slotParts(loc.slot);
-          this.ctx.copyText(this.lib.hexagonAddressText(loc.hexagon, loc.floor), `Copied the address of its hexagon. The book is on wall ${wall + 1}, shelf ${shelf + 1}, volume ${volume + 1}.`);
+          this.ctx.copyText(this.lib.hexagonAddressText(loc.hexagon, loc.floor), `Copied the location of its hexagon. Paste it in the Jump tab to go there; the book is on wall ${wall + 1}, shelf ${shelf + 1}, volume ${volume + 1}.`);
         });
-        row.append(read, go, copy, link);
+        row.append(go, copy, link);
         li.append(p, row);
         ol.appendChild(li);
       });
