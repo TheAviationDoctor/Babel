@@ -382,9 +382,10 @@
       const lib = this.lib, raw = $('find-text').value;
       const p = lib.prepareText(raw);
       const parts = [];
-      if (!raw) parts.push(`Up to ${fmt(lib.M)} characters, in the Library's alphabet: ${alphabetWords(lib)}.`);
+//      if (!raw) parts.push(`Up to ${fmt(lib.M)} characters, in the Library's alphabet: ${alphabetWords(lib)}.`);
+      if (!raw) parts.push(`Up to ${fmt(lib.M)} characters (A–Z, a-z, accented letters, digits, and punctuation).`);
       else {
-        parts.push(`${fmt(p.symbols.length)} ${p.symbols.length === 1 ? 'character' : 'characters'}.`);
+        parts.push(`Search ${fmt(p.symbols.length)} ${p.symbols.length === 1 ? 'character' : 'characters'}.`);
         if (p.recased) parts.push(`Letters are searched for as ${oneCase(lib)}.`);
         if (p.substitutions.length) parts.push(`Some characters are read as their nearest equivalents in the alphabet: ${equivalents(p.substitutions)}.`);
         if (p.dropped.length) {

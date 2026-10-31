@@ -57,10 +57,10 @@
     <header class="glass-head">
       <h2 id="terminal-title">The catalogue</h2>
       <div class="tabs" role="tablist" aria-label="What to do">
-        <button id="tab-here" type="button" role="tab" aria-selected="true" aria-controls="panel-here">Current position</button>
-        <button id="tab-find" type="button" role="tab" aria-selected="false" aria-controls="panel-find">Find a text</button>
-        <button id="tab-books" type="button" role="tab" aria-selected="false" aria-controls="panel-books">Find a book</button>
-        <button id="tab-go" type="button" role="tab" aria-selected="false" aria-controls="panel-go">Go to a hexagon</button>
+        <button id="tab-here" type="button" role="tab" aria-selected="true" aria-controls="panel-here">Map</button>
+        <button id="tab-find" type="button" role="tab" aria-selected="false" aria-controls="panel-find">Search</button>
+        <button id="tab-books" type="button" role="tab" aria-selected="false" aria-controls="panel-books">Read</button>
+        <button id="tab-go" type="button" role="tab" aria-selected="false" aria-controls="panel-go">Teleport</button>
         <button id="tab-about" type="button" role="tab" aria-selected="false" aria-controls="panel-about">About</button>
       </div>
       <button id="terminal-close" type="button" class="quiet">Step away</button>
@@ -83,8 +83,8 @@
 
     <div id="panel-find" class="panel" role="tabpanel" aria-labelledby="tab-find" hidden>
       <form id="find-form" class="find" autocomplete="off">
-        <label for="find-text">Text to find</label>
-        <textarea id="find-text" rows="3" spellcheck="false" placeholder="Type or paste any text"></textarea>
+        <label for="find-text"></label>
+        <textarea id="find-text" rows="3" spellcheck="false" placeholder="Type, paste, or upload any text to search for its location in the Library…"></textarea>
         <div class="find-foot">
           <p id="find-note" class="note"></p>
           <div class="row">
@@ -114,7 +114,7 @@
 
     <div id="panel-books" class="panel" role="tabpanel" aria-labelledby="tab-books" hidden>
       <section class="intro">
-        <p id="shelf-intro" class="status">These are the books of this Library’s own collection. Choose one, and the catalogue sets it in pages as a book of the Library holds it, then finds the one book on the shelves that holds exactly those pages.</p>
+        <p id="shelf-intro" class="status">An index of literary classics. Pick one and find it in the Library.</p>
         <div class="row shelf-tools">
           <input id="shelf-filter" type="search" placeholder="Title, author or language" autocomplete="off" spellcheck="false" aria-label="Search the books">
           <label>Order
