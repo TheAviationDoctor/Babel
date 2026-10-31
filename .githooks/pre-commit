@@ -1,0 +1,31 @@
+#!/bin/sh
+# THE LIBRARY OF BABEL — before every commit, puts on the shelf the books of
+# books/uncompressed/ that are new or changed, takes off it those that are gone (see
+# books/shelve.py), and adds what changed to the commit. A copy of the repository
+# without the books' texts leaves the shelf as it is.
+#
+# Git runs it once it has been told where the Library keeps its hooks, which is done
+# once per copy of the repository, in its folder:
+#   git config core.hooksPath .githooks
+
+cd "$(git rev-parse --show-toplevel)" || exit 0
+# apps such as GitHub Desktop may not look where Python is usually installed
+PATH="$PATH:/usr/local/bin:/opt/homebrew/bin:/usr/bin"
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "Babel: Python 3 was not found, so the books were not shelved. The commit goes ahead without them." >&2
+  exit 0
+fi
+if ! python3 books/shelve.py --quiet; then
+  echo "Babel: shelving the books failed (see above). The commit goes ahead without them." >&2
+  exit 0
+fi
+# the list, and every book's script added, changed or removed
+paths=""
+for p in books/index.js books/compressed; do
+  [ -e "$p" ] && paths="$paths $p"
+done
+if [ -n "$paths" ] && ! git add -A -- $paths; then
+  echo "Babel: the shelved books could not be added to the commit. The commit goes ahead without them." >&2
+fi
+exit 0

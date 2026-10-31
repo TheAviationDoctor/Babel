@@ -1,6 +1,6 @@
 // The books of this Library, for the catalogue's "Find a book".
-// Written by download_gutenberg_top1024.py: run it again (with --shelve-only
-// to skip downloading) whenever the .txt files in uncompressed/ change.
+// Written by shelve.py, beside it, from the .txt files in uncompressed/: run it
+// again whenever they change (the git hook in .githooks/ does, before every commit).
 window.BABEL_BOOKS = [
 {"file":"pg1342.txt","title":"Pride and Prejudice","author":"Jane Austen","year":"","language":"English","characters":763082,"rank":1,"shelf":"3f6bb9d6f78e0293b56a"},
 {"file":"pg2701.txt","title":"Moby Dick; Or, The Whale","author":"Herman Melville","year":"","language":"English","characters":1260643,"rank":2,"shelf":"b5e88b71a1cda068e9ab"},

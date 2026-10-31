@@ -194,7 +194,17 @@ The Library has a collection of ~1K copyright-free literature classics from the 
 
 The Catalogue loads the list when **Find a book** is first opened, and a book's text only when you choose it, so the collection works the same whether the Library is opened by double-click or online.
 
-The title, author and year come from the file name. If the name does not give an author, they come from the e-book's header, as for the Gutenberg files. Those can be added as they are: the Catalogue leaves out the licence that comes before and after the text, and the volunteers' credits. Leave a blank line between paragraphs. If there are no blank lines, each line is taken as a paragraph, and a file written on a single line is set as one long paragraph. Each book's script is named after its text, so shelving again only writes the books that are new or changed, and removes those that are gone.
+The title, author and year come from the file name. If the name does not give an author, they come from the e-book's header, as for the Gutenberg files. Those can be added as they are: the Catalogue leaves out the licence that comes before and after the text, and the volunteers' credits. Leave a blank line between paragraphs. If there are no blank lines, each line is taken as a paragraph, and a file written on a single line is set as one long paragraph.
+
+**Adding books.** Put plain-text files (`.txt`) in `books/uncompressed/`, which is not published, then shelve them with Python 3:
+
+```
+python3 books/shelve.py
+```
+
+It compresses each new or changed book into a script of its own in `books/compressed/`, named after a hash of its text (which is also its `#book=` link), removes the scripts of the books whose `.txt` file is gone, and rewrites the list, `books/index.js`. Books it has shelved before, unchanged since, are not read again, so it takes but a moment. A copy of the repository without `books/uncompressed/` leaves the shelf as it is.
+
+A git hook, `.githooks/pre-commit`, runs the script before every commit and adds what it changed to the commit. Git uses it once told where the Library keeps its hooks, which is done once per copy of the repository, in its folder: `git config core.hooksPath .githooks`. Note that `books/uncompressed/` is not part of the repository, so new books on their own leave nothing to commit: run the script yourself then, and commit what it wrote.
 
 Under **Other books**, anyone can also show the Catalogue a `.txt` file of their own with **Choose book files**. Browsers word this as "uploading", but the file is only read by the page and never leaves the computer. The Catalogue remembers those books in that browser until **Forget these books** is pressed.
 
@@ -228,7 +238,9 @@ In `index.html`, every file name is followed by `?v=` and a version, such as `js
 | `js/main.js` | Start-up, reading, sleep |
 | `lib/` | three.js r147 and its `Reflector` (MIT licence, see `lib/three.LICENSE`) |
 | `tests/library.test.js` | Tests of the mathematics |
-| `books/index.js`, `books/compressed/` | The collection, as the Catalogue reads it, written by `books/download_gutenberg_top1024.py` from the `.txt` files in `books/uncompressed/` (which are not published) |
+| `books/index.js`, `books/compressed/` | The collection, as the Catalogue reads it, written by `books/shelve.py` from the `.txt` files in `books/uncompressed/` (which are not published) |
+| `books/shelve.py` | Shelves the collection: see [Your books](#your-books) |
+| `.githooks/pre-commit` | Runs `books/shelve.py` before every commit |
 
 ## Testing
 

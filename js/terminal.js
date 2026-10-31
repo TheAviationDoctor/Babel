@@ -594,7 +594,7 @@
       $('shelf-status').textContent = 'Opening the shelves…';
       const books = await collection.load();
       if (!books.length) {
-        $('shelf-intro').textContent = 'This Library has no collection of books yet. To give it one, put plain-text files (.txt) in its books/uncompressed folder and run books/download_gutenberg_top1024.py --output books --shelve-only. Meanwhile, you can show the catalogue your own books below.';
+        $('shelf-intro').textContent = 'This Library has no collection of books yet. To give it one, put plain-text files (.txt) in its books/uncompressed folder and run python3 books/shelve.py. Meanwhile, you can show the catalogue your own books below.';
         $('shelf-status').textContent = '';
         $('shelf-list').hidden = true;
         document.querySelector('#panel-books .shelf-tools').hidden = true;
