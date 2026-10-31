@@ -668,7 +668,6 @@
 
     $('prev-page').addEventListener('click', () => turn(-1));
     $('next-page').addEventListener('click', () => turn(1));
-    $('random-page').addEventListener('click', () => { reading.page = Math.floor(Math.random() * lib.config.pagesPerBook); renderPage(); });
     $('copy-page').addEventListener('click', () => {
       copyText(lib.pageLines(reading.content, reading.page).join('\n'), `Copied page ${reading.page + 1}.`);
     });
