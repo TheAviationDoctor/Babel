@@ -1,6 +1,6 @@
 # Babel
 
-A Web-based walkable simulation of Jorge Luis Borges's *[Library of Babel](https://en.wikipedia.org/wiki/The_Library_of_Babel)* adapted from his 1941 eponymous story. It contains every book that was ever written, and every book that wasn't. Every future idea or life experience of yours is already written somewhere in there; nihil sub sōle novum. The complication, of course, is knowing where to look.
+A Web-based walkable simulation of Jorge Luis Borges's *[Library of Babel](https://en.wikipedia.org/wiki/The_Library_of_Babel)* adapted from his 1941 eponymous story. It contains every book that was ever written, and every book that wasn't. The complication, of course, is knowing where to look.
 
 ## Features
 
