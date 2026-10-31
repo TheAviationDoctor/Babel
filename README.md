@@ -8,7 +8,7 @@ A Web-based walkable simulation of Jorge Luis Borges's *[Library of Babel](https
 - Configurable environment (seed, book format, alphabet, bookshelves, look sensitivity, field of view)
 - Interactive objects (books, terminal, doors, beds, bedside lamps)
 - Reverse-search any text and teleport to the corresponding book
-- Copy and share book locations
+- Copy and share locations of any book or text, incl. secret password-encrypted links
 - Read from an index of ~1K literature classics (all copyright-free)
 
 ## Getting started
