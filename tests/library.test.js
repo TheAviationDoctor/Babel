@@ -524,16 +524,31 @@ test('the sentences of dreams are grammatical and always the same for a hexagon'
     assert.strictEqual(await Library.readLink('#text=50%25 off, 100% sure'), '50% off, 100% sure');
     assert.strictEqual(await Library.readLink('#book=3f6bb9d6f78e0293b56a'), null);
     assert.strictEqual(await Library.readLink(''), null);
-    // the book: the text as typed, from the very start of the first page, the rest blank
+    // the book: a text over several lines is set in paragraphs, as the Read tab sets a book
+    // of the collection, from the very start of the first page, the rest blank
     const b = lib.bookOfText(post);
-    const typed = lib.prepareText(post);
-    assert.strictEqual(b.length, typed.symbols.length);
-    assert.strictEqual(lib.toText(b.content, 0, b.length), typed.text);
-    assert.ok(typed.text.startsWith('A first paragraph, with “curly quotes”, an em dash — and an émigré.  A second'));
+    const laid = lib.layText(post);
+    assert.ok(laid.laidOut);
+    assert.deepStrictEqual(laid.symbols, lib.typeset(post, {}).parts[0]);
+    assert.strictEqual(b.length, laid.symbols.length);
+    assert.deepStrictEqual(lib.pageLines(b.content, 0).slice(0, 4).map((l) => l.trimEnd()),
+      ['   A first paragraph, with “curly quotes”, an em dash — and an', 'émigré.', '   A second paragraph.', '']);
+    assert.strictEqual(laid.text, 'A first paragraph, with “curly quotes”, an em dash — and an émigré. A second paragraph.');
     assert(lib.pageLines(b.content, 1).every((l) => !l.trim()), 'the second page is blank');
     assert.strictEqual(Library.indexOf(lib.bookAt(b.location), b.content), 0);
+    // a text on one line is taken as typed, whatever spaces or line break surround it
+    for (const t of ['The sun rises in the west.', 'The sun rises in the west.\n', '  The sun rises in the west.']) {
+      const p = lib.layText(t);
+      assert.ok(!p.laidOut);
+      assert.deepStrictEqual(p.symbols, lib.prepareText(t).symbols);
+      assert.strictEqual(lib.bookOfText(t).length, lib.prepareText(t).symbols.length);
+    }
+    // a text set in more lines than a book holds is too long
+    const lines = lib.M / lib.config.charactersPerLine;
+    assert.ok(lib.bookOfText('a\n'.repeat(lines)));
+    assert.strictEqual(lib.bookOfText('a\n'.repeat(lines + 1)), null);
     // the same book as "Find a text" finds; and whichever form of link carried the text
-    const found = lib.findText(typed.symbols);
+    const found = lib.findText(laid.symbols);
     assert.strictEqual(key(found.location.hexagon) + key(found.location.floor) + found.location.slot, key(b.location.hexagon) + key(b.location.floor) + b.location.slot);
     const again = lib.bookOfText(await Library.readLink(new URL(plain).hash));
     assert.strictEqual(key(again.location.hexagon) + key(again.location.floor) + again.location.slot, key(b.location.hexagon) + key(b.location.floor) + b.location.slot);

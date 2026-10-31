@@ -1018,13 +1018,41 @@
     }
 
     /**
-     * The book that holds a text exactly as typed, from the very start of its first page,
-     * the rest of its pages blank: the book "Search" finds, and links to texts lead to.
-     * Returns { location, content, length } (length: the symbols the text takes), or null if
-     * the text holds nothing the Library can write, or is longer than a book.
+     * Sets a text as Search and links do, from the very start of the first page. A text on
+     * one line is taken as typed (as prepareText leaves it). A text over several lines is
+     * set as typeset sets a book, without a title page: in lines broken between words and
+     * padded with spaces, each paragraph starting on a new, indented line, so that its
+     * paragraphs keep their shape. Returns what prepareText returns, with laidOut (whether
+     * it was set in lines), lines (how many it takes) and characters (those of the text).
+     */
+    layText(raw) {
+      raw = String(raw);
+      if (!/[\r\n]/.test(raw.trim()) || this.alphabet.indexOf(' ') < 0) {
+        const p = this.prepareText(raw);
+        return Object.assign(p, { laidOut: false, lines: 0, characters: p.symbols.length });
+      }
+      const set = this.typeset(raw, {});
+      let symbols = set.parts[0];
+      if (set.parts.length > 1) { // longer than a book: kept whole, for the caller to say so
+        symbols = new Uint8Array(set.parts.reduce((n, part) => n + part.length, 0));
+        let at = 0;
+        for (const part of set.parts) { symbols.set(part, at); at += part.length; }
+      }
+      return {
+        symbols, text: this.toText(symbols).replace(/ {2,}/g, ' ').trim(),
+        dropped: set.dropped, recased: set.recased, substituted: set.substituted, substitutions: set.substitutions,
+        laidOut: true, lines: Math.ceil(symbols.length / this.config.charactersPerLine), characters: set.characters,
+      };
+    }
+
+    /**
+     * The book that holds a text from the very start of its first page, set as layText
+     * sets it, the rest of its pages blank: the book "Search" finds, and links to texts
+     * lead to. Returns { location, content, length } (length: the symbols the text takes),
+     * or null if the text holds nothing the Library can write, or is longer than a book.
      */
     bookOfText(text) {
-      const p = this.prepareText(text);
+      const p = this.layText(text);
       if (!p.symbols.length || p.symbols.length > this.M) return null;
       const r = this.findText(p.symbols);
       return { location: r.location, content: r.content, length: p.symbols.length };

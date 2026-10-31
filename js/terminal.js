@@ -289,19 +289,22 @@
     /** Describes what will be searched for, as the reader types. */
     _note() {
       const lib = this.lib, raw = $('find-text').value;
-      const p = lib.prepareText(raw);
+      const p = lib.layText(raw);
       const parts = [];
 //      if (!raw) parts.push(`Up to ${fmt(lib.M)} characters, in the Library's alphabet: ${alphabetWords(lib)}.`);
       if (!raw) parts.push(`Up to ${fmt(lib.M)} characters (A–Z, a-z, accented letters, digits, and punctuation).`);
       else {
-        parts.push(`Search ${fmt(p.symbols.length)} ${p.symbols.length === 1 ? 'character' : 'characters'}.`);
+        if (p.laidOut) parts.push(`Search ${fmt(p.characters)} ${p.characters === 1 ? 'character' : 'characters'}, set in ${fmt(p.lines)} ${p.lines === 1 ? 'line' : 'lines'}, each paragraph starting on a new, indented line.`);
+        else parts.push(`Search ${fmt(p.symbols.length)} ${p.symbols.length === 1 ? 'character' : 'characters'}.`);
         if (p.recased) parts.push(`Letters are searched for as ${oneCase(lib)}.`);
         if (p.substitutions.length) parts.push(`Some characters are read as their nearest equivalents in the alphabet: ${equivalents(p.substitutions)}.`);
         if (p.dropped.length) {
           const shown = p.dropped.slice(0, 12).map((c) => `“${c}”`).join(' ');
           parts.push(`Not in the alphabet, so left out: ${shown}${p.dropped.length > 12 ? ' and others' : ''}.`);
         }
-        if (p.symbols.length > lib.M) parts.push(`That is longer than a whole book, which holds ${fmt(lib.M)} characters.`);
+        if (p.symbols.length > lib.M) parts.push(p.laidOut
+          ? `That is longer than a whole book, which holds ${fmt(lib.M / lib.config.charactersPerLine)} lines.`
+          : `That is longer than a whole book, which holds ${fmt(lib.M)} characters.`);
       }
       $('find-note').textContent = parts.join(' ');
       $('find-go').disabled = !p.symbols.length || p.symbols.length > lib.M;

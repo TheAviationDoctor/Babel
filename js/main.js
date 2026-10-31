@@ -212,9 +212,9 @@
     return goToText(text, hash, travelling);
   }
 
-  /** Sets the reader down before the book that holds `text` as typed, from the start of its first page. */
+  /** Sets the reader down before the book that holds `text` from the start of its first page, set as Search sets it. */
   function goToText(text, hash, travelling) {
-    const p = lib.prepareText(text);
+    const p = lib.layText(text);
     if (!p.symbols.length) { toast('This link carries no text that the Library can hold.', 7000); return false; }
     if (p.symbols.length > lib.M) { toast('The text this link carries is longer than a book of the Library.', 7000); return false; }
     const loc = lib.findText(p.symbols).location, length = p.symbols.length;
@@ -440,7 +440,10 @@
     const base = reading.page * c.charactersPerPage;
     lines.forEach((line, i) => {
       const s0 = base + i * c.charactersPerLine;
-      const a = h ? Math.max(h.start, s0) - s0 : 0, b = h ? Math.min(h.start + h.length, s0 + c.charactersPerLine) - s0 : 0;
+      let a = h ? Math.max(h.start, s0) - s0 : 0, b = h ? Math.min(h.start + h.length, s0 + c.charactersPerLine) - s0 : 0;
+      // not the spaces that indent a paragraph, or pad out its lines
+      while (b > a && line[a] === ' ') a++;
+      while (b > a && line[b - 1] === ' ') b--;
       if (b > a) {
         if (a > 0) appendText(pre, line.slice(0, a));
         const m = document.createElement('mark');
