@@ -194,24 +194,24 @@
    *
    * A book's address is as long as the book itself (there are exactly as many
    * addresses as books), so a link carries the book's text instead, in the part of the
-   * address after '#', which browsers never send to the server. It takes one of two forms:
+   * address after '#', which browsers never send to the server. It takes one of three forms:
    *
    *   …/#text=<the text, percent-encoded>          e.g. …/#text=Call%20me%20Ishmael.
    *   …/#text=:<the text, compressed>              the same, often shorter: a colon, then
    *                                                the text's UTF-8 bytes, deflated (zlib)
    *                                                and written in base64url, without padding
+   *   …/#secret=<the text, compressed, encrypted>  a secret link: see below
    *
-   * The book it leads to is the one that holds exactly that text, set in pages as the
-   * catalogue sets a book (whole words, a new line for each paragraph), from the first
-   * page, the rest of its pages blank. Two options may follow, in any order:
+   * The book it leads to holds exactly that text, as typed, from the very start of its
+   * first page, the rest of its pages blank: the book the catalogue's "Find a text" finds.
+   * The link carries everything the book holds, so it keeps leading to the same book
+   * whatever the seed or configuration of the Library.
    *
-   *   &typed     the text as typed, at the very start of the first page, as the
-   *              catalogue's "Find a text" places it, rather than set in pages
-   *   &random    the rest of the book in random characters rather than blank
-   *
-   * Without &random, the link carries everything the book holds, so it keeps leading to
-   * the same book whatever the seed or configuration of the Library. With it, the random
-   * characters come from the seed, so the book is the same only in the same Library.
+   * A secret link holds the text compressed, then encrypted with AES-GCM under a key made
+   * from a password with PBKDF2 (SHA-256, 600,000 rounds, so that guessing passwords is
+   * slow): a version byte (1), the salt (16 bytes), the nonce (12 bytes), then the
+   * encrypted text and its tag (16 bytes), all in base64url. The password is in no link,
+   * and kept nowhere: whoever opens the link is asked for it.
    * ------------------------------------------------------------------ */
 
   function toBase64Url(bytes) {
@@ -229,6 +229,23 @@
 
   async function throughStream(bytes, stream) {
     return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
+  }
+
+  const SECRET_VERSION = 1;
+  const SECRET_ROUNDS = 600000;
+
+  /** The browser's (or Node's) cryptography, which secret links need. */
+  function webCrypto() {
+    const c = typeof globalThis !== 'undefined' ? globalThis.crypto : null;
+    if (!c || !c.subtle) throw new Error('This browser cannot encrypt or decrypt here, so it cannot make or open secret links.');
+    return c;
+  }
+
+  /** The AES-GCM key a password makes with a given salt. */
+  async function secretKey(subtle, password, salt) {
+    const raw = await subtle.importKey('raw', new TextEncoder().encode(String(password).normalize('NFC')), 'PBKDF2', false, ['deriveKey']);
+    return subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: SECRET_ROUNDS }, raw,
+      { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
   }
 
   /** Decodes %XX sequences, leaving alone any '%' that does not begin one (as in "50% off"). */
@@ -676,21 +693,20 @@
     /**
      * A link to a book of the collection, by the name of its file in books/compressed/ (a
      * hash of its text): '#book=<id>' for its first part, '#book=<id>/<n>' for part n of a
-     * book too long for one volume, and '&random' after either for random characters after
-     * the text rather than blank pages. Without &random, these links keep leading to the
-     * same book whatever the seed, like links to texts.
+     * book too long for one volume. These links keep leading to the same book whatever
+     * the seed, like links to texts.
      */
-    static bookLink(id, part, random) {
-      return `#book=${id}${part > 1 ? '/' + part : ''}${random ? '&random' : ''}`;
+    static bookLink(id, part) {
+      return `#book=${id}${part > 1 ? '/' + part : ''}`;
     }
 
-    /** Reads '#book=…': { id, part, random }, or { error }, or null if it is not such a link. */
+    /** Reads '#book=…': { id, part }, or { error }, or null if it is not such a link. */
     static readBookLink(hash) {
       const h = String(hash || '').trim();
       if (!/^#?book=/.test(h)) return null;
-      const m = /^#?book=([0-9a-f]{20})(?:\/(\d{1,6}))?(&random)?$/.exec(h);
+      const m = /^#?book=([0-9a-f]{20})(?:\/(\d{1,6}))?$/.exec(h);
       if (!m) return { error: 'This link to a book of the collection is incomplete: part of it may have been lost when it was copied.' };
-      return { id: m[1], part: m[2] ? Math.max(1, Number(m[2])) : 1, random: !!m[3] };
+      return { id: m[1], part: m[2] ? Math.max(1, Number(m[2])) : 1 };
     }
 
     /**
@@ -931,55 +947,87 @@
     }
 
     /**
-     * A link to the book that holds `text`, as described under "Links to books": the
-     * compressed form, or the percent-encoded one if `plain` is set or compression is
-     * unavailable. `base` is the address of the published Library.
-     */
-    /**
      * A link to the book that holds `text`: `base` (the Library's address), then '#text='
-     * and the text, compressed or plain, whichever is shorter. options: { plain, typed,
-     * random } (plain: never compressed; typed, random: the options above).
+     * and the text, compressed or percent-encoded, whichever is shorter (`plain`: never
+     * compressed).
      */
-    static async makeLink(base, text, options) {
-      const o = options || {};
+    static async makeLink(base, text, plain) {
       base = String(base || '').replace(/#.*$/, '');
-      const flags = (o.typed ? '&typed' : '') + (o.random ? '&random' : '');
-      const plain = base + '#text=' + encodeURIComponent(String(text)) + flags;
-      if (!o.plain && typeof CompressionStream === 'function') {
+      const open = base + '#text=' + encodeURIComponent(String(text));
+      if (!plain && typeof CompressionStream === 'function') {
         try {
           const bytes = await throughStream(new TextEncoder().encode(String(text)), new CompressionStream('deflate'));
-          const packed = base + '#text=:' + toBase64Url(bytes) + flags;
-          if (packed.length < plain.length) return packed;
-        } catch (e) { /* the plain form, then */ }
+          const packed = base + '#text=:' + toBase64Url(bytes);
+          if (packed.length < open.length) return packed;
+        } catch (e) { /* the percent-encoded form, then */ }
       }
-      return plain;
+      return open;
     }
 
-    /**
-     * What a link to a text carries (its part after '#'): { text, typed, random }, or null
-     * if it is not such a link.
-     */
+    /** The text a link to a text carries (its part after '#'), or null if it is not such a link. */
     static async readLink(hash) {
       const m = /^#?text=([\s\S]*)$/.exec(String(hash || ''));
       if (!m) return null;
-      let value = m[1], typed = false, random = false;
-      for (let f; (f = /&(typed|random)$/.exec(value)); value = value.slice(0, f.index)) {
-        if (f[1] === 'typed') typed = true; else random = true;
-      }
-      if (value.charAt(0) !== ':') return { text: decodePercent(value), typed, random };
+      const value = m[1];
+      if (value.charAt(0) !== ':') return decodePercent(value);
       if (typeof DecompressionStream !== 'function') throw new Error('This browser is too old to open compressed links to texts.');
-      const text = new TextDecoder().decode(await throughStream(fromBase64Url(value.slice(1)), new DecompressionStream('deflate')));
-      return { text, typed, random };
+      return new TextDecoder().decode(await throughStream(fromBase64Url(value.slice(1)), new DecompressionStream('deflate')));
+    }
+
+    /** A secret link to the book that holds `text`: the text, compressed and encrypted with `password`. */
+    static async makeSecretLink(base, text, password) {
+      const c = webCrypto();
+      if (typeof CompressionStream !== 'function') throw new Error('This browser is too old to make secret links.');
+      const packed = await throughStream(new TextEncoder().encode(String(text)), new CompressionStream('deflate'));
+      const salt = c.getRandomValues(new Uint8Array(16)), nonce = c.getRandomValues(new Uint8Array(12));
+      const key = await secretKey(c.subtle, password, salt);
+      const sealed = new Uint8Array(await c.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, key, packed));
+      const out = new Uint8Array(29 + sealed.length);
+      out[0] = SECRET_VERSION;
+      out.set(salt, 1);
+      out.set(nonce, 17);
+      out.set(sealed, 29);
+      return String(base || '').replace(/#.*$/, '') + '#secret=' + toBase64Url(out);
+    }
+
+    /** Whether the part of an address after '#' is a secret link. */
+    static isSecretLink(hash) { return /^#?secret=/.test(String(hash || '').trim()); }
+
+    /**
+     * The text a secret link carries, given its password. Throws an Error whose `reason` is
+     * 'password' if the password does not open it (or the link was cut short where that
+     * cannot be told), or 'broken' if the link is plainly incomplete.
+     */
+    static async readSecretLink(hash, password) {
+      const m = /^#?secret=([A-Za-z0-9_-]+)$/.exec(String(hash || '').trim());
+      let bytes = null;
+      try { if (m) bytes = fromBase64Url(m[1]); } catch (e) { bytes = null; }
+      if (!bytes || bytes.length < 29 + 16 || bytes[0] !== SECRET_VERSION) {
+        throw Object.assign(new Error('This secret link is incomplete: part of it may have been lost when it was copied.'), { reason: 'broken' });
+      }
+      const c = webCrypto();
+      const key = await secretKey(c.subtle, password, bytes.slice(1, 17));
+      let packed;
+      try {
+        packed = await c.subtle.decrypt({ name: 'AES-GCM', iv: bytes.slice(17, 29) }, key, bytes.slice(29));
+      } catch (e) {
+        throw Object.assign(new Error('That password does not open this link.'), { reason: 'password' });
+      }
+      if (typeof DecompressionStream !== 'function') throw new Error('This browser is too old to open secret links.');
+      return new TextDecoder().decode(await throughStream(new Uint8Array(packed), new DecompressionStream('deflate')));
     }
 
     /**
-     * The book that holds a text, as a link leads to it: its location and contents. With
-     * `random`, the rest of the book is random characters rather than blank.
+     * The book that holds a text exactly as typed, from the very start of its first page,
+     * the rest of its pages blank: the book "Find a text" finds, and links to texts lead to.
+     * Returns { location, content, length } (length: the symbols the text takes), or null if
+     * the text holds nothing the Library can write, or is longer than a book.
      */
-    bookOfText(text, random) {
-      const set = this.typeset(Library.cleanEbook(text).text, {});
-      const r = this.findText(set.parts[0], { fill: random ? 'random' : 'blank' });
-      return { location: r.location, content: r.content, parts: set.parts.length, set };
+    bookOfText(text) {
+      const p = this.prepareText(text);
+      if (!p.symbols.length || p.symbols.length > this.M) return null;
+      const r = this.findText(p.symbols);
+      return { location: r.location, content: r.content, length: p.symbols.length };
     }
 
     /**
@@ -1198,16 +1246,15 @@
     }
 
     /**
-     * Finds a book containing `text`, starting at character `position` of page `page`
-     * (both 0-based). The rest of the book is filled with seeded random symbols, so the
-     * same request always returns the same book. Returns { location, page, position }.
+     * Finds the book that holds `text` from character `position` of page `page` (both
+     * 0-based, by default the very start), the rest of it blank: spaces, or the first
+     * symbol of an alphabet without a space. Returns { location, page, position, content }.
      */
     findText(text, options) {
       options = options || {};
       let symbols;
       if (text instanceof Uint8Array) {
         symbols = text;
-        text = this.toText(symbols);
       } else {
         const enc = this.encode(text);
         if (enc.unknown.length) throw new Error('These characters are not in the alphabet: ' + enc.unknown.join(' '));
@@ -1219,14 +1266,8 @@
       const start = page * c.charactersPerPage + position;
       if (start + symbols.length > this.M) throw new Error('The text does not fit in one book from that position.');
       const content = new Uint8Array(this.M);
-      if (options.fill === 'blank') {
-        const blank = this.alphabet.indexOf(' ');
-        content.fill(blank >= 0 ? blank : 0);
-      } else {
-        const k = hashString('babel/fill/' + this.seed + '/' + text);
-        const rng = sfc32(k[0], k[1], k[2], k[3]);
-        for (let i = 0; i < this.M; i++) content[i] = Math.floor(unit(rng) * this.N);
-      }
+      const blank = this.alphabet.indexOf(' ');
+      content.fill(blank >= 0 ? blank : 0);
       content.set(symbols, start);
       return { location: this.locateContent(content), page, position, content };
     }

@@ -192,36 +192,82 @@
   }
 
   /**
-   * If the page's address is a link to a text (…/#text=…) or to a book of the collection
-   * (…/#book=…), sets the reader down before the book it leads to, and returns true.
+   * If the page's address is a link to a text (…/#text=…), a secret link (…/#secret=…) or a
+   * link to a book of the collection (…/#book=…), sets the reader down before the book it
+   * leads to (once its password is given, for a secret link), and returns true.
    */
   async function goToLinkedBook(travelling) {
     const hash = location.hash;
+    if (BabelCore.Library.isSecretLink(hash)) { askSecret(hash, travelling); return true; }
     const book = BabelCore.Library.readBookLink(hash);
     if (book) return goToCollectionBook(book, hash, travelling);
-    let link;
+    let text;
     try {
-      link = await BabelCore.Library.readLink(hash);
+      text = await BabelCore.Library.readLink(hash);
     } catch (e) {
       toast(/too old/.test(e.message) ? e.message : 'This link to a text could not be read. It may have been cut short.', 7000);
       return false;
     }
-    if (!link) return false;
-    const p = lib.prepareText(link.text);
+    if (text === null) return false;
+    return goToText(text, hash, travelling);
+  }
+
+  /** Sets the reader down before the book that holds `text` as typed, from the start of its first page. */
+  function goToText(text, hash, travelling) {
+    const p = lib.prepareText(text);
     if (!p.symbols.length) { toast('This link carries no text that the Library can hold.', 7000); return false; }
-    let loc, length = 0;
-    if (link.typed) {
-      // as typed, at the very start of the first page, as "Find a text" places it
-      if (p.symbols.length > lib.M) { toast('The text this link carries is longer than a book of the Library.', 7000); return false; }
-      loc = lib.findText(p.symbols, { fill: link.random ? 'random' : 'blank' }).location;
-      length = p.symbols.length;
-    } else {
-      loc = lib.bookOfText(link.text, link.random).location;
-    }
+    if (p.symbols.length > lib.M) { toast('The text this link carries is longer than a book of the Library.', 7000); return false; }
+    const loc = lib.findText(p.symbols).location, length = p.symbols.length;
     const go = () => goToAddress(loc.hexagon, loc.floor, lib.slotParts(loc.slot), { slot: loc.slot, start: 0, length, link: hash });
     if (travelling) journey(go); else go();
     toast(`Before you, a little out of its row, stands the book the link leads to. ${isTouch ? 'Tap it' : 'Press E'} to read it.`, 6000);
     return true;
+  }
+
+  /* ---------------- secret links ---------------- */
+
+  let secret = null; // the secret link waiting for its password: { hash, travelling }
+
+  /** Asks for the password of a secret link. */
+  function askSecret(hash, travelling) {
+    secret = { hash, travelling };
+    $('secret-password').value = '';
+    $('secret-error').hidden = true;
+    $('secret-go').disabled = false;
+    setMode('secret');
+    setTimeout(() => $('secret-password').focus(), 0);
+  }
+
+  async function openSecret() {
+    if (!secret || $('secret-go').disabled) return;
+    const { hash, travelling } = secret, password = $('secret-password').value;
+    if (!password) return;
+    const error = $('secret-error');
+    error.hidden = true;
+    $('secret-go').disabled = true;
+    $('secret-go').textContent = 'Opening…';
+    let text = null;
+    try {
+      text = await BabelCore.Library.readSecretLink(hash, password);
+    } catch (e) {
+      if (e.reason === 'broken' || /too old|cannot encrypt/.test(e.message)) { secret = null; startWalking(); toast(e.message, 7000); return; }
+      error.textContent = 'That password does not open this link. Check it, and that the link was copied whole.';
+      error.hidden = false;
+      $('secret-password').select();
+      return;
+    } finally {
+      $('secret-go').disabled = false;
+      $('secret-go').textContent = 'Open';
+    }
+    secret = null;
+    if (!goToText(text, hash, travelling)) startWalking();
+  }
+
+  function leaveSecret() {
+    if (!secret) return;
+    secret = null;
+    startWalking();
+    toast('The secret text stays closed. Open its link again to give its password.', 6000);
   }
 
   function goToRandom() {
@@ -230,7 +276,7 @@
     toast('You arrive in a hexagon chosen at random.');
   }
 
-  /** Follows a link to a book of the collection: '#book=<id>' or '#book=<id>/<part>', and '&random' after either. */
+  /** Follows a link to a book of the collection: '#book=<id>' or '#book=<id>/<part>'. */
   async function goToCollectionBook(ref, hash, travelling) {
     if (ref.error) { toast(ref.error, 7000); return false; }
     let text;
@@ -245,7 +291,7 @@
     const set = lib.typeset(BabelCore.Library.cleanEbook(text).text, {});
     const n = set.parts.length;
     if (ref.part > n) { toast(`This link leads to part ${ref.part} of a book that has ${n === 1 ? 'only one part' : `only ${n} parts`}.`, 7000); return false; }
-    const r = lib.findText(set.parts[ref.part - 1], { fill: ref.random ? 'random' : 'blank' });
+    const r = lib.findText(set.parts[ref.part - 1]);
     const title = book ? (n > 1 ? `${book.title}, part ${ref.part} of ${n}` : book.title) : '';
     const go = () => goToAddress(r.location.hexagon, r.location.floor, lib.slotParts(r.location.slot),
       { slot: r.location.slot, start: 0, length: 0, title, link: hash });
@@ -294,9 +340,10 @@
     $('hud').hidden = next !== 'walking';
     $('reader').hidden = next !== 'reading';
     $('terminal').hidden = next !== 'terminal';
+    $('secret').hidden = next !== 'secret';
     $('sleep').hidden = next !== 'sleeping';
     player.enabled = next === 'walking';
-    if ((next === 'terminal' || next === 'reading' || next === 'sleeping') && document.pointerLockElement) document.exitPointerLock();
+    if ((next === 'terminal' || next === 'reading' || next === 'sleeping' || next === 'secret') && document.pointerLockElement) document.exitPointerLock();
     if (next !== 'walking') { world.clearHover(); gaze = null; gazeKey = ''; $('gaze').hidden = true; }
     updateLookHint();
   }
@@ -613,6 +660,9 @@
   /* ---------------- interface wiring ---------------- */
 
   function bindInterface() {
+    // the password of a secret link
+    $('secret-form').addEventListener('submit', (e) => { e.preventDefault(); openSecret(); });
+    $('secret-leave').addEventListener('click', leaveSecret);
     // a link to a book, pasted into the address bar while the Library is open
     window.addEventListener('hashchange', () => { goToLinkedBook(true); });
 
@@ -664,6 +714,8 @@
         if (e.code === 'Escape') { e.preventDefault(); terminal.close(); }
       } else if (mode === 'sleeping') {
         if (e.code === 'Escape') { e.preventDefault(); wakeUp(false); }
+      } else if (mode === 'secret') {
+        if (e.code === 'Escape') { e.preventDefault(); leaveSecret(); }
       }
     });
 
@@ -671,7 +723,7 @@
     setMode('walking');
     goToLinkedBook().then((went) => {
       // (a link that could not be followed has said why: that stays on screen instead)
-      if (!went && !/^#(text|book)=/.test(location.hash)) {
+      if (!went && !/^#(text|book|secret)=/.test(location.hash)) {
         toast((isTouch ? 'Drag on the right to look around, hold and slide on the left to walk, and tap a book to read it.'
           : 'Walk with W A S D, and press E to take down a book.') + ' The catalogue in each vestibule tells you where you are.', 9000);
       }

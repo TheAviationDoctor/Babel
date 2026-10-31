@@ -280,10 +280,10 @@
       $('find-text').addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); this.find(); }
       });
-      for (const r of document.querySelectorAll('input[name="fill"]')) r.addEventListener('change', () => this._certain());
       $('certain-read').addEventListener('click', () => this._readCertain());
       $('certain-go').addEventListener('click', () => this._goCertain());
       $('certain-link').addEventListener('click', () => this._copyLink(this.certainLink));
+      $('certain-secret').addEventListener('click', () => this._toggleSecret($('certain-secret-box'), () => this.query.raw));
       $('certain-copy').addEventListener('click', () => {
         const loc = this.certain.location;
         this.ctx.copyText(this.lib.hexagonAddressText(loc.hexagon, loc.floor), 'Copied the address of that hexagon.');
@@ -293,7 +293,6 @@
       $('shelf-order').addEventListener('change', () => this._renderShelf());
       $('books-files-input').addEventListener('change', () => this._addBooks($('books-files-input')));
       $('books-forget').addEventListener('click', () => this._forgetBooks());
-      for (const r of document.querySelectorAll('input[name="book-fill"]')) r.addEventListener('change', () => this._placeBook());
       $('go-offset').addEventListener('submit', (e) => { e.preventDefault(); this._goOffset(); });
       $('go-address').addEventListener('submit', (e) => { e.preventDefault(); this._goAddress(); });
       $('go-random').addEventListener('click', () => this.ctx.goToRandom());
@@ -407,6 +406,7 @@
       this.query = Object.assign({ raw: $('find-text').value }, p);
       $('find-results').hidden = false;
       $('find-query').textContent = p.text.length > 160 ? p.text.slice(0, 160) + '…' : p.text;
+      $('certain-secret-box').textContent = '';
       this._certain();
     }
 
@@ -415,11 +415,10 @@
     _certain() {
       if (!this.query) return;
       const lib = this.lib, world = this.ctx.world, player = this.ctx.player;
-      const fill = document.querySelector('input[name="fill"]:checked').value;
-      const r = lib.findText(this.query.symbols, { fill });
+      const r = lib.findText(this.query.symbols);
       this.certain = r;
-      // a link to this very book: the text as typed, at the start of the first page
-      this.certainLink = this._link(this.query.raw, { typed: true, random: fill === 'random' });
+      // a link to this very book: the text, which it holds from the start of its first page
+      this.certainLink = this._link(this.query.raw);
       $('certain-where').innerHTML = this._whereHTML(r.location, 'from the first page');
     }
 
@@ -438,10 +437,10 @@
       return { url, promise: Promise.resolve(url) };
     }
 
-    _link(text, options) {
+    _link(text) {
       const base = this.ctx.linkBase();
       if (!base) return null;
-      const p = BabelCore.Library.makeLink(base, text, options).catch(() => null);
+      const p = BabelCore.Library.makeLink(base, text).catch(() => null);
       const holder = { url: null, promise: p };
       p.then((url) => { holder.url = url; });
       return holder;
@@ -456,6 +455,84 @@
       if (!url) { this.ctx.toast('The link could not be made.'); return; }
       const long = url.length > 60000 ? ` It is ${fmt(url.length)} characters long, which is more than some browsers and websites accept.` : '';
       this.ctx.copyText(url, `Copied a link to this book. Whoever opens it is set down before the book.${long}`);
+    }
+
+    /** Shows, or hides again, the form that makes a secret link to a text, in `box`. */
+    _toggleSecret(box, getText) {
+      if (box.firstChild) { box.textContent = ''; return; }
+      const form = this._secretForm(getText);
+      box.appendChild(form);
+      form.querySelector('input').focus();
+    }
+
+    /**
+     * The form that makes a secret link: a password, twice, then the link, copied with a
+     * second click (encrypting takes a moment, and browsers only copy within a click).
+     */
+    _secretForm(getText) {
+      const form = el('form', 'secret-make');
+      form.autocomplete = 'off';
+      const note = el('p', 'note', 'A secret link carries the text encrypted with a password of your choosing. Whoever opens it is asked for the password: give it to them separately, since the link alone cannot be read. The password is kept nowhere, and cannot be recovered.');
+      const field = (label) => {
+        const input = el('input');
+        input.type = 'password';
+        input.autocomplete = 'new-password';
+        input.spellcheck = false;
+        input.placeholder = label;
+        input.setAttribute('aria-label', label);
+        return input;
+      };
+      const password = field('Password'), again = field('The password again');
+      const make = el('button', 'primary', 'Make the secret link');
+      make.type = 'submit';
+      const error = el('p', 'error');
+      error.hidden = true;
+      const out = el('input', 'secret-link');
+      out.type = 'text';
+      out.readOnly = true;
+      out.setAttribute('aria-label', 'The secret link');
+      const copy = el('button', 'primary', 'Copy the secret link');
+      copy.type = 'button';
+      const made = el('div', 'row');
+      made.hidden = true;
+      made.append(out, copy);
+      const fields = el('div', 'row');
+      fields.append(password, again, make);
+      form.append(note, fields, error, made);
+
+      let url = null;
+      const forget = () => { url = null; made.hidden = true; };
+      password.addEventListener('input', forget);
+      again.addEventListener('input', forget);
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fail = (text) => { error.textContent = text; error.hidden = false; };
+        error.hidden = true;
+        forget();
+        if (password.value.length < 8) return fail('Choose a password of at least 8 characters. A few words make a stronger one, and one easier to remember.');
+        if (password.value !== again.value) return fail('The two passwords are not the same.');
+        const base = this.ctx.linkBase();
+        if (!base) return fail('To make links from a copy of the Library on this computer, set "website" in config.js to the address where the Library is published.');
+        make.disabled = true;
+        make.textContent = 'Encrypting…';
+        try {
+          url = await BabelCore.Library.makeSecretLink(base, getText(), password.value);
+          out.value = url;
+          made.hidden = false;
+          copy.focus();
+        } catch (x) {
+          fail(x.message || 'The secret link could not be made.');
+        } finally {
+          make.disabled = false;
+          make.textContent = 'Make the secret link';
+        }
+      });
+      copy.addEventListener('click', () => {
+        if (!url) return;
+        const long = url.length > 60000 ? ` It is ${fmt(url.length)} characters long, which is more than some browsers and websites accept.` : '';
+        this.ctx.copyText(url, `Copied the secret link. Whoever opens it is asked for its password, which the link does not hold.${long}`);
+      });
+      return form;
     }
 
     /** "Wall 2, shelf 3, volume 17, …, about 10^… hexagons east from here. Its floor is …" (HTML). */
@@ -683,13 +760,12 @@
       $('book-found-title').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
 
-    /** Runs the shelving backwards for every part of the book, with blank or random pages after it. */
+    /** Runs the shelving backwards for every part of the book, its pages after the text blank. */
     _placeBook() {
       const b = this.book;
       if (!b) return;
       const lib = this.lib, c = lib.config, set = b.set, n = set.parts.length;
-      const fill = document.querySelector('input[name="book-fill"]:checked').value;
-      b.found = set.parts.map((part) => lib.findText(part, { fill }));
+      b.found = set.parts.map((part) => lib.findText(part));
 
       $('book-found-title').replaceChildren('Where ', el('cite', '', b.meta.title), ' stands');
       const how = [`The catalogue sets the text as a book of this Library holds it, from the first page: ${fmt(c.charactersPerLine)} characters to a line and ${fmt(c.linesPerPage)} lines to a page, with words kept whole and paragraphs indented.`];
@@ -716,14 +792,17 @@
         const go = el('button', 'primary', 'Go there');
         const copy = el('button', '', 'Copy its address');
         const link = el('button', '', 'Copy a link to it');
-        for (const x of [read, go, copy, link]) x.type = 'button';
-        // a link to a book of the collection names it (any part); a link to another text carries
-        // it, and leads to the book set from its first page: the first part, then
-        const random = fill === 'random';
-        const bookHash = b.entry.shelf ? BabelCore.Library.bookLink(b.entry.shelf, k + 1, random) : null;
-        const linkable = !!bookHash || k === 0;
-        const holder = bookHash ? this._shortLink(bookHash) : linkable ? this._link(b.text, { random }) : null;
+        const secret = el('button', '', 'Copy a secret link');
+        for (const x of [read, go, copy, link, secret]) x.type = 'button';
+        // a link to a book of the collection names it; a link to another book carries the
+        // pages of this part as set, which its book holds from the start of its first page
+        // (the blank at their end, which the rest of the book is anyway, left out)
+        const bookHash = b.entry.shelf ? BabelCore.Library.bookLink(b.entry.shelf, k + 1) : null;
+        const pages = () => lib.toText(set.parts[k]).replace(/ +$/, '');
+        const holder = bookHash ? this._shortLink(bookHash) : this._link(pages());
         link.addEventListener('click', () => this._copyLink(holder));
+        const secretBox = el('div');
+        secret.addEventListener('click', () => this._toggleSecret(secretBox, pages));
         const linkOf = () => bookHash || (holder && holder.url ? holder.url.slice(holder.url.indexOf('#')) : null);
         read.addEventListener('click', () => this.ctx.openBookAt({ location: r.location, slot: r.location.slot, content: r.content, returnTo: 'terminal', link: linkOf() }));
         go.addEventListener('click', () => {
@@ -735,9 +814,10 @@
           const loc = r.location, { wall, shelf, volume } = this.lib.slotParts(loc.slot);
           this.ctx.copyText(this.lib.hexagonAddressText(loc.hexagon, loc.floor), `Copied the address of its hexagon. The book is on wall ${wall + 1}, shelf ${shelf + 1}, volume ${volume + 1}.`);
         });
-        row.append(read, go, copy);
-        if (linkable) row.append(link);
-        li.append(p, row);
+        row.append(read, go, copy, link);
+        // the books of the collection are public: a secret link is for books of one's own
+        if (!bookHash) row.append(secret);
+        li.append(p, row, secretBox);
         ol.appendChild(li);
       });
     }

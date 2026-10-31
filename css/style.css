@@ -163,7 +163,7 @@ mark { background: rgba(227, 169, 90, 0.55); color: var(--ink); box-shadow: 0 0 
 /* ---------- the catalogue ---------- */
 /* Its screen is a different object from everything else in the Library: cool glass, not lamplight. */
 
-#terminal {
+#terminal, #secret {
   --glass: #0f1716;
   --glow: #d4e3dc;
   --glow-dim: #8ea29a;
@@ -202,13 +202,13 @@ mark { background: rgba(227, 169, 90, 0.55); color: var(--ink); box-shadow: 0 0 
 .tabs button[aria-selected="true"] { color: var(--glow); border-bottom-color: var(--signal); background: transparent; }
 .panel { display: grid; gap: 1.4rem; }
 .glass label { color: var(--glow-dim); }
-.glass textarea, .glass input[type="text"], .glass input[type="search"], .glass select {
+.glass textarea, .glass input[type="text"], .glass input[type="search"], .glass input[type="password"], .glass select {
   font-family: var(--type); font-size: 1rem; color: var(--glow);
   background: rgba(0, 0, 0, 0.28); border: 1px solid rgba(212, 227, 220, 0.22); border-radius: 6px;
   padding: 0.55em 0.7em; box-sizing: border-box;
 }
 .glass textarea { width: 100%; resize: vertical; min-height: 4.5em; text-transform: none; }
-.glass textarea:focus, .glass input[type="text"]:focus, .glass input[type="search"]:focus, .glass select:focus { outline: none; border-color: var(--signal); }
+.glass textarea:focus, .glass input[type="text"]:focus, .glass input[type="search"]:focus, .glass input[type="password"]:focus, .glass select:focus { outline: none; border-color: var(--signal); }
 .find { display: grid; gap: 0.5rem; }
 .find-foot { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.6rem 1.2rem; }
 .find-foot .note { flex: 1 1 22rem; min-width: 0; }
@@ -221,9 +221,13 @@ mark { background: rgba(227, 169, 90, 0.55); color: var(--ink); box-shadow: 0 0 
 .result .where { line-height: 1.55; overflow-wrap: anywhere; }
 .result .where strong { font-weight: 400; color: var(--signal); }
 .glass sup { font-size: 0.7em; line-height: 0; }
-.fill { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; color: var(--glow-dim); font-size: 0.85rem; }
-.fill legend { padding: 0; margin-bottom: 0.2rem; width: 100%; }
-.fill input { accent-color: var(--signal); }
+/* making a secret link, and opening one */
+.secret-make { display: grid; gap: 0.6rem; padding: 0.9rem 1rem; border: 1px solid rgba(212, 227, 220, 0.14); border-radius: 8px; background: rgba(0, 0, 0, 0.18); }
+.secret-make .note { max-width: 46em; }
+.secret-make input[type="password"] { flex: 1 1 12rem; min-width: 0; }
+.secret-make .secret-link { flex: 1 1 18rem; min-width: 0; font-size: 0.85rem; color: var(--glow-dim); }
+.secret-ask { width: min(30rem, 100%); display: grid; gap: 1rem; }
+.secret-ask input[type="password"] { width: 100%; }
 .glass .addr { color: var(--glow); }
 .glass .error { color: #e8b48a; font-size: 0.85rem; }
 .go { display: grid; gap: 0.6rem; padding-top: 0.9rem; border-top: 1px solid rgba(212, 227, 220, 0.14); }

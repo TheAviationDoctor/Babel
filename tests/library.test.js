@@ -273,10 +273,10 @@ test('control characters are shown as control pictures, and read back from them'
   assert.strictEqual(lib.isControlGlyph('␊'), true);
   assert.strictEqual(lib.isControlGlyph('A'), false);
   // a page that is copied and pasted back is found again, control characters and all
-  const r = lib.findText(lib.prepareText('x').symbols, { fill: 'random' });
-  const page = lib.pageLines(lib.bookAt(r.location), 0).join('');
+  const content = lib.bookAt(lib.randomLocation());
+  const page = lib.pageLines(content, 0).join('');
   assert.strictEqual(lib.prepareText(page).symbols.length, lib.config.charactersPerPage);
-  assert.strictEqual(Library.indexOf(r.content, lib.prepareText(page).symbols), 0);
+  assert.strictEqual(Library.indexOf(content, lib.prepareText(page).symbols), 0);
   assert.throws(() => new Library({ alphabet: 'AB\u0000\u2400' }), /control character/);
 });
 
@@ -335,12 +335,13 @@ test('full addresses can be copied and read back', () => {
   assert.throws(() => lib.parseHexagonAddress('Floor: ABC\nHexagon: DEF'), /symbols/);
 });
 
-test('the copy that certainly exists contains the text', () => {
+test('the book that certainly exists holds the text, the rest of it blank', () => {
   const q = lib.prepareText('The catalogue of catalogues').symbols;
-  for (const fill of ['random', 'blank']) {
-    const r = lib.findText(q, { fill });
-    assert.strictEqual(Library.indexOf(lib.bookAt(r.location), q), 0);
-  }
+  const r = lib.findText(q);
+  const book = lib.bookAt(r.location);
+  assert.strictEqual(Library.indexOf(book, q), 0);
+  const blank = lib.alphabet.indexOf(' ');
+  assert.ok(book.subarray(q.length).every((v) => v === blank), 'the rest of the book is blank');
 });
 
 test('a whole text is set in pages, with a title page', () => {
@@ -352,7 +353,7 @@ test('a whole text is set in pages, with a title page', () => {
   const c = lib.config, part = t.parts[0];
   assert.strictEqual(part.length % c.charactersPerLine, 0);
   // the book that holds it, with the rest of its pages blank, is read back from its shelf
-  const book = lib.bookAt(lib.findText(part, { fill: 'blank' }).location);
+  const book = lib.bookAt(lib.findText(part).location);
   assert.strictEqual(Library.indexOf(book, part), 0);
   const title = lib.pageLines(book, 0).map((l) => l.trim()).filter(Boolean);
   assert.deepStrictEqual(title, ['A test', 'Nobody', '2026']);
@@ -376,7 +377,7 @@ test('a text longer than one book is split into parts', () => {
   assert(t.parts.length > 1, 'expected several parts');
   for (const [k, part] of t.parts.entries()) {
     assert(small.pageLines(part, 0).join('').toUpperCase().includes(`PART ${k + 1} OF ${t.parts.length}`));
-    const r = small.findText(part, { fill: 'blank' });
+    const r = small.findText(part);
     assert.strictEqual(Library.indexOf(small.bookAt(r.location), part), 0);
   }
 });
@@ -475,9 +476,9 @@ test('the About tab reads Markdown, and runs none of the HTML in it', () => {
 test('links to books of the collection name them by their file', () => {
   assert.strictEqual(Library.bookLink('3f6bb9d6f78e0293b56a', 1), '#book=3f6bb9d6f78e0293b56a');
   assert.strictEqual(Library.bookLink('3f6bb9d6f78e0293b56a', 3), '#book=3f6bb9d6f78e0293b56a/3');
-  assert.strictEqual(Library.bookLink('3f6bb9d6f78e0293b56a', 3, true), '#book=3f6bb9d6f78e0293b56a/3&random');
-  assert.deepStrictEqual(Library.readBookLink('#book=3f6bb9d6f78e0293b56a/3'), { id: '3f6bb9d6f78e0293b56a', part: 3, random: false });
-  assert.deepStrictEqual(Library.readBookLink('#book=3f6bb9d6f78e0293b56a&random'), { id: '3f6bb9d6f78e0293b56a', part: 1, random: true });
+  assert.deepStrictEqual(Library.readBookLink('#book=3f6bb9d6f78e0293b56a/3'), { id: '3f6bb9d6f78e0293b56a', part: 3 });
+  assert.deepStrictEqual(Library.readBookLink('#book=3f6bb9d6f78e0293b56a'), { id: '3f6bb9d6f78e0293b56a', part: 1 });
+  assert.ok(Library.readBookLink('#book=3f6bb9d6f78e0293b56a&random').error);
   assert.ok(Library.readBookLink('#book=3f6b').error);
   assert.ok(Library.readBookLink('#book=:eNpc').error);
   assert.strictEqual(Library.readBookLink('#text=x'), null);
@@ -534,38 +535,58 @@ test('the sentences of dreams are grammatical and always the same for a hexagon'
   await testAsync('a link carries a text, and leads to the book that holds it', async () => {
     const post = 'A first paragraph, with “curly quotes”, an em dash — and an émigré.\n\nA second paragraph.';
     const short = await Library.makeLink('https://example.org/Babel/#old', post);
-    const plain = await Library.makeLink('https://example.org/Babel/', post, { plain: true });
+    const plain = await Library.makeLink('https://example.org/Babel/', post, true);
     assert(short.startsWith('https://example.org/Babel/#text=:'));
     assert.strictEqual(plain, 'https://example.org/Babel/#text=' + encodeURIComponent(post));
-    assert.deepStrictEqual(await Library.readLink(new URL(short).hash), { text: post, typed: false, random: false });
-    assert.deepStrictEqual(await Library.readLink(new URL(plain).hash), { text: post, typed: false, random: false });
-    // a short text is linked plainly, being shorter so
+    assert.strictEqual(await Library.readLink(new URL(short).hash), post);
+    assert.strictEqual(await Library.readLink(new URL(plain).hash), post);
+    // a short text is linked plainly, being shorter so; an "&" in the text stays in it
     assert.strictEqual(await Library.makeLink('https://example.org/', 'IN THE BEGINNING'), 'https://example.org/#text=IN%20THE%20BEGINNING');
+    assert.strictEqual(await Library.readLink(new URL(await Library.makeLink('https://example.org/', 'A & B')).hash), 'A & B');
     // a link built by hand, as a browser leaves it once pasted in its address bar
-    assert.strictEqual((await Library.readLink('#text=Call%20me%20Ishmael.')).text, 'Call me Ishmael.');
-    assert.strictEqual((await Library.readLink('#text=50%25 off, 100% sure')).text, '50% off, 100% sure');
+    assert.strictEqual(await Library.readLink('#text=Call%20me%20Ishmael.'), 'Call me Ishmael.');
+    assert.strictEqual(await Library.readLink('#text=50%25 off, 100% sure'), '50% off, 100% sure');
     assert.strictEqual(await Library.readLink('#book=3f6bb9d6f78e0293b56a'), null);
     assert.strictEqual(await Library.readLink(''), null);
-    // options: as typed, and random characters after the text; an "&" in the text stays in it
-    const typed = await Library.makeLink('https://example.org/', 'A & B', { typed: true, random: true });
-    assert.strictEqual(typed, 'https://example.org/#text=A%20%26%20B&typed&random');
-    assert.deepStrictEqual(await Library.readLink(new URL(typed).hash), { text: 'A & B', typed: true, random: true });
-    assert.deepStrictEqual(await Library.readLink('#text=:' + short.split(':').pop() + '&random&typed'), { text: post, typed: true, random: true });
-    // the book: the text from the first page, words whole, paragraphs indented, the rest blank
+    // the book: the text as typed, from the very start of the first page, the rest blank
     const b = lib.bookOfText(post);
-    const lines = lib.pageLines(b.content, 0).map((l) => l.trimEnd());
-    assert.deepStrictEqual(lines.slice(0, 3), ['   A first paragraph, with “curly quotes”, an em dash — and an', 'émigré.', '   A second paragraph.']);
+    const typed = lib.prepareText(post);
+    assert.strictEqual(b.length, typed.symbols.length);
+    assert.strictEqual(lib.toText(b.content, 0, b.length), typed.text);
+    assert.ok(typed.text.startsWith('A first paragraph, with “curly quotes”, an em dash — and an émigré.  A second'));
     assert(lib.pageLines(b.content, 1).every((l) => !l.trim()), 'the second page is blank');
     assert.strictEqual(Library.indexOf(lib.bookAt(b.location), b.content), 0);
-    // with random characters after it: another book, beginning the same way
-    const r = lib.bookOfText(post, true);
-    assert.notStrictEqual(key(r.location.hexagon) + r.location.slot, key(b.location.hexagon) + b.location.slot);
-    assert.deepStrictEqual(lib.pageLines(r.content, 0).slice(0, 3).map((l) => l.trimEnd()), lines.slice(0, 3));
-    // the same text, whichever form of link carried it, is the same book
-    const again = lib.bookOfText((await Library.readLink(new URL(plain).hash)).text);
+    // the same book as "Find a text" finds; and whichever form of link carried the text
+    const found = lib.findText(typed.symbols);
+    assert.strictEqual(key(found.location.hexagon) + key(found.location.floor) + found.location.slot, key(b.location.hexagon) + key(b.location.floor) + b.location.slot);
+    const again = lib.bookOfText(await Library.readLink(new URL(plain).hash));
     assert.strictEqual(key(again.location.hexagon) + key(again.location.floor) + again.location.slot, key(b.location.hexagon) + key(b.location.floor) + b.location.slot);
+    // pages set from a book of one's own lead, as a link, to the very book they were found in
+    const set = lib.typeset('Call me Ishmael. Some years ago, never mind how long precisely.\n\nThere now is your insular city.', {});
+    const pages = lib.toText(set.parts[0]).replace(/ +$/, '');
+    const own = lib.bookOfText(await Library.readLink(new URL(await Library.makeLink('https://example.org/', pages)).hash));
+    assert.strictEqual(key(own.location.hexagon) + own.location.slot, key(lib.findText(set.parts[0]).location.hexagon) + lib.findText(set.parts[0]).location.slot);
+    assert.strictEqual(lib.bookOfText(''), null);
     const big = 'WORD '.repeat(200000);
     assert((await Library.makeLink('https://example.org/', big)).length < big.length / 50, 'repetitive text compresses');
+  });
+
+  await testAsync('a secret link carries the text encrypted, and opens with its password only', async () => {
+    const text = 'Meet me at the hexagon of the crimson books.';
+    const url = await Library.makeSecretLink('https://example.org/Babel/#old', text, 'correct horse battery staple');
+    assert(url.startsWith('https://example.org/Babel/#secret='));
+    const hash = new URL(url).hash;
+    assert.ok(Library.isSecretLink(hash) && !Library.isSecretLink('#text=x'));
+    assert.ok(!/crimson|horse/.test(hash), 'neither the text nor the password shows in the link');
+    assert.strictEqual(await Library.readLink(hash), null);
+    assert.strictEqual(await Library.readSecretLink(hash, 'correct horse battery staple'), text);
+    await assert.rejects(Library.readSecretLink(hash, 'correct horse battery stapler'), (e) => e.reason === 'password');
+    await assert.rejects(Library.readSecretLink(hash.slice(0, 24), 'correct horse battery staple'), (e) => e.reason === 'broken');
+    // the same text and password make another link every time, which leads to the same book
+    const other = new URL(await Library.makeSecretLink('https://example.org/', text, 'correct horse battery staple')).hash;
+    assert.notStrictEqual(other, hash);
+    const a = lib.bookOfText(await Library.readSecretLink(other, 'correct horse battery staple')), b = lib.bookOfText(text);
+    assert.strictEqual(key(a.location.hexagon) + key(a.location.floor) + a.location.slot, key(b.location.hexagon) + key(b.location.floor) + b.location.slot);
   });
 
   await testAsync('the website and view settings are checked', async () => {

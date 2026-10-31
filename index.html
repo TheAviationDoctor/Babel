@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=Libre+Bodoni:ital,wght@0,400;0,500;1,400&display=swap">
-<link rel="stylesheet" href="css/style.css?v=2026-10-31.1">
+<link rel="stylesheet" href="css/style.css?v=2026-10-31.2">
 </head>
 <body>
 <canvas id="view" aria-label="The Library, seen from the eyes of a librarian"></canvas>
@@ -98,19 +98,16 @@
         <p class="query">Your text: <span id="find-query"></span></p>
         <section class="result" aria-labelledby="certain-title">
           <h3 id="certain-title">Where it stands</h3>
-          <p class="status">The catalogue runs the shelving backwards: it composes the book that begins with your text and finds the shelf it stands on. Every possible book is somewhere in the Library, exactly once.</p>
-          <fieldset class="fill">
-            <legend>The rest of that book</legend>
-            <label><input type="radio" name="fill" value="random" checked> random characters</label>
-            <label><input type="radio" name="fill" value="blank"> blank</label>
-          </fieldset>
+          <p class="status">The catalogue runs the shelving backwards: it composes the book that begins with your text, the rest of its pages blank, and finds the shelf it stands on. Every possible book is somewhere in the Library, exactly once.</p>
           <p id="certain-where" class="where"></p>
           <div class="row">
             <button id="certain-read" type="button">Read it here</button>
             <button id="certain-go" type="button" class="primary">Go there</button>
             <button id="certain-copy" type="button">Copy its address</button>
             <button id="certain-link" type="button">Copy a link to it</button>
+            <button id="certain-secret" type="button">Copy a secret link</button>
           </div>
+          <div id="certain-secret-box"></div>
         </section>
       </div>
     </div>
@@ -136,11 +133,6 @@
         <section class="result" aria-labelledby="book-found-title">
           <h3 id="book-found-title"></h3>
           <p id="book-how" class="status"></p>
-          <fieldset class="fill">
-            <legend>The rest of the book</legend>
-            <label><input type="radio" name="book-fill" value="blank" checked> blank pages</label>
-            <label><input type="radio" name="book-fill" value="random"> random characters</label>
-          </fieldset>
           <ol id="book-parts" class="parts"></ol>
         </section>
       </div>
@@ -190,6 +182,20 @@
   </div>
 </section>
 
+<!-- the password of a secret link, asked when one is opened -->
+<section id="secret" class="screen" hidden aria-labelledby="secret-title">
+  <form id="secret-form" class="glass secret-ask" autocomplete="off">
+    <h2 id="secret-title">A secret text</h2>
+    <p class="note">This link leads to a text kept secret. Enter its password, and you will be set down before the book that holds it.</p>
+    <input id="secret-password" type="password" autocomplete="off" spellcheck="false" placeholder="Password" aria-label="Password">
+    <p id="secret-error" class="error" role="alert" hidden></p>
+    <div class="row">
+      <button id="secret-go" type="submit" class="primary">Open</button>
+      <button id="secret-leave" type="button" class="quiet">Leave it closed</button>
+    </div>
+  </form>
+</section>
+
 <p id="toast" role="status" aria-live="polite" hidden></p>
 <section id="sleep" hidden aria-label="Asleep">
   <p id="dream-quote" aria-live="polite"></p>
@@ -209,20 +215,20 @@
   whenever any of them changes: browsers and GitHub Pages keep copies of files for a while,
   and a new page read with an old script would not start.
 -->
-<script src="lib/three.min.js?v=2026-10-31.1"></script>
-<script src="lib/Reflector.js?v=2026-10-31.1"></script>
-<script src="config.js?v=2026-10-31.1"></script>
-<script src="js/about.js?v=2026-10-31.1"></script>
-<script src="js/library.js?v=2026-10-31.1"></script>
-<script src="js/textures.js?v=2026-10-31.1"></script>
-<script src="js/architecture.js?v=2026-10-31.1"></script>
-<script src="js/world.js?v=2026-10-31.1"></script>
-<script src="js/player.js?v=2026-10-31.1"></script>
-<script src="js/markdown.js?v=2026-10-31.1"></script>
-<script src="js/terminal.js?v=2026-10-31.1"></script>
-<script src="js/quotes.js?v=2026-10-31.1"></script>
-<script src="js/dream.js?v=2026-10-31.1"></script>
-<script src="js/main.js?v=2026-10-31.1"></script>
+<script src="lib/three.min.js?v=2026-10-31.2"></script>
+<script src="lib/Reflector.js?v=2026-10-31.2"></script>
+<script src="config.js?v=2026-10-31.2"></script>
+<script src="js/about.js?v=2026-10-31.2"></script>
+<script src="js/library.js?v=2026-10-31.2"></script>
+<script src="js/textures.js?v=2026-10-31.2"></script>
+<script src="js/architecture.js?v=2026-10-31.2"></script>
+<script src="js/world.js?v=2026-10-31.2"></script>
+<script src="js/player.js?v=2026-10-31.2"></script>
+<script src="js/markdown.js?v=2026-10-31.2"></script>
+<script src="js/terminal.js?v=2026-10-31.2"></script>
+<script src="js/quotes.js?v=2026-10-31.2"></script>
+<script src="js/dream.js?v=2026-10-31.2"></script>
+<script src="js/main.js?v=2026-10-31.2"></script>
 <script>
   // If the Library has not started a few seconds after the page has loaded (a script missing,
   // or not matching the others), say so rather than leave the screen black.
