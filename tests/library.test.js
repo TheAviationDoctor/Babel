@@ -524,39 +524,39 @@ test('the sentences of dreams are grammatical and always the same for a hexagon'
     assert.strictEqual(await Library.readLink('#text=50%25 off, 100% sure'), '50% off, 100% sure');
     assert.strictEqual(await Library.readLink('#book=3f6bb9d6f78e0293b56a'), null);
     assert.strictEqual(await Library.readLink(''), null);
-    // the book: a text over several lines is set in paragraphs, as the Read tab sets a book
-    // of the collection, from the very start of the first page, the rest blank
+    // the book: the text from the very start of the first page, the rest blank, set in lines
+    // with no word cut at their end and none starting with a space, and a blank line
+    // before each new, indented paragraph
     const b = lib.bookOfText(post);
     const laid = lib.layText(post);
-    assert.ok(laid.laidOut);
-    assert.deepStrictEqual(laid.symbols, lib.typeset(post, {}).parts[0]);
     assert.strictEqual(b.length, laid.symbols.length);
-    assert.deepStrictEqual(lib.pageLines(b.content, 0).slice(0, 4).map((l) => l.trimEnd()),
-      ['   A first paragraph, with “curly quotes”, an em dash — and an', 'émigré.', '   A second paragraph.', '']);
+    assert.deepStrictEqual(lib.pageLines(b.content, 0).slice(0, 5).map((l) => l.trimEnd()),
+      ['A first paragraph, with “curly quotes”, an em dash — and an', 'émigré.', '', '   A second paragraph.', '']);
+    assert.strictEqual(laid.lines, 4);
     assert.strictEqual(laid.text, 'A first paragraph, with “curly quotes”, an em dash — and an émigré. A second paragraph.');
+    assert.strictEqual(laid.characters, laid.text.length - 1);
     assert(lib.pageLines(b.content, 1).every((l) => !l.trim()), 'the second page is blank');
     assert.strictEqual(Library.indexOf(lib.bookAt(b.location), b.content), 0);
-    // a text on one line is taken as typed, whatever spaces or line break surround it
-    for (const t of ['The sun rises in the west.', 'The sun rises in the west.\n', '  The sun rises in the west.']) {
-      const p = lib.layText(t);
-      assert.ok(!p.laidOut);
-      assert.deepStrictEqual(p.symbols, lib.prepareText(t).symbols);
-      assert.strictEqual(lib.bookOfText(t).length, lib.prepareText(t).symbols.length);
+    // a long line is broken between words, the space at the break left out
+    const long = 'One line that is long enough to run over the end of the first line of the page, and on.';
+    assert.deepStrictEqual(lib.pageLines(lib.bookOfText(long).content, 0).slice(0, 3).map((l) => l.trimEnd()),
+      ['One line that is long enough to run over the end of the first', 'line of the page, and on.', '']);
+    // a word longer than a line is cut; spaces, tabs and blank lines are not doubled
+    assert.deepStrictEqual(lib.pageLines(lib.bookOfText('x'.repeat(70) + ' y\n\n\n\tz  z').content, 0).slice(0, 5).map((l) => l.trimEnd()),
+      ['x'.repeat(64), 'xxxxxx y', '', '   z z', '']);
+    // a short text on one line is set as typed, but for the spaces around it
+    for (const t of ['The sun rises in the west.', 'The sun rises in the west.\n', '  The sun rises in the west. ']) {
+      assert.deepStrictEqual(lib.layText(t).symbols, lib.prepareText('The sun rises in the west.').symbols);
     }
     // a text set in more lines than a book holds is too long
     const lines = lib.M / lib.config.charactersPerLine;
-    assert.ok(lib.bookOfText('a\n'.repeat(lines)));
-    assert.strictEqual(lib.bookOfText('a\n'.repeat(lines + 1)), null);
+    assert.ok(lib.bookOfText('a\n'.repeat(lines / 2)));
+    assert.strictEqual(lib.bookOfText('a\n'.repeat(lines / 2 + 1)), null);
     // the same book as "Find a text" finds; and whichever form of link carried the text
     const found = lib.findText(laid.symbols);
     assert.strictEqual(key(found.location.hexagon) + key(found.location.floor) + found.location.slot, key(b.location.hexagon) + key(b.location.floor) + b.location.slot);
     const again = lib.bookOfText(await Library.readLink(new URL(plain).hash));
     assert.strictEqual(key(again.location.hexagon) + key(again.location.floor) + again.location.slot, key(b.location.hexagon) + key(b.location.floor) + b.location.slot);
-    // pages set from a book of one's own lead, as a link, to the very book they were found in
-    const set = lib.typeset('Call me Ishmael. Some years ago, never mind how long precisely.\n\nThere now is your insular city.', {});
-    const pages = lib.toText(set.parts[0]).replace(/ +$/, '');
-    const own = lib.bookOfText(await Library.readLink(new URL(await Library.makeLink('https://example.org/', pages)).hash));
-    assert.strictEqual(key(own.location.hexagon) + own.location.slot, key(lib.findText(set.parts[0]).location.hexagon) + lib.findText(set.parts[0]).location.slot);
     assert.strictEqual(lib.bookOfText(''), null);
     const big = 'WORD '.repeat(200000);
     assert((await Library.makeLink('https://example.org/', big)).length < big.length / 50, 'repetitive text compresses');

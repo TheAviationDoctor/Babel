@@ -217,8 +217,8 @@
     const p = lib.layText(text);
     if (!p.symbols.length) { toast('This link carries no text that the Library can hold.', 7000); return false; }
     if (p.symbols.length > lib.M) { toast('The text this link carries is longer than a book of the Library.', 7000); return false; }
-    const loc = lib.findText(p.symbols).location, length = p.symbols.length;
-    const go = () => goToAddress(loc.hexagon, loc.floor, lib.slotParts(loc.slot), { slot: loc.slot, start: 0, length, link: hash });
+    const loc = lib.findText(p.symbols).location;
+    const go = () => goToAddress(loc.hexagon, loc.floor, lib.slotParts(loc.slot), { slot: loc.slot, link: hash });
     if (travelling) journey(go); else go();
     toast(`Before you, a little out of its row, stands the book the link leads to. ${isTouch ? 'Tap it' : 'Press E'} to read it.`, 6000);
     return true;
@@ -294,7 +294,7 @@
     const r = lib.findText(set.parts[ref.part - 1]);
     const title = book ? (n > 1 ? `${book.title}, part ${ref.part} of ${n}` : book.title) : '';
     const go = () => goToAddress(r.location.hexagon, r.location.floor, lib.slotParts(r.location.slot),
-      { slot: r.location.slot, start: 0, length: 0, title, link: hash });
+      { slot: r.location.slot, title, link: hash });
     if (travelling) journey(go); else go();
     toast(`Before you, a little out of its row, stands ${title || 'the book the link leads to'}. ${isTouch ? 'Tap it' : 'Press E'} to read it.`, 6000);
     return true;
@@ -386,14 +386,13 @@
     const dh = player.ch + target.off, df = player.cf;
     const mark = world.mark && world.isMarked(dh, df, target.slot) ? world.mark : null;
     openBookAt({
-      location: world.location(dh, df, target.slot), slot: target.slot,
-      highlight: mark && mark.length ? { start: mark.start, length: mark.length } : null, returnTo: 'walking',
+      location: world.location(dh, df, target.slot), slot: target.slot, returnTo: 'walking',
       link: (mark && mark.link) || null, // the link that led to it, if a link (or the catalogue) did
     });
   }
 
   /**
-   * Opens any book of the Library. options: { location, slot, content?, highlight?: { start, length }, returnTo }.
+   * Opens any book of the Library. options: { location, slot, content?, returnTo, link? }.
    */
   function openBookAt(o) {
     const content = o.content || lib.bookAt(o.location);
@@ -402,8 +401,7 @@
     const { wall, shelf, volume } = lib.slotParts(o.slot);
     const c = lib.config;
     reading = {
-      content, returnTo: o.returnTo || 'walking', highlight: o.highlight || null,
-      page: o.highlight ? Math.floor(o.highlight.start / c.charactersPerPage) : 0,
+      content, returnTo: o.returnTo || 'walking', page: 0,
       title: lib.spineTitle(fp, o.slot),
       link: o.link || null,
     };
@@ -412,7 +410,6 @@
     $('book-where').textContent = `Wall ${wall + 1}, shelf ${shelf + 1}, volume ${volume + 1}`;
     $('page-count').textContent = `of ${fmt(c.pagesPerBook)}`;
     $('page-input').max = c.pagesPerBook;
-    $('show-passage').hidden = !reading.highlight;
     $('close-book').textContent = reading.returnTo === 'terminal' ? 'Back to the catalogue' : 'Put the book back';
     $('book-keys').textContent = reading.returnTo === 'terminal' ? 'Arrow keys turn pages. Esc returns to the catalogue.' : 'Arrow keys turn pages. Esc puts the book back.';
     setMode('reading');
@@ -433,24 +430,10 @@
     sizePage();
     reading.page = Math.max(0, Math.min(P - 1, reading.page));
     const pre = $('page');
-    const c = lib.config, lines = lib.pageLines(reading.content, reading.page);
-    const h = reading.highlight;
+    const lines = lib.pageLines(reading.content, reading.page);
     pre.textContent = '';
-    // mark the passage the catalogue found, wherever it falls on this page
-    const base = reading.page * c.charactersPerPage;
     lines.forEach((line, i) => {
-      const s0 = base + i * c.charactersPerLine;
-      let a = h ? Math.max(h.start, s0) - s0 : 0, b = h ? Math.min(h.start + h.length, s0 + c.charactersPerLine) - s0 : 0;
-      // not the spaces that indent a paragraph, or pad out its lines
-      while (b > a && line[a] === ' ') a++;
-      while (b > a && line[b - 1] === ' ') b--;
-      if (b > a) {
-        if (a > 0) appendText(pre, line.slice(0, a));
-        const m = document.createElement('mark');
-        appendText(m, line.slice(a, b));
-        pre.appendChild(m);
-        if (b < line.length) appendText(pre, line.slice(b));
-      } else appendText(pre, line);
+      appendText(pre, line);
       if (i < lines.length - 1) pre.appendChild(document.createTextNode('\n'));
     });
     const folio = document.createElement('span');
@@ -681,10 +664,6 @@
       const url = base.replace(/#.*$/, '') + reading.link;
       const long = url.length > 60000 ? ` It is ${fmt(url.length)} characters long, which is more than some browsers and websites accept.` : '';
       copyText(url, `Copied a link to this book. Whoever opens it is set down before it.${long}`);
-    });
-    $('show-passage').addEventListener('click', () => {
-      reading.page = Math.floor(reading.highlight.start / lib.config.charactersPerPage);
-      renderPage();
     });
     $('page-form').addEventListener('submit', (e) => { e.preventDefault(); reading.page = Number($('page-input').value) - 1; renderPage(); $('page').focus(); });
     $('page-input').addEventListener('change', () => { reading.page = Number($('page-input').value) - 1; renderPage(); });

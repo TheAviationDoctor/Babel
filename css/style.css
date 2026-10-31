@@ -158,7 +158,6 @@ input[type="text"]:focus, input[type="number"]:focus { outline: none; border-bot
 #page-count { color: var(--ash); }
 .book-keys { font-size: var(--step--1); color: var(--ash); }
 
-mark { background: rgba(227, 169, 90, 0.55); color: var(--ink); box-shadow: 0 0 0 1px rgba(227, 169, 90, 0.55); }
 
 /* ---------- the catalogue ---------- */
 /* Its screen is a different object from everything else in the Library: cool glass, not lamplight. */

@@ -294,17 +294,15 @@
 //      if (!raw) parts.push(`Up to ${fmt(lib.M)} characters, in the Library's alphabet: ${alphabetWords(lib)}.`);
       if (!raw) parts.push(`Up to ${fmt(lib.M)} characters (A–Z, a-z, accented letters, digits, and punctuation).`);
       else {
-        if (p.laidOut) parts.push(`Search ${fmt(p.characters)} ${p.characters === 1 ? 'character' : 'characters'}, set in ${fmt(p.lines)} ${p.lines === 1 ? 'line' : 'lines'}, each paragraph starting on a new, indented line.`);
-        else parts.push(`Search ${fmt(p.symbols.length)} ${p.symbols.length === 1 ? 'character' : 'characters'}.`);
+        const chars = `${fmt(p.characters)} ${p.characters === 1 ? 'character' : 'characters'}`;
+        parts.push(p.lines > 1 ? `Search ${chars}, set in ${fmt(p.lines)} lines of ${lib.config.charactersPerLine}, with no word cut at the end of a line, and a blank line before each new, indented paragraph.` : `Search ${chars}.`);
         if (p.recased) parts.push(`Letters are searched for as ${oneCase(lib)}.`);
         if (p.substitutions.length) parts.push(`Some characters are read as their nearest equivalents in the alphabet: ${equivalents(p.substitutions)}.`);
         if (p.dropped.length) {
           const shown = p.dropped.slice(0, 12).map((c) => `“${c}”`).join(' ');
           parts.push(`Not in the alphabet, so left out: ${shown}${p.dropped.length > 12 ? ' and others' : ''}.`);
         }
-        if (p.symbols.length > lib.M) parts.push(p.laidOut
-          ? `That is longer than a whole book, which holds ${fmt(lib.M / lib.config.charactersPerLine)} lines.`
-          : `That is longer than a whole book, which holds ${fmt(lib.M)} characters.`);
+        if (p.symbols.length > lib.M) parts.push(`That is longer than a whole book, which holds ${fmt(lib.M / lib.config.charactersPerLine)} lines of ${lib.config.charactersPerLine} characters.`);
       }
       $('find-note').textContent = parts.join(' ');
       $('find-go').disabled = !p.symbols.length || p.symbols.length > lib.M;
@@ -464,9 +462,8 @@
     _goCertain() {
       const r = this.certain, loc = r.location;
       const { wall, shelf, volume } = this.lib.slotParts(loc.slot);
-      const length = this.query.symbols.length;
       const h = this.certainLink, link = h && h.url ? h.url.slice(h.url.indexOf('#')) : null;
-      this.ctx.goToAddress(loc.hexagon, loc.floor, { wall, shelf, volume }, { slot: loc.slot, start: 0, length, link });
+      this.ctx.goToAddress(loc.hexagon, loc.floor, { wall, shelf, volume }, { slot: loc.slot, link });
     }
 
     /* ---------------- finding a whole book ---------------- */
@@ -624,7 +621,7 @@
         go.addEventListener('click', () => {
           const loc = r.location, face = this.lib.slotParts(loc.slot);
           const title = n > 1 ? `${b.meta.title}, part ${k + 1} of ${n}` : b.meta.title;
-          this.ctx.goToAddress(loc.hexagon, loc.floor, face, { slot: loc.slot, start: 0, length: 0, title, link: linkOf() });
+          this.ctx.goToAddress(loc.hexagon, loc.floor, face, { slot: loc.slot, title, link: linkOf() });
         });
         copy.addEventListener('click', () => {
           const loc = r.location, { wall, shelf, volume } = this.lib.slotParts(loc.slot);

@@ -852,6 +852,49 @@
     isControlGlyph(ch) { return this.controlGlyphs.has(ch); }
 
     /**
+     * The paragraphs of a text, each on one line: blank lines separate them if there are
+     * any; otherwise each line is one. Spaces, tabs and line breaks within a paragraph
+     * become single spaces.
+     */
+    _paragraphs(text) {
+      text = String(text).replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+      const blocks = /\n[ \t]*\n/.test(text) ? text.split(/\n[ \t]*\n+/) : text.split('\n');
+      return blocks.map((b) => b.replace(/\s+/g, ' ').trim()).filter((b) => b.length);
+    }
+
+    /** The indent of a paragraph, as books are set: three spaces, on lines wide enough. */
+    _indent() { return this.config.charactersPerLine >= 24 ? '   ' : ''; }
+
+    /**
+     * Sets paragraphs (prepared, each on one line) in lines of exactly charactersPerLine
+     * characters, broken between words and padded with spaces: the first paragraph starts
+     * with `firstIndent`, the others with `indent`, after a blank line if `gap`. A word
+     * longer than a line is cut. Returns the lines.
+     */
+    _setLines(paragraphs, firstIndent, indent, gap) {
+      const W = this.config.charactersPerLine, lines = [];
+      const pad = (s) => s + ' '.repeat(Math.max(0, W - s.length));
+      paragraphs.forEach((para, k) => {
+        if (gap && k > 0) lines.push(pad(''));
+        let line = k === 0 ? firstIndent : indent;
+        for (const word0 of para.split(' ')) {
+          let word = word0;
+          if (!word) continue;
+          while (word.length > W) { // a word longer than a line is cut
+            if (line.trim()) { lines.push(pad(line)); line = ''; }
+            lines.push(word.slice(0, W));
+            word = word.slice(W);
+          }
+          const sep = line.trim() ? ' ' : '';
+          if (line.length + sep.length + word.length > W) { lines.push(pad(line)); line = word; }
+          else line += sep + word;
+        }
+        if (line.trim()) lines.push(pad(line));
+      });
+      return lines;
+    }
+
+    /**
      * Sets a whole text in the Library's page format, as a printer would: a title page,
      * then the text in lines of exactly `charactersPerLine` characters, broken between
      * words and padded with spaces, each paragraph indented. A text longer than one book
@@ -879,28 +922,10 @@
         for (let i = 0; i < Math.max(1, symbols.length); i += this.M) parts.push(symbols.subarray(i, i + this.M));
         return { parts, dropped: p.dropped, recased: p.recased, substituted: p.substituted, substitutions: p.substitutions, characters: symbols.length };
       }
-      // paragraphs: blank lines separate them if there are any; otherwise each line is one
-      const blocks = /\n[ \t]*\n/.test(text) ? text.split(/\n[ \t]*\n+/) : text.split('\n');
-      const paragraphs = blocks.map((b) => prep(b.replace(/\s+/g, ' ').trim())).filter((b) => b.length);
-      const indent = W >= 24 ? '   ' : '';
-      const lines = [];
+      const paragraphs = this._paragraphs(text).map(prep).filter((b) => b.length);
+      const indent = this._indent();
+      const lines = this._setLines(paragraphs, indent, indent, false);
       const pad = (s) => s + ' '.repeat(Math.max(0, W - s.length));
-      for (const para of paragraphs) {
-        let line = indent;
-        for (const word0 of para.split(' ')) {
-          let word = word0;
-          if (!word) continue;
-          while (word.length > W) { // a word longer than a line is cut
-            if (line.trim()) { lines.push(pad(line)); line = ''; }
-            lines.push(word.slice(0, W));
-            word = word.slice(W);
-          }
-          const sep = line.trim() ? ' ' : '';
-          if (line.length + sep.length + word.length > W) { lines.push(pad(line)); line = word; }
-          else line += sep + word;
-        }
-        if (line.trim()) lines.push(pad(line));
-      }
       const characters = paragraphs.reduce((n, p) => n + p.length, 0);
       // title pages
       const centre = (s) => {
@@ -1018,30 +1043,36 @@
     }
 
     /**
-     * Sets a text as Search and links do, from the very start of the first page. A text on
-     * one line is taken as typed (as prepareText leaves it). A text over several lines is
-     * set as typeset sets a book, without a title page: in lines broken between words and
-     * padded with spaces, each paragraph starting on a new, indented line, so that its
-     * paragraphs keep their shape. Returns what prepareText returns, with laidOut (whether
-     * it was set in lines), lines (how many it takes) and characters (those of the text).
+     * Sets a text as Search and links do, from the very start of the first page: in lines
+     * broken between words and padded with spaces, so that no word is cut at the end of a
+     * line and no line starts with a space; each paragraph after the first starts on a new
+     * line, indented as in books, after a blank line. Spaces within a paragraph become
+     * single spaces: a short text on one line is set as typed, but for extra spaces.
+     * Returns what prepareText returns (`text`: the paragraphs, one after the other), with
+     * `lines` (the lines it takes) and `characters` (those of the text itself).
      */
     layText(raw) {
-      raw = String(raw);
-      if (!/[\r\n]/.test(raw.trim()) || this.alphabet.indexOf(' ') < 0) {
+      const W = this.config.charactersPerLine;
+      if (this.alphabet.indexOf(' ') < 0) { // without a space, there is no layout to speak of
         const p = this.prepareText(raw);
-        return Object.assign(p, { laidOut: false, lines: 0, characters: p.symbols.length });
+        return Object.assign(p, { lines: Math.ceil(p.symbols.length / W), characters: p.symbols.length });
       }
-      const set = this.typeset(raw, {});
-      let symbols = set.parts[0];
-      if (set.parts.length > 1) { // longer than a book: kept whole, for the caller to say so
-        symbols = new Uint8Array(set.parts.reduce((n, part) => n + part.length, 0));
-        let at = 0;
-        for (const part of set.parts) { symbols.set(part, at); at += part.length; }
-      }
+      const dropped = new Set(), substitutions = new Map();
+      let recased = false;
+      const paragraphs = this._paragraphs(raw).map((t) => {
+        const p = this.prepareText(t);
+        p.dropped.forEach((ch) => dropped.add(ch));
+        p.substitutions.forEach(([from, to]) => { if (!substitutions.has(from)) substitutions.set(from, to); });
+        recased = recased || p.recased;
+        return p.text.replace(/ {2,}/g, ' ').trim(); // where a character was left out
+      }).filter((t) => t.length);
+      const lines = this._setLines(paragraphs, '', this._indent(), true);
+      // the blank that ends the last line is the blank of the rest of the book
+      const symbols = this._symbolsOf(lines.join('').replace(/ +$/, ''));
       return {
-        symbols, text: this.toText(symbols).replace(/ {2,}/g, ' ').trim(),
-        dropped: set.dropped, recased: set.recased, substituted: set.substituted, substitutions: set.substitutions,
-        laidOut: true, lines: Math.ceil(symbols.length / this.config.charactersPerLine), characters: set.characters,
+        symbols, text: paragraphs.join(' '), dropped: [...dropped], recased,
+        substituted: substitutions.size > 0, substitutions: [...substitutions],
+        lines: lines.length, characters: paragraphs.reduce((n, t) => n + t.length, 0),
       };
     }
 
