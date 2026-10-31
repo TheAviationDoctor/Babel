@@ -58,7 +58,7 @@
       <h2 id="terminal-title">The catalogue</h2>
       <div class="tabs" role="tablist" aria-label="What to do">
         <button id="tab-here" type="button" role="tab" aria-selected="true" aria-controls="panel-here">Map</button>
-        <button id="tab-find" type="button" role="tab" aria-selected="false" aria-controls="panel-find">Search</button>
+        <button id="tab-find" type="button" role="tab" aria-selected="false" aria-controls="panel-find">Find</button>
         <button id="tab-books" type="button" role="tab" aria-selected="false" aria-controls="panel-books">Read</button>
         <button id="tab-go" type="button" role="tab" aria-selected="false" aria-controls="panel-go">Jump</button>
       </div>
@@ -104,7 +104,7 @@
           <h3 id="certain-title">Where it stands</h3>
           <p id="certain-where" class="where"></p>
           <div class="row">
-            <button id="certain-go" type="button" class="primary">Go there</button>
+            <button id="certain-go" type="button" class="primary">Jump there</button>
             <button id="certain-copy" type="button">Copy its location</button>
             <button id="certain-link" type="button">Copy a public link</button>
             <button id="certain-secret" type="button">Copy a secret link</button>
@@ -145,7 +145,7 @@
         <form id="go-offset" class="row offset" autocomplete="off">
           <label><input id="go-east" type="text" inputmode="numeric" value="0"> hexagons east</label>
           <label><input id="go-up" type="text" inputmode="numeric" value="0"> floors up</label>
-          <button type="submit" class="primary">Go</button>
+          <button type="submit" class="primary">Jump</button>
         </form>
         <p class="note">Negative numbers go west, or down.</p>
         <p id="go-offset-error" class="error" hidden></p>
@@ -156,12 +156,12 @@
           <label for="go-address-text">Paste a full address, as copied from this catalogue:</label>
           <textarea id="go-address-text" rows="3" spellcheck="false" placeholder="Seed: …&#10;Floor: …&#10;Hexagon: …"></textarea>
           <p id="go-address-error" class="error" hidden></p>
-          <div class="row"><button type="submit" class="primary">Go</button></div>
+          <div class="row"><button type="submit" class="primary">Jump</button></div>
         </form>
       </section>
       <section class="go">
         <h3>Anywhere</h3>
-        <div class="row"><button id="go-random" type="button">Go to a hexagon at random</button></div>
+        <div class="row"><button id="go-random" type="button">Jump to a hexagon at random</button></div>
       </section>
     </div>
 
