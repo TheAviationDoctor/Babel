@@ -65,7 +65,7 @@
     const textures = Babel.Textures.create();
     const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
     for (const k of ['wood', 'plaster', 'stone', 'tiles', 'spines']) textures[k].anisotropy = aniso;
-    assets = Babel.Architecture.createAssets(lib.config, textures);
+    assets = Babel.Architecture.createAssets(lib.config, textures, { painting: lib.painting, anisotropy: aniso });
     world = new Babel.World(scene, assets, lib);
     player = new Babel.Player(assets.dims, camera, renderer.domElement);
     player.sensitivity = lib.config.lookSensitivity || 1;

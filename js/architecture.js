@@ -387,6 +387,11 @@
       }
       b.box(cx - 0.006, cy + r, cz - 0.006, cx + 0.006, d.roomH, cz + 0.006, 'xXzZ');
     }
+    if (d.painting) {
+      // the underside of the picture lamp in the vestibule
+      const L = d.painting.lamp;
+      b.box(L.x - L.halfW, L.y - 0.002, L.z - 0.016, L.x + L.halfW, L.y, L.z + 0.016, 'y');
+    }
     return b.geometry();
   }
 
@@ -448,6 +453,19 @@
     wood.box(nx0 - 0.06, 0, hw - 0.045, nx0, dH + 0.06, hw, 'xXYz');
     wood.box(nx1, 0, hw - 0.045, nx1 + 0.06, dH + 0.06, hw, 'xXYz');
     wood.box(nx0, dH, hw - 0.045, nx1, dH + 0.06, hw, 'yYz');
+
+    // the frame of the painting on the north wall, opposite the mirror
+    if (d.painting) {
+      const p = d.painting, px0 = p.x - p.w / 2, px1 = p.x + p.w / 2, py0 = p.y - p.h / 2, py1 = p.y + p.h / 2;
+      const pw = p.frame, pz = hw - p.depth;
+      wood.box(px0 - pw, py0 - pw, pz, px1 + pw, py0, hw, 'xXyYz');
+      wood.box(px0 - pw, py1, pz, px1 + pw, py1 + pw, hw, 'xXyYz');
+      wood.box(px0 - pw, py0, pz, px0, py1, hw, 'xXz');
+      wood.box(px1, py0, pz, px1 + pw, py1, hw, 'xXz');
+      const L = p.lamp;
+      wood.box(L.x - L.halfW - 0.01, L.y, L.z - 0.025, L.x + L.halfW + 0.01, L.y + 0.045, L.z + 0.025, 'xXyYzZ');
+      for (const ax of [L.x - L.halfW * 0.6, L.x + L.halfW * 0.6]) wood.box(ax - 0.008, L.y + 0.015, L.z + 0.025, ax + 0.008, L.y + 0.03, hw, 'xXyYz');
+    }
 
     // mirror frame on the south wall, facing the stair
     const mx0 = d.mirrorX - d.mirrorW / 2, mx1 = d.mirrorX + d.mirrorW / 2, my0 = d.mirrorY0, my1 = d.mirrorY0 + d.mirrorH;
@@ -672,6 +690,37 @@
     return g;
   }
 
+  /**
+   * Where the painting hangs: on the north wall of the vestibule, between the niche of the
+   * catalogue and the opening onto the stair, opposite the mirror, as large as that stretch
+   * of wall allows for a picture of the given proportions (width ÷ height).
+   */
+  function paintingPlace(d, aspect) {
+    const x0 = d.closetX + d.closetW / 2 + 0.06, x1 = d.wellX - d.openW / 2 - 0.06; // inside the two door frames
+    const frame = 0.045, margin = 0.035;
+    let w = x1 - x0 - 2 * (frame + margin), h = w / aspect;
+    if (h > 0.9) { h = 0.9; w = h * aspect; }
+    const x = (x0 + x1) / 2, y = 1.4;
+    // a picture lamp on two arms above the frame, its light falling on the canvas
+    const lampY = y + h / 2 + frame + 0.07, lampZ = d.hallW / 2 - 0.145;
+    return { x, y, w, h, frame, depth: 0.035, z: d.hallW / 2 - 0.016, lamp: { x, y: lampY, z: lampZ, halfW: Math.min(0.17, w / 2 - 0.05) } };
+  }
+
+  /**
+   * The canvas of the painting, facing south, in cell coordinates. Its texture's first row
+   * is the painting's top row, and its first column the left one as the reader sees it.
+   */
+  function buildCanvas(d) {
+    const p = d.painting, xl = p.x + p.w / 2, xr = p.x - p.w / 2, yt = p.y + p.h / 2, yb = p.y - p.h / 2;
+    const g = new THREE.BufferGeometry();
+    // facing −z, the reader's left is +x
+    g.setAttribute('position', new THREE.Float32BufferAttribute([xl, yt, p.z, xl, yb, p.z, xr, yb, p.z, xr, yt, p.z], 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute([0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1], 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 0, 1, 1, 1, 1, 0], 2));
+    g.setIndex([0, 1, 2, 0, 2, 3]);
+    return g;
+  }
+
   /** Book geometry with a part attribute: 2 = spine, 1 = boards, 0 = page edges. */
   function buildBook(d) {
     const g = new THREE.BoxGeometry(d.bookT - 0.005, d.bookH, d.bookD);
@@ -843,6 +892,24 @@
     }
   `;
 
+  const PAINT_FRAG = `
+    uniform sampler2D map;
+    varying vec3 vLocal;
+    varying vec3 vN;
+    varying vec2 vUv;
+    ${LIGHTING_GLSL}
+    #include <fog_pars_fragment>
+    void main() {
+      vec3 n = normalize(vN);
+      // sharper than the mipmaps alone would have it: a million pixels of nearly random
+      // colours, averaged as a screen's few hundred pixels would average them, look a
+      // uniform brown; sampled more finely, they keep their colours
+      vec3 c = expose(texture2D(map, vUv, -1.5).rgb * lampLight(vLocal, n));
+      gl_FragColor = vec4(c + dither(gl_FragCoord.xy) / 255.0, 1.0);
+      #include <fog_fragment>
+    }
+  `;
+
   const LAMP = new THREE.Color(1.0, 0.78, 0.52); // the lamps' warm light
   const SCREEN = new THREE.Color(0.62, 0.82, 0.78); // the catalogue's cool glow
 
@@ -876,6 +943,12 @@
     return new THREE.ShaderMaterial({ uniforms, vertexShader: SIGN_VERT, fragmentShader: SIGN_FRAG, fog: true });
   }
 
+  function paintMaterial(map, lights, opts) {
+    const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog]);
+    Object.assign(uniforms, lightingUniforms(lights, opts || {}), { map: { value: map } });
+    return new THREE.ShaderMaterial({ uniforms, vertexShader: SIGN_VERT, fragmentShader: PAINT_FRAG, fog: true });
+  }
+
   function bookMaterial(map, lights, variants) {
     const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog]);
     Object.assign(uniforms, lightingUniforms(lights, {}), { map: { value: map }, uVariants: { value: variants } });
@@ -893,6 +966,13 @@
         V(d.wellX, 1.3, d.wellZ, 0.18),
         V(d.screen.x, d.screen.y, d.hallW / 2 + 0.1, 0.32),
       ],
+      // with a painting, its lamp takes the place of the faint light from the stairwell
+      walls: d.painting ? [
+        V(d.hallX0 - 0.25, 1.8, 0, 0.72),
+        V(d.hallX1 + 0.25, 1.8, 0, 0.72),
+        V(d.painting.lamp.x, d.painting.lamp.y - 0.01, d.painting.lamp.z, 0.85),
+        V(d.screen.x, d.screen.y, d.hallW / 2 + 0.1, 0.32),
+      ] : null,
       // inside the niche: the screen, and the vestibule's light
       niche: [
         V(d.screen.x, d.screen.y, d.screen.z - 0.3, 0.75),
@@ -924,9 +1004,16 @@
     };
   }
 
-  function createAssets(cfg, textures) {
+  /**
+   * opts.painting: the layout of the Library's paintings (width and height in pixels), if
+   * it has any; opts.anisotropy: the texture filtering the paintings may use.
+   */
+  function createAssets(cfg, textures, opts) {
+    opts = opts || {};
     const d = dimensions(cfg);
+    if (opts.painting) d.painting = paintingPlace(d, opts.painting.width / opts.painting.height);
     const L = lightSets(d);
+    if (!L.walls) L.walls = L.vestibule;
     const hex = buildHexagon(d);
     const ves = buildVestibule(d);
     const cell = buildCell(d);
@@ -936,8 +1023,8 @@
       hexWood: wood(L.hexagon),
       hexPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.hexagon),
       hexTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.hexagon),
-      vesWood: archMaterial(textures.wood, [0.9, 2.2], 0xb0845a, L.vestibule, { colors: [null, null, null, SCREEN] }),
-      vesPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.vestibule, { colors: [null, null, null, SCREEN] }),
+      vesWood: archMaterial(textures.wood, [0.9, 2.2], 0xb0845a, L.walls, { colors: [null, null, null, SCREEN] }),
+      vesPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.walls, { colors: [null, null, null, SCREEN] }),
       vesTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.vestibule, { colors: [null, null, null, SCREEN] }),
       niche: archMaterial(textures.plaster, [0.4, 0.4], 0xffffff, L.niche, { vertexColors: true, colors: [SCREEN], falloff: 1.4, ambient: 0.04 }),
       screen: new THREE.MeshBasicMaterial({ map: textures.screen, fog: true }),
@@ -968,7 +1055,10 @@
       cellWood: cell.wood, cellSoft: cell.soft, shade: cell.shade, bulb: cell.bulb,
       sinkMirror: new THREE.PlaneGeometry(d.sinkMirror.w, d.sinkMirror.h),
     };
-    return { dims: d, materials, geometries, lights: L };
+    // each painting has its own texture, so its own material
+    const paintingMaterial = d.painting ? (map) => paintMaterial(map, L.walls, { colors: [null, null, null, SCREEN] }) : null;
+    if (d.painting) geometries.canvas = buildCanvas(d);
+    return { dims: d, materials, geometries, lights: L, paintingMaterial, anisotropy: opts.anisotropy || 1 };
   }
 
   Babel.Architecture = { dimensions, createAssets, sideMatrix, Builder };

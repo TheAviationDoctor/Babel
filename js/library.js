@@ -39,6 +39,27 @@
   'use strict';
 
   const FEISTEL_ROUNDS = 4;
+
+  // The pigments of an old painter's box (sRGB), from which the paintings' colours are mixed:
+  // lead white and bone black first, whose mixtures make a scale of greys.
+  const PIGMENTS = [
+    [238, 232, 216], // lead white
+    [32, 29, 27], // bone black
+    [228, 196, 92], // lead-tin yellow
+    [196, 146, 58], // yellow ochre
+    [184, 112, 52], // raw sienna
+    [140, 62, 34], // burnt sienna
+    [92, 52, 36], // burnt umber
+    [214, 64, 44], // vermilion
+    [168, 40, 62], // madder lake
+    [104, 34, 72], // Tyrian purple
+    [44, 52, 150], // ultramarine
+    [56, 102, 164], // azurite
+    [42, 48, 82], // indigo
+    [64, 150, 138], // verdigris
+    [70, 140, 88], // malachite
+    [118, 128, 88], // green earth
+  ];
   const MAX_BOOK_SYMBOLS = 1 << 24; // safety limit (16.7 million symbols per book)
 
   /* ------------------------------------------------------------------ *
@@ -456,6 +477,17 @@
         ]);
       }
       this.cosmeticKey = hashString('babel/cosmetic/' + this.seed);
+      // the paintings' own permutation, keyed by the seed like the books'
+      const pk = hashString('babel/painting/' + this.seed);
+      this.paintingKeys = [];
+      for (let r = 0; r < FEISTEL_ROUNDS; r++) {
+        this.paintingKeys.push([
+          fmix32(pk[0] ^ Math.imul(r + 1, 0x9e3779b1)),
+          fmix32(pk[1] ^ Math.imul(r + 1, 0x85ebca77)),
+          fmix32(pk[2] ^ Math.imul(r + 1, 0xc2b2ae3d)),
+          fmix32(pk[3] ^ Math.imul(r + 1, 0x27d4eb2f)),
+        ]);
+      }
 
       // The last hexagon's place in the whole Library: floor((N^M − 1) / S).
       const top = new Uint8Array(this.M).fill(N - 1);
@@ -508,13 +540,16 @@
         hexagonAddressLength: this.hexagonDigits,
         floorAddressLength: this.floorDigits,
       };
+      this.painting = this._paintingLayout();
     }
 
     /* ---------------- Feistel permutation ---------------- */
 
     /** Adds (sign = +1) or subtracts (sign = −1) the round keystream derived from `src` into `dst`. */
-    _round(r, src, dst, sign) {
-      const key = this.roundKeys[r];
+    _round(r, src, dst, sign) { this._roundWith(this.roundKeys[r], src, dst, sign); }
+
+    /** The same, with the round's key given. */
+    _roundWith(key, src, dst, sign) {
       const h = hashBytes(src, key[0], key[1]);
       const rng = sfc32(key[2] ^ h[0], key[3] ^ h[1], h[0] ^ 0x6a09e667, h[1] ^ 0xbb67ae85);
       const N = this.N, n = dst.length;
@@ -737,6 +772,137 @@
       const v = new Uint8Array(this.M);
       for (let i = 0; i < this.M; i++) v[i] = Math.floor(unit(rng) * this.N);
       return this.locate(v);
+    }
+
+    /* ---------------- Paintings ---------------- */
+
+    /*
+     * Each hexagon has a painting in its vestibule: a picture of M pixels (width × height,
+     * as near a square as M allows: 1,024 × 1,024 by default), each pixel one of N colours,
+     * and every possible painting hangs in exactly one hexagon. There are N^M pictures of
+     * that size and N^M / S hexagons, so a rule on whole rows keeps one picture in S: with
+     * S = N^k × d (d dividing N), the colour numbers of each of the first k rows add up to
+     * a multiple of N, and those of the next row to a multiple of d. By default, S = 512 =
+     * 128 × 4: the first row adds up to a multiple of 128, and the second to a multiple of 4.
+     * The rule does not depend on the order of a row's pixels, so the mirror image of a
+     * painting (each row read backwards) is a painting too, hanging in another hexagon.
+     *
+     * A hexagon's place (a number below N^M / S) is scrambled by its own Feistel network,
+     * keyed by the seed, so that neighbouring hexagons have unrelated paintings; its digits
+     * then fill the pixels, row by row, and the last pixel of each ruled row is set to keep
+     * the rule.
+     */
+
+    /** The layout of the paintings, or null if S is not of the form N^k × d (no painting can then be unique). */
+    _paintingLayout() {
+      const N = this.N, M = this.M;
+      let s = this.S, k = 0;
+      while (s % N === 0) { s /= N; k++; }
+      const d = s;
+      if (N % d !== 0) return null;
+      let height = 1;
+      for (let h = Math.floor(Math.sqrt(M)); h >= 1; h--) if (M % h === 0) { height = h; break; }
+      const width = M / height, rows = k + (d > 1 ? 1 : 0);
+      // a place has M − k digits, the last of them below N / d
+      if (rows > height || this.placeDigits !== M - k) return null;
+      return { width, height, k, d, rows, top: N / d };
+    }
+
+    /** One round of the paintings' permutation of a place (digits), in place. */
+    _paintingRound(r, x, sign) {
+      const key = this.paintingKeys[r], half = Math.floor(x.length / 2);
+      const A = x.subarray(0, half), B = x.subarray(half);
+      if (r % 2 === 0) { this._roundWith(key, B, A, sign); return; }
+      const T = this.painting.top;
+      if (T === this.N) { this._roundWith(key, A, B, sign); return; }
+      // the last digit counts below N / d only: it gets its own share of the keystream
+      this._roundWith(key, A, B.subarray(0, B.length - 1), sign);
+      const t = hashBytes(A, key[2], key[3])[0] % T, j = B.length - 1;
+      B[j] = (B[j] + (sign > 0 ? t : T - t)) % T;
+    }
+
+    /**
+     * The painting of a hexagon, made a step at a time: the generator yields between the
+     * rounds of the permutation, so that a caller can spread the work over several frames.
+     * Returns the colour numbers of its pixels, row by row from the top, each row from the
+     * left (or null if the Library has no paintings).
+     */
+    *paintingSteps(hexagon, floor) {
+      const P = this.painting;
+      if (!P) return null;
+      const x = this.placeOf(hexagon, floor);
+      for (let r = 0; r < FEISTEL_ROUNDS; r++) { this._paintingRound(r, x, +1); yield r; }
+      const W = P.width, N = this.N, out = new Uint8Array(this.M);
+      let i = 0;
+      for (let row = 0; row < P.rows; row++) {
+        const base = row * W;
+        let sum = 0;
+        for (let c = 0; c < W - 1; c++) { const v = x[i++]; out[base + c] = v; sum += v; }
+        if (row < P.k) out[base + W - 1] = (N - (sum % N)) % N;
+        else out[base + W - 1] = x[x.length - 1] * P.d + ((P.d - (sum % P.d)) % P.d);
+      }
+      out.set(x.subarray(i, i + this.M - P.rows * W), P.rows * W);
+      return out;
+    }
+
+    /** The painting of a hexagon, all at once (see paintingSteps). */
+    paintingOf(hexagon, floor) {
+      const it = this.paintingSteps(hexagon, floor);
+      let step = it.next();
+      while (!step.done) step = it.next();
+      return step.value;
+    }
+
+    /** The hexagon whose painting this is: { hexagon, floor }, or null if no hexagon has it. */
+    placeOfPainting(pixels) {
+      const P = this.painting, N = this.N;
+      if (!P || !pixels || pixels.length !== this.M) return null;
+      for (let j = 0; j < pixels.length; j++) if (pixels[j] >= N) return null;
+      const W = P.width, x = new Uint8Array(this.M - P.k);
+      let i = 0;
+      for (let row = 0; row < P.rows; row++) {
+        const base = row * W, m = row < P.k ? N : P.d;
+        let sum = 0;
+        for (let c = 0; c < W; c++) sum += pixels[base + c];
+        if (sum % m !== 0) return null;
+        for (let c = 0; c < W - 1; c++) x[i++] = pixels[base + c];
+        if (row >= P.k) x[x.length - 1] = Math.floor(pixels[base + W - 1] / P.d);
+      }
+      x.set(pixels.subarray(P.rows * W), i);
+      for (let r = FEISTEL_ROUNDS - 1; r >= 0; r--) this._paintingRound(r, x, -1);
+      const { hexagon, floor } = this._split(x, x.length);
+      return { hexagon, floor: floor.slice(0, this.floorDigits) };
+    }
+
+    /**
+     * The colours of the paintings, as red, green and blue bytes (N colours): the pigments
+     * of an old painter's box, each in several mixtures from a shade (with bone black) to a
+     * tint (with lead white), and a scale of greys between bone black and lead white.
+     * Which colour a number stands for is cosmetic, not part of the bijection.
+     */
+    paintingPalette() {
+      const N = this.N, P = Math.min(PIGMENTS.length, N), L = Math.ceil(N / P);
+      const lin = (c) => Math.pow(c / 255, 2.2);
+      const srgb = (x) => Math.round(255 * Math.pow(Math.min(1, Math.max(0, x)), 1 / 2.2));
+      const white = PIGMENTS[0], black = PIGMENTS[1];
+      const rgb = new Uint8Array(N * 3);
+      for (let i = 0; i < N; i++) {
+        const p = i % P, level = Math.floor(i / P);
+        for (let k = 0; k < 3; k++) {
+          let v;
+          if (p < 2) {
+            // the greys: bone black's mixtures below, lead white's above
+            const t = (p === 1 ? level : L + level) / (2 * L - 1);
+            v = Math.round(black[k] + (white[k] - black[k]) * t);
+          } else {
+            const a = L > 1 ? -0.6 + (1.2 * level) / (L - 1) : 0; // below 0, with black; above, with white
+            const toward = a < 0 ? black : white;
+            v = srgb(lin(PIGMENTS[p][k]) * (1 - Math.abs(a)) + lin(toward[k]) * Math.abs(a));
+          }
+          rgb[i * 3 + k] = v;
+        }
+      }
+      return rgb;
     }
 
     /* ---------------- Cosmetics (not part of the bijection) ---------------- */

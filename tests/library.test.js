@@ -61,6 +61,47 @@ function exhaustive(raw) {
   return { lib, total, empty, floors: floors.length, hexagons };
 }
 
+/**
+ * Enumerates every hexagon of a small library and checks its paintings: each one different,
+ * keeping the rule on rows, leading back to its hexagon, and its mirror image a painting too;
+ * and as many pictures keep the rule as there are hexagons, so every one of them hangs somewhere.
+ */
+function paintingsExhaustive(raw) {
+  const lib = new Library(raw), P = lib.painting, N = lib.N, M = lib.M;
+  assert.ok(P, 'this library should have paintings');
+  const hexagons = N ** M / lib.S;
+  const seen = new Set(), paintings = [];
+  for (let p = 0; p < hexagons; p++) {
+    const digits = new Uint8Array(lib.placeDigits);
+    for (let i = 0, v = p; i < digits.length; i++) { digits[i] = v % N; v = Math.floor(v / N); }
+    const { hexagon, floor } = lib._split(digits, digits.length);
+    const f = floor.slice(0, lib.floorDigits);
+    const pic = lib.paintingOf(hexagon, f);
+    assert.strictEqual(pic.length, M);
+    const k = key(pic);
+    assert(!seen.has(k), 'two hexagons have the same painting');
+    seen.add(k);
+    paintings.push(pic);
+    const back = lib.placeOfPainting(pic);
+    assert.ok(back, 'a painting breaks the rule');
+    assert.strictEqual(key(back.hexagon), key(hexagon));
+    assert.strictEqual(key(back.floor), key(f));
+  }
+  for (const pic of paintings) {
+    const mirror = new Uint8Array(M);
+    for (let r = 0; r < P.height; r++) for (let c = 0; c < P.width; c++) mirror[r * P.width + c] = pic[r * P.width + P.width - 1 - c];
+    assert(seen.has(key(mirror)), 'the mirror image of a painting is not a painting');
+  }
+  let keeping = 0;
+  const pic = new Uint8Array(M);
+  for (let v = 0; v < N ** M; v++) {
+    for (let i = 0, x = v; i < M; i++) { pic[i] = x % N; x = Math.floor(x / N); }
+    if (lib.placeOfPainting(pic)) { keeping++; assert(seen.has(key(pic)), 'a picture that keeps the rule hangs nowhere'); }
+  }
+  assert.strictEqual(keeping, hexagons);
+  return { lib, hexagons };
+}
+
 console.log('Reading the configuration');
 
 test('misspelt settings are reported, and names ignore case and punctuation', () => {
@@ -236,6 +277,84 @@ test('a non-power-of-two alphabet and a hexagon size that does not divide the nu
   assert.strictEqual(key(back.hexagon), key(loc.hexagon));
   assert.strictEqual(key(back.floor), key(loc.floor));
   assert.strictEqual(back.slot, 639);
+});
+
+console.log('\nPaintings');
+
+test('4 colours, 2 × 2 pixels, 8 books per hexagon: 32 paintings, one per hexagon', () => {
+  const r = paintingsExhaustive({
+    seed: 'paint', alphabet: 'ABCD',
+    book: { pagesPerBook: 1, linesPerPage: 2, charactersPerLine: 2 },
+    hexagon: { wallsWithShelves: 1, shelvesPerWall: 2, booksPerShelf: 4 },
+  });
+  assert.deepStrictEqual(r.lib.painting, { width: 2, height: 2, k: 1, d: 2, rows: 2, top: 2 });
+});
+
+test('8 colours, 3 × 2 pixels, 16 books per hexagon: 16,384 paintings', () => {
+  const r = paintingsExhaustive({
+    seed: 'paint', alphabet: 'ABCDEFGH',
+    book: { pagesPerBook: 1, linesPerPage: 2, charactersPerLine: 3 },
+    hexagon: { wallsWithShelves: 1, shelvesPerWall: 4, booksPerShelf: 4 },
+  });
+  assert.strictEqual(r.hexagons, 16384);
+});
+
+test('other alphabets and hexagons: 6 colours and 12 books, 3 and 9, 4 and 2', () => {
+  paintingsExhaustive({ seed: 'six', alphabet: 'ABCDEF', book: { pagesPerBook: 1, linesPerPage: 2, charactersPerLine: 2 }, hexagon: { wallsWithShelves: 1, shelvesPerWall: 3, booksPerShelf: 4 } });
+  const nine = paintingsExhaustive({ seed: 'nine', alphabet: 'ABC', book: { pagesPerBook: 1, linesPerPage: 2, charactersPerLine: 2 }, hexagon: { wallsWithShelves: 1, shelvesPerWall: 3, booksPerShelf: 3 } });
+  assert.strictEqual(nine.lib.painting.rows, 2); // two rows adding up to multiples of 3
+  const two = paintingsExhaustive({ seed: 'two', alphabet: 'ABCD', book: { pagesPerBook: 1, linesPerPage: 2, charactersPerLine: 2 }, hexagon: { wallsWithShelves: 1, shelvesPerWall: 1, booksPerShelf: 2 } });
+  assert.strictEqual(two.lib.painting.rows, 1);
+});
+
+test('a hexagon size that no rule on rows can match has no paintings', () => {
+  const b = new Library({ seed: 'borges', alphabet: 'ABCDEFGHIJKLMNOPQRSTUV,. ', book: { pagesPerBook: 410, linesPerPage: 40, charactersPerLine: 80 }, hexagon: { wallsWithShelves: 4, shelvesPerWall: 5, booksPerShelf: 32 } });
+  assert.strictEqual(b.painting, null);
+  assert.strictEqual(b.paintingOf(b.wakingLocation(0).hexagon, b.wakingLocation(0).floor), null);
+  assert.strictEqual(new Library({ alphabet: 'ABCD', book: { pagesPerBook: 1, linesPerPage: 2, charactersPerLine: 2 }, hexagon: { wallsWithShelves: 1, shelvesPerWall: 2, booksPerShelf: 3 } }).painting, null);
+});
+
+test('the paintings of config.js: 1,024 × 1,024 in 128 colours, unrelated from one hexagon to the next', () => {
+  assert.deepStrictEqual(lib.painting, { width: 1024, height: 1024, k: 1, d: 4, rows: 2, top: 32 });
+  const start = lib.wakingLocation(0);
+  const t0 = performance.now();
+  const pic = lib.paintingOf(start.hexagon, start.floor);
+  console.log(`       ${(performance.now() - t0).toFixed(1)} ms per painting`);
+  assert.strictEqual(pic.length, 1024 * 1024);
+  assert(pic.every((v) => v < 128));
+  let row0 = 0, row1 = 0;
+  for (let c = 0; c < 1024; c++) { row0 += pic[c]; row1 += pic[1024 + c]; }
+  assert.strictEqual(row0 % 128, 0);
+  assert.strictEqual(row1 % 4, 0);
+  const back = lib.placeOfPainting(pic);
+  assert.strictEqual(key(back.hexagon), key(start.hexagon));
+  assert.strictEqual(key(back.floor), key(start.floor));
+  // the same hexagon, the same painting; its neighbours' share about 1 pixel in 128 with it, as chance would
+  assert.strictEqual(key(lib.paintingOf(start.hexagon, start.floor)), key(pic));
+  for (const [dh, df] of [[1, 0], [0, 1]]) {
+    const other = lib.paintingOf(lib.offsetHexagon(start.hexagon, dh), lib.offsetFloor(start.floor, df));
+    let same = 0;
+    for (let i = 0; i < pic.length; i++) if (pic[i] === other[i]) same++;
+    assert(same / pic.length < 0.012, `${same} pixels in common`);
+  }
+  // the mirror shows the painting of another hexagon; a picture that breaks the rule is no painting
+  const mirror = new Uint8Array(pic.length);
+  for (let r = 0; r < 1024; r++) for (let c = 0; c < 1024; c++) mirror[r * 1024 + c] = pic[r * 1024 + 1023 - c];
+  const there = lib.placeOfPainting(mirror);
+  assert.strictEqual(key(lib.paintingOf(there.hexagon, there.floor)), key(mirror));
+  const broken = pic.slice();
+  broken[0] = (broken[0] + 1) % 128;
+  assert.strictEqual(lib.placeOfPainting(broken), null);
+});
+
+test('the palette has as many different colours as the alphabet has symbols', () => {
+  for (const alphabet of ['AB', 'ABCDEFGHIJKLMNOPQRSTUV,. ', null]) {
+    const l = alphabet ? new Library({ alphabet }) : lib;
+    const pal = l.paintingPalette(), colours = new Set();
+    assert.strictEqual(pal.length, l.N * 3);
+    for (let i = 0; i < l.N; i++) colours.add(pal.slice(i * 3, i * 3 + 3).join(','));
+    assert.strictEqual(colours.size, l.N);
+  }
 });
 
 console.log('\nThe catalogue');

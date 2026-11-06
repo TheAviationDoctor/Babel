@@ -39,6 +39,8 @@
       this.view = { nearFloors: 1, nearHexagons: 3, farFloors: 6, farHexagons: 1 };
       this.doors = new Map(); // "dh,df" → { target: 0 or 1, t: 0…1 } for doors that have been touched
       this.lamps = new Map(); // "dh,df" → { target: 0 or 1, t: 0…1 } for night lamps that have been switched
+      // the painting in each vestibule, if the Library has paintings
+      this.paintings = assets.paintingMaterial && library.painting ? new Babel.Paintings(library, assets) : null;
     }
 
     /* ---------------- doors of the cells ---------------- */
@@ -102,8 +104,9 @@
       return s ? s.t * s.t : 1; // a filament dims quickly, then glows out
     }
 
-    /** Swings doors and dims lamps towards their targets. */
+    /** Swings doors, dims lamps towards their targets, and goes on making the nearest paintings. */
     tick(dt) {
+      if (this.paintings && this.paintings.step(6)) this._showPaintings();
       for (const [key, s] of this.doors) {
         if (s.t === s.target) continue;
         s.t = s.target ? Math.min(1, s.t + dt / 0.75) : Math.max(0, s.t - dt / 0.75);
@@ -270,6 +273,13 @@
       const signs = new THREE.Mesh(G.signs, M.signs);
       group.add(signs);
 
+      // the painting opposite the mirror
+      let canvas = null;
+      if (this.paintings) {
+        canvas = new THREE.Mesh(G.canvas, this.paintings.blank);
+        group.add(canvas);
+      }
+
       // the cell itself, drawn only near the reader
       const interior = new THREE.Group();
       interior.add(new THREE.Mesh(G.cellWood, light.wood));
@@ -300,7 +310,7 @@
       const books = new THREE.InstancedMesh(geo, M.books, S);
       books.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       group.add(books);
-      return { group, books, tint, variant, tints: new Float32Array(S * 3), dh: 0, df: 0, door, interior, niche, signs, light };
+      return { group, books, tint, variant, tints: new Float32Array(S * 3), dh: 0, df: 0, door, interior, niche, signs, light, canvas };
     }
 
     _acquire() { return this.pool.pop() || this._createCell(); }
@@ -396,9 +406,30 @@
         cell.door.visible = Math.abs(df - pf) <= 1;
         cell.niche.visible = Math.abs(df - pf) <= 1;
         cell.signs.visible = Math.abs(df - pf) <= 1;
+        if (cell.canvas) cell.canvas.visible = Math.abs(df - pf) <= 1;
+      }
+      if (this.paintings) {
+        // the paintings of the vestibules either side of the reader's hexagon and the next one
+        // east, then the two beyond, made ahead of the reader
+        const f = this.floor(pf);
+        this.paintings.want([0, -1, 1, 2, -2].map((o) => {
+          const g = this.hexagon(ph + o);
+          return { key: this.paintings.key(g, f), hexagon: g.digits, floor: f.digits };
+        }));
+        this._showPaintings();
       }
       this._trimCaches(ph, pf);
       this.clearHover();
+    }
+
+    /** Hangs each painting that is ready in the vestibules near the reader; the others show the far colour. */
+    _showPaintings() {
+      if (!this.center) return;
+      const [ph, pf] = this.center, P = this.paintings;
+      for (const cell of this.cells.values()) {
+        const near = cell.df === pf && cell.dh >= ph - 1 && cell.dh <= ph + 1;
+        cell.canvas.material = near ? P.material(P.key(this.hexagon(cell.dh), this.floor(cell.df))) : P.blank;
+      }
     }
 
     _trimCaches(ph, pf) {

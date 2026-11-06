@@ -10,6 +10,7 @@ A Web-based walkable simulation of Jorge Luis Borges's *[Library of Babel](https
 - Reverse-search any text and teleport to the corresponding book
 - Copy and share locations of any book or text, incl. secret password-encrypted links
 - Read from an index of ~1K literature classics (all copyright-free)
+- A painting in every vestibule, each one different, and every possible painting somewhere
 
 ## Getting started
 
@@ -127,6 +128,8 @@ Because the map can be inverted, any text can be located: `findText` in `js/libr
 
 **Shape.** Both the floors and the hexagons along them wrap around: walk east for 2^3,670,011 hexagons and you are back where you started. The Library is finite, and from inside it has no edge. This is close to the hypothesis the narrator offers at the end of the story. When the number of books is not a multiple of the books per hexagon, as with Borges's figures, the very last hexagon is only partly filled.
 
+**Paintings.** Each hexagon also has a painting in its vestibule, numbered the same way (see [Paintings](#paintings)).
+
 **Cosmetics.** Spine colours and the letters on the spines come from a separate hash of the hexagon's address. They are not part of the bijection and, as in the story, they say nothing about what the pages contain.
 
 ## The Catalogue
@@ -209,6 +212,18 @@ It compresses each new or changed book into a script of its own in `books/compre
 
 A git hook, `.githooks/pre-commit`, runs the script before every commit and adds what it changed to the commit. Git uses it once told where the Library keeps its hooks, which is done once per copy of the repository, in its folder: `git config core.hooksPath .githooks`. Note that `books/uncompressed/` is not part of the repository, so new books on their own leave nothing to commit: run the script yourself then, and commit what it wrote.
 
+## Paintings
+
+Every vestibule has a painting, on the wall opposite the mirror, under a small picture lamp. It belongs to the hexagon west of the vestibule. A painting is 1,024 × 1,024 pixels, each one of 128 colours: the sixteen pigments of an old painter's box (lead white, bone black, lead-tin yellow, yellow ochre, raw and burnt sienna, burnt umber, vermilion, madder lake, Tyrian purple, ultramarine, azurite, indigo, verdigris, malachite and green earth), each in eight mixtures from a shade to a tint, lead white and bone black making a scale of sixteen greys.
+
+As with the books, every possible painting hangs somewhere, and only once. There are 128^1,048,576 pictures of that size, which is 2^7,340,032, but 512 times fewer hexagons, 2^7,340,023. So a painting keeps a rule that one picture in 512 keeps: the colour numbers of its top row add up to a multiple of 128, and those of its second row to a multiple of 4 (128 × 4 = 512). The rule is invisible, since any pixel can still take any colour, and it does not depend on the order of a row's pixels. So the mirror image of a painting, each row read backwards, is a painting too, and the mirror opposite shows the painting of some other hexagon of the Library.
+
+Which painting hangs in which hexagon is scrambled by a Feistel network of its own, keyed by the seed like the books, so that neighbouring hexagons have unrelated paintings: the hexagon's place (its floor and hexagon numbers, 7,340,023 bits) goes through the network, and its digits fill the pixels row by row, the last pixel of the first two rows being set to keep the rule. Run backwards, the network finds the hexagon of any painting (`placeOfPainting` in `js/library.js`).
+
+Almost every painting is coloured static, as almost every book is gibberish, and a recognisable picture is as rare as a sensible sentence. From a few steps away its million pixels blend, as a screen's few hundred pixels cannot show them all; walk up to the canvas to see them one by one. Only the paintings of the vestibules beside your hexagon are drawn; the others show the colour a painting averages to.
+
+With another configuration, the paintings follow the books: as many pixels as a book has characters, in as many colours as the alphabet has symbols. When the books per hexagon are not a power of the alphabet's size times a divisor of it (with Borges's own figures, 640 books and 25 symbols), no rule on rows can make every painting unique, and the vestibules have no painting.
+
 ## Dreams
 
 Lie down on the bed of a cell (look at it and press `E`, click or tap) to sleep. The Library fades to black, and a dream comes out of the black: shapes like smoke seen through a kaleidoscope, now and then with the ghost of the Library's hexagons, of rings or of a spiral, in muted colours. Sentences fade in over it, one after another. Each one stays for `dreams.quoteDuration` seconds, then fades out, and the next one begins to fade in `dreams.quoteInterval` seconds later, while the dream melts into its next scene. Click, tap or press `Esc` to wake.
@@ -228,6 +243,7 @@ In `index.html`, every file name is followed by `?v=` and a version, such as `js
 | `css/style.css` | Reading view, Catalogue and dreams |
 | `js/library.js` | The mathematics: addresses, the bijection, text search, setting books in pages. No graphics. |
 | `js/architecture.js` | Dimensions, geometry and lighting of hexagons, vestibules, stairs and cells |
+| `js/paintings.js` | Draws the paintings of the vestibules near the reader, a step at a time |
 | `js/world.js` | Streams the hexagons around the reader and dresses their books |
 | `js/player.js` | Walking, the spiral stair, and picking a book, door, lamp, bed or Catalogue by gaze |
 | `js/terminal.js` | The Catalogue's screen: the current position, finding texts and books, and going to hexagons |
@@ -243,7 +259,7 @@ In `index.html`, every file name is followed by `?v=` and a version, such as `js
 
 ## Testing
 
-With Node.js installed, run `node tests/library.test.js`. The tests enumerate every shelf of five small libraries and check that each holds a different book and that the inverse map finds every book again. They then check round trips, text search and timing on the Library described by `config.js`, and on Borges's own figures, and finally the Catalogue: preparing texts, setting whole books in pages and splitting long ones into parts, leaving out Project Gutenberg's licence, finding them in books, distances that wrap around the Library, reading back copied addresses, and making and reading links to books, secret ones included. They also check positions measured from the seam, random hexagons to wake in, and the sentences of dreams: grammatical, varied, and always the same for the same hexagon.
+With Node.js installed, run `node tests/library.test.js`. The tests enumerate every shelf of five small libraries and check that each holds a different book and that the inverse map finds every book again. They then check round trips, text search and timing on the Library described by `config.js`, and on Borges's own figures, and finally the Catalogue: preparing texts, setting whole books in pages and splitting long ones into parts, leaving out Project Gutenberg's licence, finding them in books, distances that wrap around the Library, reading back copied addresses, and making and reading links to books, secret ones included. The paintings are checked exhaustively on five small libraries, each painting different, keeping its rule and leading back to its hexagon, every picture that keeps the rule hanging somewhere, and every mirror image a painting too, then on the Library of `config.js`. They also check positions measured from the seam, random hexagons to wake in, and the sentences of dreams: grammatical, varied, and always the same for the same hexagon.
 
 ## Credits
 
