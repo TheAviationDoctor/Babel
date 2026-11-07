@@ -268,11 +268,11 @@
   /** "capitals" or "small letters": the one case of an alphabet that has only one. */
   const oneCase = (lib) => (lib.alphabet.some((c) => /\p{Lu}/u.test(c)) ? 'capitals' : 'small letters');
 
-  const TABS = [['tab-here', 'panel-here'], ['tab-find', 'panel-find'], ['tab-books', 'panel-books'], ['tab-go', 'panel-go']];
+  const TABS = [['tab-here', 'panel-here'], ['tab-browse', 'panel-browse'], ['tab-find', 'panel-find'], ['tab-go', 'panel-go']];
   // within two of them, two kinds of thing
   const SUBTABS = {
-    find: [['sub-text', 'find-text-panel'], ['sub-image', 'find-image-panel']],
     books: [['sub-books', 'browse-books'], ['sub-paintings', 'browse-paintings']],
+    find: [['sub-text', 'find-text-panel'], ['sub-image', 'find-painting-panel']],
   };
   const SUBTAB_FOCUS = { 'sub-text': 'find-text', 'sub-image': 'image-upload', 'sub-books': 'shelf-filter', 'sub-paintings': 'gallery-filter' };
 
@@ -300,10 +300,10 @@
       if (this.painting) this._placePainting();
       if (this.image && this.image.place) this._placeImage();
       const tab = TABS.find(([t]) => $(t).getAttribute('aria-selected') === 'true')[0];
-      if (tab === 'tab-books') this._openBrowse();
+      if (tab === 'tab-browse') this._openBrowse();
       const active = {
         'tab-here': $('panel-here'), 'tab-find': $(SUBTAB_FOCUS[this._selected('find')]),
-        'tab-books': $(SUBTAB_FOCUS[this._selected('books')]), 'tab-go': $('go-east'),
+        'tab-browse': $(SUBTAB_FOCUS[this._selected('books')]), 'tab-go': $('go-east'),
       }[tab];
       setTimeout(() => active.focus({ preventScroll: true }), 0);
     }
@@ -383,7 +383,7 @@
         $(p).hidden = p !== panel;
       }
       if (tab === 'tab-here') this._fitMap();
-      if (tab === 'tab-books') this._openBrowse();
+      if (tab === 'tab-browse') this._openBrowse();
     }
 
     /** The sub-tab chosen in a group ('find' or 'books'). */
@@ -802,7 +802,7 @@
       const parts = [stretch(lib, dh, 'hexagon', 'hexagons', 'east', 'west'), stretch(lib, df, 'floor', 'floors', 'up', 'down')].filter(Boolean);
       const far = parts.length ? `${parts.join(' and ')} from here` : 'in the vestibule of this very hexagon';
       const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      return `<strong>In the vestibule east of its hexagon, opposite the mirror</strong>, ${far}. ` +
+      return `<strong>In the vestibule east of its hexagon</strong>, ${far}. ` +
         `Its hexagon is on floor <span class="addr">${esc(lib.addressText(place.floor, 16))}</span>, hexagon <span class="addr">${esc(lib.addressText(place.hexagon, 16))}</span> of that floor.`;
     }
 
@@ -825,7 +825,7 @@
         return;
       }
       if (!paintings.length) {
-        $('gallery-intro').textContent = 'This Library has no collection of paintings yet. To give it one, put pictures (GIF, JPEG or PNG) in its paintings/originals folder and run node paintings/hang.js.';
+        $('gallery-intro').textContent = 'This Library has no collection of paintings yet. To give it one, put pictures (GIF, JPEG, or PNG) in its paintings/originals folder and run node paintings/hang.js.';
         $('gallery-list').hidden = true;
         document.querySelector('#browse-paintings .gallery-tools').hidden = true;
         return;
@@ -927,7 +927,7 @@
       if (!file) return;
       const status = $('image-status');
       if (!/\.(gif|jpe?g|png)$/i.test(file.name) && !/^image\/(gif|jpeg|png)$/.test(file.type)) {
-        status.textContent = 'Only GIF, JPEG and PNG pictures can be read here.';
+        status.textContent = 'Only GIF, JPEG, and PNG pictures can be read here.';
         return;
       }
       if (!this.lib.painting) {

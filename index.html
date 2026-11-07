@@ -56,8 +56,8 @@
       <h2 id="terminal-title">The catalogue</h2>
       <div class="tabs" role="tablist" aria-label="What to do">
         <button id="tab-here" type="button" role="tab" aria-selected="true" aria-controls="panel-here">Map</button>
+        <button id="tab-browse" type="button" role="tab" aria-selected="false" aria-controls="panel-browse">Browse</button>
         <button id="tab-find" type="button" role="tab" aria-selected="false" aria-controls="panel-find">Find</button>
-        <button id="tab-books" type="button" role="tab" aria-selected="false" aria-controls="panel-books">Browse</button>
         <button id="tab-go" type="button" role="tab" aria-selected="false" aria-controls="panel-go">Jump</button>
       </div>
       <button id="terminal-close" type="button" class="quiet">Step away</button>
@@ -84,7 +84,7 @@
     <div id="panel-find" class="panel" role="tabpanel" aria-labelledby="tab-find" hidden>
       <div class="subtabs" role="tablist" aria-label="What to find">
         <button id="sub-text" type="button" role="tab" aria-selected="true" aria-controls="find-text-panel">Find text</button>
-        <button id="sub-image" type="button" role="tab" aria-selected="false" aria-controls="find-image-panel">Find image</button>
+        <button id="sub-image" type="button" role="tab" aria-selected="false" aria-controls="find-painting-panel">Find painting</button>
       </div>
 
       <div id="find-text-panel" class="subpanel" role="tabpanel" aria-labelledby="sub-text">
@@ -118,9 +118,9 @@
       </div>
       </div>
 
-      <div id="find-image-panel" class="subpanel" role="tabpanel" aria-labelledby="sub-image" hidden>
+      <div id="find-painting-panel" class="subpanel" role="tabpanel" aria-labelledby="sub-image" hidden>
         <section class="intro">
-          <p id="image-note" class="status">Upload a picture (GIF, JPEG or PNG) to find the vestibule where it hangs as a painting of the Library: 1,024 × 1,024 pixels in 128 colours. The picture is only read by this page, and never leaves your computer.</p>
+          <p id="image-note" class="status">Upload a picture (ideally in square ratio, and either GIF, JPEG, or PNG format) to find the vestibule where it hangs as a painting of the Library. The picture is only read by this page, and never leaves your computer.</p>
           <div class="row image-tools">
             <button id="image-upload" type="button" class="primary">Upload image</button>
             <input id="image-upload-input" type="file" accept=".gif,.jpg,.jpeg,.png,image/gif,image/jpeg,image/png" hidden>
@@ -147,7 +147,7 @@
       </div>
     </div>
 
-    <div id="panel-books" class="panel" role="tabpanel" aria-labelledby="tab-books" hidden>
+    <div id="panel-browse" class="panel" role="tabpanel" aria-labelledby="tab-browse" hidden>
       <div class="subtabs" role="tablist" aria-label="What to browse">
         <button id="sub-books" type="button" role="tab" aria-selected="true" aria-controls="browse-books">Read book</button>
         <button id="sub-paintings" type="button" role="tab" aria-selected="false" aria-controls="browse-paintings">View painting</button>
