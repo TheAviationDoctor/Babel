@@ -110,6 +110,7 @@
       // every journey through the catalogue says, for a while, how far it went
       goToCell: (...a) => journey(() => goToCell(...a)),
       goToAddress: (...a) => journey(() => goToAddress(...a)),
+      goToPainting: (...a) => journey(() => goToPainting(...a)),
       goToRandom: () => journey(goToRandom),
       lastJourney: () => lastJourney,
     });
@@ -183,6 +184,18 @@
     goToCell(0, 0, face);
   }
 
+  /** Goes to the vestibule east of a hexagon, anywhere, and stands before its painting. */
+  function goToPainting(hexagon, floor, opts) {
+    opts = opts || {};
+    world.setAnchor(hexagon, floor);
+    terminal.reset();
+    player.origin = 'arrived';
+    player.facePainting(0, 0);
+    world.update(player.ch, player.cf);
+    startWalking();
+    if (opts.title) toast(`Before you hangs ${opts.title}.`, 6000);
+  }
+
   /* ---------------- links to books ---------------- */
 
   /** Where links copied from the catalogue lead: the published Library, or else this page if it is on the web. */
@@ -192,15 +205,18 @@
   }
 
   /**
-   * If the page's address is a link to a text (…/#text=…), a secret link (…/#secret=…) or a
-   * link to a book of the collection (…/#book=…), sets the reader down before the book it
-   * leads to (once its password is given, for a secret link), and returns true.
+   * If the page's address is a link to a text (…/#text=…), a secret link (…/#secret=…), a
+   * link to a book of the collection (…/#book=…) or to one of its paintings (…/#painting=…),
+   * sets the reader down before the book or painting it leads to (once its password is
+   * given, for a secret link), and returns true.
    */
   async function goToLinkedBook(travelling) {
     const hash = location.hash;
     if (BabelCore.Library.isSecretLink(hash)) { askSecret(hash, travelling); return true; }
     const book = BabelCore.Library.readBookLink(hash);
     if (book) return goToCollectionBook(book, hash, travelling);
+    const painting = BabelCore.Library.readPaintingLink(hash);
+    if (painting) return goToCollectionPainting(painting, travelling);
     let text;
     try {
       text = await BabelCore.Library.readLink(hash);
@@ -297,6 +313,26 @@
       { slot: r.location.slot, title, link: hash });
     if (travelling) journey(go); else go();
     toast(`Before you, a little out of its row, stands ${title || 'the book the link leads to'}. ${isTouch ? 'Tap it' : 'Press E'} to read it.`, 6000);
+    return true;
+  }
+
+  /** Follows a link to a painting of the collection: '#painting=<id>'. */
+  async function goToCollectionPainting(ref, travelling) {
+    if (ref.error) { toast(ref.error, 7000); return false; }
+    const paintings = await Babel.Gallery.load();
+    const painting = paintings.find((p) => p.id === ref.id);
+    let pixels;
+    try {
+      if (!painting) throw new Error('not in the collection');
+      pixels = await Babel.Gallery.pixels(painting, lib);
+    } catch (e) {
+      toast(/too old/.test(e.message) ? e.message : 'This link leads to a painting that is not in the collection of this Library.', 7000);
+      return false;
+    }
+    const place = lib.placeOfPainting(pixels);
+    if (!place) { toast('This link leads to a painting that does not belong to this Library.', 7000); return false; }
+    const go = () => goToPainting(place.hexagon, place.floor, { title: painting.title });
+    if (travelling) journey(go); else go();
     return true;
   }
 
@@ -704,7 +740,7 @@
     setMode('walking');
     goToLinkedBook().then((went) => {
       // (a link that could not be followed has said why: that stays on screen instead)
-      if (!went && !/^#(text|book|secret)=/.test(location.hash)) {
+      if (!went && !/^#(text|book|secret|painting)=/.test(location.hash)) {
         toast((isTouch ? 'Drag on the right to look around, hold and slide on the left to walk, and tap a book to read it.'
           : 'Walk with W A S D, and press E to take down a book.') + ' The catalogue in each vestibule tells you where you are.', 9000);
       }

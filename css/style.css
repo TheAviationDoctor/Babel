@@ -206,6 +206,12 @@ input[type="text"]:focus, input[type="number"]:focus { outline: none; border-bot
 .tabs button { border: 0; border-radius: 0; padding: 0.5em 0.9em; color: var(--glow-dim); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
 .tabs button[aria-selected="true"] { color: var(--glow); border-bottom-color: var(--signal); background: transparent; }
 .panel { display: grid; gap: 1.4rem; align-content: start; }
+/* within a tab, sub-tabs for two kinds of thing: text or image, book or painting */
+.subtabs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.glass .subtabs button { font-size: 0.85rem; padding: 0.35em 0.95em; border-radius: 999px; color: var(--glow-dim); border-color: rgba(212, 227, 220, 0.22); }
+.glass .subtabs button[aria-selected="true"] { color: var(--glass); background: var(--glow); border-color: var(--glow); }
+.subpanel { display: grid; gap: 1.4rem; align-content: start; }
+.subpanel[hidden] { display: none; }
 /* Every tab the same size, so that the catalogue keeps its size from one tab to the next:
    as tall as the screen allows (up to a point), the map filling its tab, and any longer
    tab scrolling within, under the tabs. */
@@ -291,10 +297,19 @@ input[type="text"]:focus, input[type="number"]:focus { outline: none; border-bot
 .books.shelf li { padding: 0.55rem 0; }
 .books.shelf cite { font-size: var(--step-0); }
 .books.shelf { max-height: min(26rem, 52vh); overflow: auto; overscroll-behavior: contain; padding-right: 0.6rem; border-bottom: 1px solid rgba(212, 227, 220, 0.14); }
-/* in the Read tab, the list of the collection takes the room the tab leaves it */
-#panel-books { display: flex; flex-direction: column; }
-#panel-books > * { flex: none; }
-#panel-books > .books.shelf { flex: 1 1 auto; min-height: min(12rem, 40vh); max-height: none; }
+/* in the Browse tab, the list of books or paintings takes the room the tab leaves it */
+#panel-books, #panel-books > .subpanel { display: flex; flex-direction: column; }
+#panel-books > *, #panel-books > .subpanel > * { flex: none; }
+#panel-books > .subpanel { flex: 1 1 auto; min-height: 0; gap: 1.4rem; }
+#panel-books > .subpanel[hidden] { display: none; }
+#panel-books > .subpanel > .books.shelf { flex: 1 1 auto; min-height: min(12rem, 40vh); max-height: none; }
+/* a painting found: how it looks in the Library's colours, framed, beside where it hangs */
+.painting-found { display: flex; flex-wrap: wrap; gap: 1rem 1.4rem; align-items: flex-start; }
+.painting-found[hidden] { display: none; }
+.painting-preview { flex: none; width: min(12rem, 42vw); height: auto; box-sizing: content-box; border: 7px solid #4b2f1e; box-shadow: 0 0 0 1px rgba(212, 227, 220, 0.18), 0 6px 18px rgba(0, 0, 0, 0.45); background: #eee8d8; }
+.painting-about { display: grid; gap: 0.6rem; flex: 1 1 18rem; min-width: 0; }
+.image-tools label { display: flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+.image-tools input[type="radio"] { accent-color: var(--signal); margin: 0; }
 .result h3 cite { font-style: normal; }
 .parts { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
 .parts li { display: grid; gap: 0.5rem; }

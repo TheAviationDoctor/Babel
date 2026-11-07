@@ -1,6 +1,6 @@
 /*
  * The catalogue's screen: where the reader is, finding where a text or a whole book
- * stands, and going to any hexagon.
+ * stands and where a picture hangs, and going to any hexagon.
  *
  * A text is found by running the shelving backwards: the catalogue composes the book
  * that begins with the text, and the inverse permutation gives the shelf it stands on.
@@ -10,6 +10,7 @@
  * It talks to the rest of the game through a small context object (see main.js):
  *   ctx.lib(), ctx.world, ctx.player, ctx.dims, ctx.setMode(mode), ctx.startWalking(),
  *   ctx.openBookAt(options), ctx.goToCell(dh, df, face), ctx.goToAddress(hexagon, floor, face),
+ *   ctx.goToPainting(hexagon, floor, { title, link }),
  *   ctx.goToRandom(), ctx.toast(text), ctx.copyText(text, done), ctx.linkBase(),
  *   ctx.lastJourney() (how far the last jump through the catalogue went, or null)
  */
@@ -48,6 +49,26 @@
   // catalogue no longer keeps any, so whatever it kept is forgotten.
   try { if (typeof indexedDB !== 'undefined') indexedDB.deleteDatabase('babel'); } catch (e) { /* nothing kept, then */ }
 
+  /** Loads a script beside the page: a page opened by double-click may load scripts, though it may not read files. */
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.async = true;
+      s.onload = () => { s.remove(); resolve(); };
+      s.onerror = () => { s.remove(); reject(new Error(`its file, ${src.replace(/\?.*$/, '')}, is missing`)); };
+      document.head.appendChild(s);
+    });
+  }
+
+  /** Bytes deflated and written in base64, back as they were. */
+  async function inflate(packed, what) {
+    if (typeof DecompressionStream !== 'function') throw new Error(`This browser is too old to open the ${what} of the collection.`);
+    const bin = atob(packed), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer());
+  }
+
   /*
    * The Library's own collection of books, shelved in books/ by the download script from
    * the plain-text files in books/uncompressed/: books/index.js lists them, and
@@ -59,16 +80,7 @@
     books: null, // the list, once loaded
     _loading: null,
     _arrived: new Map(), // shelf id → the function waiting for that book's text
-    _script(src) {
-      return new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = src;
-        s.async = true;
-        s.onload = () => { s.remove(); resolve(); };
-        s.onerror = () => { s.remove(); reject(new Error(`its file, ${src.replace(/\?.*$/, '')}, is missing`)); };
-        document.head.appendChild(s);
-      });
-    },
+    _script: loadScript,
     /** The list of books, or [] if none has been shelved beside this Library. */
     load() {
       if (!this._loading) {
@@ -86,11 +98,7 @@
           if (this._arrived.delete(book.shelf)) reject(new Error('its file on the shelf is not what was expected'));
         }, (e) => { this._arrived.delete(book.shelf); reject(e); });
       });
-      if (typeof DecompressionStream !== 'function') throw new Error('This browser is too old to open the books of the collection.');
-      const bin = atob(packed), bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const out = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer();
-      return new TextDecoder('utf-8').decode(out);
+      return new TextDecoder('utf-8').decode(await inflate(packed, 'books'));
     },
   };
   Babel.Collection = collection; // main.js follows links to the collection's books with it
@@ -99,6 +107,102 @@
   window.BABEL_SHELF_BOOK = (id, packed) => {
     const resolve = collection._arrived.get(id);
     if (resolve) { collection._arrived.delete(id); resolve(packed); }
+  };
+
+  /*
+   * The Library's own collection of paintings, hung in paintings/ by paintings/hang.js from
+   * the pictures in paintings/originals/: paintings/index.js lists them, and
+   * paintings/compressed/<id>.js holds each one as the Library holds it, its colour numbers
+   * deflated and in base64. Scripts too, for the same reason as the books.
+   */
+  const gallery = {
+    paintings: null, // the list, once loaded
+    _loading: null,
+    _arrived: new Map(), // id → the function waiting for that painting
+    /** The list of paintings, or [] if none has been hung beside this Library. */
+    load() {
+      if (!this._loading) {
+        this._loading = loadScript(`paintings/index.js?t=${Date.now()}`)
+          .then(() => (Array.isArray(window.BABEL_PAINTINGS) ? window.BABEL_PAINTINGS : []), () => [])
+          .then((list) => { this.paintings = list; return list; });
+      }
+      return this._loading;
+    },
+    /** A painting's colour numbers, if it was hung for this Library's paintings. */
+    async pixels(painting, lib) {
+      const got = await new Promise((resolve, reject) => {
+        this._arrived.set(painting.id, resolve);
+        loadScript(`paintings/compressed/${painting.id}.js`).then(() => {
+          if (this._arrived.delete(painting.id)) reject(new Error('its file is not what was expected'));
+        }, (e) => { this._arrived.delete(painting.id); reject(e); });
+      });
+      const P = lib.painting;
+      if (!P || got.width !== P.width || got.height !== P.height || got.colours !== lib.N) {
+        throw new Error(`it was hung for paintings of ${got.width} × ${got.height} pixels in ${got.colours} colours, ` +
+          (P ? `and this Library's are ${P.width} × ${P.height} in ${lib.N}` : 'and this Library has no paintings') + ': run node paintings/hang.js again');
+      }
+      const pixels = await inflate(got.packed, 'paintings');
+      if (pixels.length !== P.width * P.height) throw new Error('its file is damaged');
+      return pixels;
+    },
+  };
+  Babel.Gallery = gallery; // main.js follows links to the collection's paintings with it
+
+  // each painting's script calls this with its colour numbers
+  window.BABEL_HANG_PAINTING = (id, width, height, colours, packed) => {
+    const resolve = gallery._arrived.get(id);
+    if (resolve) { gallery._arrived.delete(id); resolve({ width, height, colours, packed }); }
+  };
+
+  /** A picture file's pixels, { width, height, rgba }, read by the browser, and made no larger than 4,096 pixels a side. */
+  async function readPicture(file) {
+    let bitmap = await createImageBitmap(file);
+    const most = 4096, side = Math.max(bitmap.width, bitmap.height);
+    if (side > most) {
+      const k = most / side, w = Math.max(1, Math.round(bitmap.width * k)), h = Math.max(1, Math.round(bitmap.height * k));
+      bitmap.close();
+      bitmap = await createImageBitmap(file, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' });
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width; canvas.height = bitmap.height;
+    const g = canvas.getContext('2d', { willReadFrequently: true });
+    g.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    return { width: canvas.width, height: canvas.height, rgba: g.getImageData(0, 0, canvas.width, canvas.height).data };
+  }
+
+  /** Draws a painting on a canvas, smaller: each of its pixels the average, in linear light, of a square of the painting's. */
+  function drawPainting(canvas, pixels, lib) {
+    const P = lib.painting, pal = lib.paintingPalette();
+    const f = Math.max(1, Math.ceil(Math.max(P.width, P.height) / 256)), w = Math.max(1, Math.floor(P.width / f)), h = Math.max(1, Math.floor(P.height / f));
+    const toLin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    const lin = Float64Array.from(pal, toLin);
+    const toByte = (v) => Math.round(255 * (v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055));
+    canvas.width = w; canvas.height = h;
+    const g = canvas.getContext('2d'), img = g.createImageData(w, h), d = img.data, n = f * f;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let r = 0, gg = 0, b = 0;
+        for (let v = 0; v < f; v++) {
+          for (let u = 0; u < f; u++) {
+            const c = pixels[(y * f + v) * P.width + x * f + u] * 3;
+            r += lin[c]; gg += lin[c + 1]; b += lin[c + 2];
+          }
+        }
+        const o = (y * w + x) * 4;
+        d[o] = toByte(r / n); d[o + 1] = toByte(gg / n); d[o + 2] = toByte(b / n); d[o + 3] = 255;
+      }
+    }
+    g.putImageData(img, 0, 0);
+  }
+
+  /** The year to order a painting by: the first one its dates give. */
+  const yearKey = (p) => { const m = /\d{3,4}/.exec(p.year || ''); return m ? Number(m[0]) : 99999; };
+
+  /** The name to order a painter by: "Pieter Bruegel the Elder" → "bruegel". */
+  const painterKey = (artist) => {
+    const words = fold(artist).replace(/\s+the\s+(elder|younger)$/, '').split(/\s+/).filter(Boolean);
+    return words.length ? words[words.length - 1] : '\uffff';
   };
 
   /** Lower case, without accents: for searching. */
@@ -165,6 +269,12 @@
   const oneCase = (lib) => (lib.alphabet.some((c) => /\p{Lu}/u.test(c)) ? 'capitals' : 'small letters');
 
   const TABS = [['tab-here', 'panel-here'], ['tab-find', 'panel-find'], ['tab-books', 'panel-books'], ['tab-go', 'panel-go']];
+  // within two of them, two kinds of thing
+  const SUBTABS = {
+    find: [['sub-text', 'find-text-panel'], ['sub-image', 'find-image-panel']],
+    books: [['sub-books', 'browse-books'], ['sub-paintings', 'browse-paintings']],
+  };
+  const SUBTAB_FOCUS = { 'sub-text': 'find-text', 'sub-image': 'image-upload', 'sub-books': 'shelf-filter', 'sub-paintings': 'gallery-filter' };
 
   class Terminal {
     constructor(ctx) {
@@ -173,6 +283,8 @@
       this.certain = null; // { location, content }
       this.typeset = new Map(); // key → a book of the collection set in pages
       this.book = null; // { entry, meta, set, found: [{ location, content }] }
+      this.painting = null; // a painting of the collection: { entry, pixels, place }
+      this.image = null; // a picture uploaded: { name, picture, pixels, place }
       this._bind();
     }
 
@@ -185,9 +297,14 @@
       // the reader may have walked since: distances are measured again from here
       if (this.query) this._certain();
       if (this.book) this._placeBook();
+      if (this.painting) this._placePainting();
+      if (this.image && this.image.place) this._placeImage();
       const tab = TABS.find(([t]) => $(t).getAttribute('aria-selected') === 'true')[0];
-      if (tab === 'tab-books') this._openShelf();
-      const active = { 'tab-here': $('panel-here'), 'tab-find': $('find-text'), 'tab-books': $('shelf-filter'), 'tab-go': $('go-east') }[tab];
+      if (tab === 'tab-books') this._openBrowse();
+      const active = {
+        'tab-here': $('panel-here'), 'tab-find': $(SUBTAB_FOCUS[this._selected('find')]),
+        'tab-books': $(SUBTAB_FOCUS[this._selected('books')]), 'tab-go': $('go-east'),
+      }[tab];
       setTimeout(() => active.focus({ preventScroll: true }), 0);
     }
 
@@ -201,6 +318,12 @@
       this.book = null;
       $('book-results').hidden = true;
       this._markCurrent();
+      this.painting = null;
+      $('painting-results').hidden = true;
+      this._markGallery();
+      this.image = null;
+      $('image-results').hidden = true;
+      $('image-status').textContent = '';
     }
 
     /* ---------------- wiring ---------------- */
@@ -208,6 +331,24 @@
     _bind() {
       $('terminal-close').addEventListener('click', () => this.close());
       for (const [tab, panel] of TABS) $(tab).addEventListener('click', () => this._tab(tab, panel));
+      for (const group of Object.keys(SUBTABS)) for (const [tab] of SUBTABS[group]) $(tab).addEventListener('click', () => this._subtab(group, tab));
+      // a picture, found as a painting
+      $('image-upload').addEventListener('click', () => $('image-upload-input').click());
+      $('image-upload-input').addEventListener('change', () => this._uploadImage($('image-upload-input')));
+      for (const r of document.querySelectorAll('input[name="image-fit"]')) r.addEventListener('change', () => this._hangImage());
+      $('image-go').addEventListener('click', () => this._goPainting(this.image.place, 'your picture, as a painting of the Library', null));
+      $('image-copy').addEventListener('click', () => this._copyPlace(this.image.place));
+      // the collection of paintings
+      $('gallery-filter').addEventListener('input', () => this._filterGallery());
+      $('gallery-order').addEventListener('change', () => this._renderGallery());
+      $('painting-go').addEventListener('click', () => {
+        const p = this.painting;
+        this._goPainting(p.place, p.entry.title, BabelCore.Library.paintingLink(p.entry.id));
+      });
+      $('painting-copy').addEventListener('click', () => this._copyPlace(this.painting.place));
+      $('painting-link').addEventListener('click', () => {
+        this._copyLink(this._shortLink(BabelCore.Library.paintingLink(this.painting.entry.id)), 'Copied a link to this painting. Whoever opens it is set down before it.');
+      });
       $('find-text').addEventListener('input', () => this._note());
       $('find-upload').addEventListener('click', () => $('find-upload-input').click());
       $('find-upload-input').addEventListener('change', () => this._upload($('find-upload-input')));
@@ -242,7 +383,25 @@
         $(p).hidden = p !== panel;
       }
       if (tab === 'tab-here') this._fitMap();
-      if (tab === 'tab-books') this._openShelf();
+      if (tab === 'tab-books') this._openBrowse();
+    }
+
+    /** The sub-tab chosen in a group ('find' or 'books'). */
+    _selected(group) { return SUBTABS[group].find(([t]) => $(t).getAttribute('aria-selected') === 'true')[0]; }
+
+    _subtab(group, tab) {
+      for (const [t, p] of SUBTABS[group]) {
+        $(t).setAttribute('aria-selected', String(t === tab));
+        $(p).hidden = t !== tab;
+      }
+      if (group === 'books') this._openBrowse();
+      setTimeout(() => $(SUBTAB_FOCUS[tab]).focus({ preventScroll: true }), 0);
+    }
+
+    /** Opens the list of the Browse tab's sub-tab: the books, or the paintings. */
+    _openBrowse() {
+      if (this._selected('books') === 'sub-paintings') this._openGallery();
+      else this._openShelf();
     }
 
     /** Puts the text of a .txt file in the box, in place of what was there. */
@@ -357,7 +516,7 @@
       return holder;
     }
 
-    async _copyLink(holder) {
+    async _copyLink(holder, done) {
       if (!holder || !holder.promise) {
         this.ctx.toast('To copy links from a copy of the Library on this computer, set "website" in config.js to the address where the Library is published.');
         return;
@@ -365,7 +524,7 @@
       const url = holder.url || (await holder.promise);
       if (!url) { this.ctx.toast('The link could not be made.'); return; }
       const long = url.length > 60000 ? ` It is ${fmt(url.length)} characters long, which is more than some browsers and websites accept.` : '';
-      this.ctx.copyText(url, `Copied a link to this book. Whoever opens it is set down before the book.${long}`);
+      this.ctx.copyText(url, `${done || 'Copied a link to this book. Whoever opens it is set down before the book.'}${long}`);
     }
 
     /** Shows, or hides again, the form that makes a secret link to a text, in `box`. */
@@ -631,6 +790,187 @@
         li.append(p, row);
         ol.appendChild(li);
       });
+    }
+
+    /* ---------------- paintings ---------------- */
+
+    /** "In the vestibule east of its hexagon, opposite the mirror, … from here. Its hexagon is on floor …" (HTML). */
+    _hangsHTML(place) {
+      const lib = this.lib, world = this.ctx.world, player = this.ctx.player;
+      const dh = lib.hexagonDifference(world.hexagon(player.ch).digits, place.hexagon);
+      const df = lib.floorDifference(world.floor(player.cf).digits, place.floor);
+      const parts = [stretch(lib, dh, 'hexagon', 'hexagons', 'east', 'west'), stretch(lib, df, 'floor', 'floors', 'up', 'down')].filter(Boolean);
+      const far = parts.length ? `${parts.join(' and ')} from here` : 'in the vestibule of this very hexagon';
+      const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return `<strong>In the vestibule east of its hexagon, opposite the mirror</strong>, ${far}. ` +
+        `Its hexagon is on floor <span class="addr">${esc(lib.addressText(place.floor, 16))}</span>, hexagon <span class="addr">${esc(lib.addressText(place.hexagon, 16))}</span> of that floor.`;
+    }
+
+    _goPainting(place, title, link) { this.ctx.goToPainting(place.hexagon, place.floor, { title, link }); }
+
+    _copyPlace(place) {
+      this.ctx.copyText(this.lib.hexagonAddressText(place.hexagon, place.floor), 'Copied the location of its hexagon. Paste it in the Jump tab to go there; the painting hangs in the vestibule east of that hexagon, opposite the mirror.');
+    }
+
+    /** Shows the collection of paintings, loading its list the first time. */
+    async _openGallery() {
+      if (this._galleryShown) return;
+      this._galleryShown = true;
+      $('gallery-intro').textContent = 'Opening the gallery…';
+      const paintings = await gallery.load();
+      if (!this.lib.painting) {
+        $('gallery-intro').textContent = "With this Library's configuration, no painting can hang in only one hexagon, so its vestibules have none (see Paintings in README.md).";
+        $('gallery-list').hidden = true;
+        document.querySelector('#browse-paintings .gallery-tools').hidden = true;
+        return;
+      }
+      if (!paintings.length) {
+        $('gallery-intro').textContent = 'This Library has no collection of paintings yet. To give it one, put pictures (GIF, JPEG or PNG) in its paintings/originals folder and run node paintings/hang.js.';
+        $('gallery-list').hidden = true;
+        document.querySelector('#browse-paintings .gallery-tools').hidden = true;
+        return;
+      }
+      for (const p of paintings) p.search = fold([p.title, p.artist, p.year].join(' '));
+      this._renderGallery();
+    }
+
+    /** Lists the paintings in the order chosen. */
+    _renderGallery() {
+      const paintings = gallery.paintings;
+      if (!paintings || !paintings.length) return;
+      const order = $('gallery-order').value, sorted = paintings.slice();
+      if (order === 'year') sorted.sort((a, b) => yearKey(a) - yearKey(b) || titleKey(a.title).localeCompare(titleKey(b.title), 'en'));
+      else if (order === 'title') sorted.sort((a, b) => titleKey(a.title).localeCompare(titleKey(b.title), 'en'));
+      else sorted.sort((a, b) => painterKey(a.artist).localeCompare(painterKey(b.artist), 'en') || yearKey(a) - yearKey(b));
+      const list = $('gallery-list');
+      list.textContent = '';
+      for (const painting of sorted) {
+        const li = el('li');
+        li.dataset.key = painting.id;
+        li._painting = painting;
+        const info = el('div');
+        info.appendChild(el('cite', '', painting.title));
+        const line = el('span', 'note');
+        line.appendChild(el('span', 'by', [painting.artist, painting.year].filter(Boolean).join(', ')));
+        info.appendChild(line);
+        const button = el('button', '', 'Find it');
+        button.type = 'button';
+        button.addEventListener('click', () => this.findPainting(painting));
+        li.append(info, button);
+        list.appendChild(li);
+      }
+      this._filterGallery();
+      this._markGallery();
+    }
+
+    /** Shows only the paintings whose title, painter or date holds every word searched for. */
+    _filterGallery() {
+      const paintings = gallery.paintings;
+      if (!paintings || !paintings.length) return;
+      const words = fold($('gallery-filter').value).split(/\s+/).filter(Boolean);
+      let shown = 0;
+      for (const li of $('gallery-list').children) {
+        const ok = words.every((w) => li._painting.search.includes(w));
+        li.hidden = !ok;
+        if (ok) shown++;
+      }
+      const index = `An index of ${fmt(paintings.length)} ${paintings.length === 1 ? 'painting' : 'paintings'}`;
+      $('gallery-intro').textContent = !words.length ? `${index}. Pick one and find it in the Library.`
+        : shown ? `${index}, of which ${fmt(shown)} ${shown === 1 ? 'matches' : 'match'} your search. Pick one and find it in the Library.`
+          : `${index}, none of which matches your search.`;
+    }
+
+    _markGallery() {
+      for (const li of $('gallery-list').children) li.setAttribute('aria-current', String(!!this.painting && li.dataset.key === this.painting.entry.id));
+    }
+
+    /** Takes a painting of the collection down from its wall, then finds the vestibule it hangs in. */
+    async findPainting(painting) {
+      const ticket = (this._paintingTicket = (this._paintingTicket || 0) + 1);
+      this.painting = null;
+      this._markGallery();
+      $('painting-results').hidden = false;
+      $('painting-found').hidden = true;
+      $('painting-found-title').replaceChildren('Where ', el('cite', '', painting.title), ' hangs');
+      $('painting-how').hidden = false;
+      $('painting-how').textContent = 'Taking it down from the wall…';
+      $('painting-found-title').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      let pixels;
+      try {
+        pixels = await gallery.pixels(painting, this.lib);
+      } catch (e) {
+        if (ticket === this._paintingTicket) $('painting-how').textContent = `It could not be taken down: ${e.message}.`;
+        return;
+      }
+      if (ticket !== this._paintingTicket) return; // another painting was chosen meanwhile
+      const place = this.lib.placeOfPainting(pixels);
+      if (!place) { $('painting-how').textContent = "It is not a painting of this Library: run node paintings/hang.js again."; return; }
+      this.painting = { entry: painting, pixels, place };
+      drawPainting($('painting-preview'), pixels, this.lib);
+      this._placePainting();
+      this._markGallery();
+    }
+
+    _placePainting() {
+      const p = this.painting;
+      if (!p) return;
+      $('painting-how').hidden = true;
+      $('painting-found').hidden = false;
+      $('painting-where').innerHTML = this._hangsHTML(p.place);
+      $('painting-preview').setAttribute('aria-label', `${p.entry.title}, as the Library holds it`);
+    }
+
+    /** Reads a picture, then finds where it hangs as a painting. */
+    async _uploadImage(input) {
+      const file = input.files && input.files[0];
+      input.value = ''; // so that choosing the same file again reads it again
+      if (!file) return;
+      const status = $('image-status');
+      if (!/\.(gif|jpe?g|png)$/i.test(file.name) && !/^image\/(gif|jpeg|png)$/.test(file.type)) {
+        status.textContent = 'Only GIF, JPEG and PNG pictures can be read here.';
+        return;
+      }
+      if (!this.lib.painting) {
+        status.textContent = "With this Library's configuration, no painting can hang in only one hexagon, so its vestibules have none (see Paintings in README.md).";
+        return;
+      }
+      status.textContent = `Reading ${file.name}…`;
+      let picture;
+      try {
+        picture = await readPicture(file);
+      } catch (e) {
+        status.textContent = `The browser could not read ${file.name} as a picture.`;
+        return;
+      }
+      this.image = { name: file.name, picture };
+      this._hangImage();
+    }
+
+    /** Paints the picture in the Library's colours, cropped or fitted as chosen, and finds its vestibule. */
+    _hangImage() {
+      const im = this.image;
+      if (!im) return;
+      const fit = document.querySelector('input[name="image-fit"]:checked').value;
+      const ticket = (this._imageTicket = (this._imageTicket || 0) + 1);
+      $('image-status').textContent = `Painting ${im.name} in the Library's colours…`;
+      setTimeout(() => { // let that be seen before the work begins
+        if (ticket !== this._imageTicket || this.image !== im) return;
+        const lib = this.lib, { width, height, rgba } = im.picture;
+        im.pixels = lib.paintingOfImage(rgba, width, height, { fit });
+        im.place = lib.placeOfPainting(im.pixels);
+        const P = lib.painting, square = P.width === P.height;
+        $('image-status').textContent = `${im.name}, ${fmt(width)} × ${fmt(height)} pixels, ` +
+          (fit === 'fit' ? 'fitted whole on a mat of lead white' : square ? 'cropped to a square' : "cropped to the painting's proportions") +
+          `, as a painting of ${fmt(P.width)} × ${fmt(P.height)} pixels in the Library's ${lib.N} colours.`;
+        drawPainting($('image-preview'), im.pixels, lib);
+        this._placeImage();
+        $('image-results').hidden = false;
+        $('image-title').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }, 30);
+    }
+
+    _placeImage() {
+      if (this.image && this.image.place) $('image-where').innerHTML = this._hangsHTML(this.image.place);
     }
 
     /* ---------------- going to a hexagon ---------------- */

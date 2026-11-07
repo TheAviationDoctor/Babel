@@ -291,6 +291,17 @@
       this._applyCamera(0, 0);
     }
 
+    /** Places the reader in the vestibule east of hexagon (ch, cf), a step from its painting, looking at it. */
+    facePainting(ch, cf) {
+      const d = this.d, p = d.painting;
+      if (!p) { this.placeAtStart(ch, cf); return; }
+      const back = Math.min(0.95, d.hallW - 0.25 - this.radius); // across the vestibule, short of the wall with the mirror
+      this.ch = ch; this.cf = cf; this.x = p.x; this.y = 0; this.z = p.z - back;
+      this.yaw = Math.PI; // facing north
+      this.pitch = Math.atan2(p.y - d.eye, back);
+      this._applyCamera(0, 0);
+    }
+
     /** Height on the spiral stair (continuous ramp), choosing the turn nearest to y. */
     _stair(hx, z, y) {
       const d = this.d, r = this.radius;

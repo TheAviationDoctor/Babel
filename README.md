@@ -11,6 +11,7 @@ A Web-based walkable simulation of Jorge Luis Borges's *[Library of Babel](https
 - Copy and share locations of any book or text, incl. secret password-encrypted links
 - Read from an index of ~1K literature classics (all copyright-free)
 - A painting in every vestibule, each one different, and every possible painting somewhere
+- Find the vestibule where any picture hangs, and view famous copyright-free paintings
 
 ## Getting started
 
@@ -138,9 +139,17 @@ Every vestibule has one. There is no menu in the Library, so the Catalogue is al
 
 **Map.** Where you are: how far from where you woke (or, after a jump, from where you arrived), and how far east of the Western seam and above the Lower seam, with the percentage of the way round. After a jump through the Catalogue, it says how far the jump went, measured the shorter way round, such as `1.2 × 10^1,104,783 hexagons west and 2.2 × 10^1,104,783 floors down`. The rest of the tab is a map of the whole Library seen from the side, as large as the screen allows and drawn to its proportions (it is about 1.7 times longer than it is tall). Its four sides are the seam, named Upper, Eastern, Lower and Western, each joining the side opposite. The hexagon you are in blinks on it, and an outlined hexagon marks where the last jump began. A button below the map copies the hexagon's full address, to come back to it later from **Jump**, and another opens this project on GitHub.
 
-**Search.** Type or paste anything into it, or load a plain-text file with **Upload .txt** (the file is only read by the page, and never leaves the computer). Letters keep their case, and their accents where the alphabet has them; other letters lose their accents (Ê becomes E, ō becomes o). Tabs become spaces, and `--` becomes a long dash. Other characters become their nearest equivalents in the alphabet: ß becomes ss, … becomes ..., ¼ becomes 1/4, a ligature such as ﬁ becomes fi, and so on (the screen says which). What has no equivalent, such as Greek, is left out (the screen lists it). The text is then set in lines of 64 characters, as on the pages of a book: a word that would be cut at the end of a line goes to the start of the next, no line starts with a space, and each new paragraph starts after a blank line, indented by three spaces. Blank lines separate paragraphs; in a text without any, each line is a paragraph. Spaces within a paragraph count once, so a short text on one line is set exactly as typed. The Catalogue then runs the shelving backwards. It composes the book that begins with your text, the rest of its pages blank, and the inverse permutation gives the hexagon, wall, shelf and volume where that book stands. Since every possible book exists exactly once, it is certainly there. It is also almost always astronomically far away, so the screen gives the distance as a power of ten. To read it, go there: you are set down in front of it, and the volume stands a little out of its row. You can also copy its location (the address of its hexagon, for the **Jump** tab, with its wall, shelf and volume), a public link to it, or a secret link to it (see [Links to books](#links-to-books)).
+**Find.** Two sub-tabs: **Find text** and **Find image**.
 
-**Read.** The Catalogue can also find a whole book: any book of the Library's own collection (see [Your books](#your-books)), which it lists with a search box, most read first, by title or by author. It sets the text in pages, the way a book of this Library holds them: from the first page, 64 characters to a line and 32 lines to a page, with words kept whole and each paragraph starting on a new, indented line. The rest of the 512 pages are blank. It then finds the one book of the Library that holds exactly those pages. To read it, go and take it down from its shelf; you can also copy its location or a public link to it (see [Links to books](#links-to-books)). A text longer than one book is set in several parts, one after the other, and each part is found separately.
+**Find text.** Type or paste anything into it, or load a plain-text file with **Upload .txt** (the file is only read by the page, and never leaves the computer). Letters keep their case, and their accents where the alphabet has them; other letters lose their accents (Ê becomes E, ō becomes o). Tabs become spaces, and `--` becomes a long dash. Other characters become their nearest equivalents in the alphabet: ß becomes ss, … becomes ..., ¼ becomes 1/4, a ligature such as ﬁ becomes fi, and so on (the screen says which). What has no equivalent, such as Greek, is left out (the screen lists it). The text is then set in lines of 64 characters, as on the pages of a book: a word that would be cut at the end of a line goes to the start of the next, no line starts with a space, and each new paragraph starts after a blank line, indented by three spaces. Blank lines separate paragraphs; in a text without any, each line is a paragraph. Spaces within a paragraph count once, so a short text on one line is set exactly as typed. The Catalogue then runs the shelving backwards. It composes the book that begins with your text, the rest of its pages blank, and the inverse permutation gives the hexagon, wall, shelf and volume where that book stands. Since every possible book exists exactly once, it is certainly there. It is also almost always astronomically far away, so the screen gives the distance as a power of ten. To read it, go there: you are set down in front of it, and the volume stands a little out of its row. You can also copy its location (the address of its hexagon, for the **Jump** tab, with its wall, shelf and volume), a public link to it, or a secret link to it (see [Links to books](#links-to-books)).
+
+**Find image.** Upload a picture (GIF, JPEG or PNG; it is only read by the page, and never leaves the computer) to find the vestibule where it hangs as a painting of the Library (see [Paintings](#paintings)). The picture is cropped to a square, keeping its middle, or, with **Fit it whole**, fitted whole on a mat of lead white; resampled to 1,024 × 1,024 pixels; and each pixel given the nearest of the 128 colours, the difference carried over to the pixels not yet given theirs (Floyd–Steinberg dithering), so that from a little way off the eye mixes the colours back. Last, in each of the first two rows, the one pixel whose change shows least is changed to keep the paintings' rule. The screen shows the painting and where it hangs; you can go there, and stand before it, or copy its location. The same picture always gives the same painting, but browsers do not all read a picture file to exactly the same pixels, so another browser may find it in another vestibule.
+
+**Browse.** Two sub-tabs: **Read book** and **View painting**.
+
+**Read book.** The Catalogue can also find a whole book: any book of the Library's own collection (see [Your books](#your-books)), which it lists with a search box, most read first, by title or by author. It sets the text in pages, the way a book of this Library holds them: from the first page, 64 characters to a line and 32 lines to a page, with words kept whole and each paragraph starting on a new, indented line. The rest of the 512 pages are blank. It then finds the one book of the Library that holds exactly those pages. To read it, go and take it down from its shelf; you can also copy its location or a public link to it (see [Links to books](#links-to-books)). A text longer than one book is set in several parts, one after the other, and each part is found separately.
+
+**View painting.** Some famous copyright-free paintings, hung in the Library as **Find image** would hang them with **Fit it whole**, listed with a search box, oldest first, by title or by painter (see [Your paintings](#your-paintings)). Choose one to see it as the Library holds it and where it hangs; you can go there, copy its location, or copy a public link to it (see [Links to paintings of the collection](#links-to-paintings-of-the-collection)).
 
 **Jump.** Move any number of hexagons east or west and floors up or down. Paste a full address, as copied from the Map tab, to return to a hexagon you have bookmarked, even after closing the page. An address copied from a Library with another seed is refused, since its books stand elsewhere. Or go somewhere at random. After a jump, the Map tab counts your steps from where you arrived.
 
@@ -156,7 +165,7 @@ A link to a text carries the text itself:
 
     https://babel.pellegr.in/#text=<the text>
 
-Whoever opens the link is set down in the Library before the book that holds exactly that text from the very start of its first page (set in lines as in **Search**), with the rest of its pages blank, the volume standing a little out of its row. It is the book the Catalogue's **Search** tab finds, and the link its **Copy a public link** copies. The Library runs the shelving backwards to find it, so the same text always leads to the same book, and a link keeps leading to the book that holds its text even if the seed or the configuration change. Such a link can be built without the book ever having been found.
+Whoever opens the link is set down in the Library before the book that holds exactly that text from the very start of its first page (set in lines as in **Find text**), with the rest of its pages blank, the volume standing a little out of its row. It is the book the Catalogue's **Find text** sub-tab finds, and the link its **Copy a public link** copies. The Library runs the shelving backwards to find it, so the same text always leads to the same book, and a link keeps leading to the book that holds its text even if the seed or the configuration change. Such a link can be built without the book ever having been found.
 
 **Building a link.** The text after `text=` takes one of two forms; both lead to the same book.
 
@@ -176,7 +185,7 @@ If the text you'd like to link to is inside the file `mytext.txt`, use this:
 python3 -c "import sys,zlib,base64; t=sys.stdin.buffer.read(); print('#text=:'+base64.urlsafe_b64encode(zlib.compress(t,9)).rstrip(b'=').decode())" < mytext.txt
 ```
 
-The text is read as the Catalogue reads any text (see **Search** above): letters keep their case, and their accents where the alphabet has them, other characters become their nearest equivalents, and the text is set in lines and paragraphs. A blog post of a few thousand words makes a link of a few thousand characters, well within what browsers accept; a whole novel would be too long for some browsers, which stop at about 80,000 characters.
+The text is read as the Catalogue reads any text (see **Find text** above): letters keep their case, and their accents where the alphabet has them, other characters become their nearest equivalents, and the text is set in lines and paragraphs. A blog post of a few thousand words makes a link of a few thousand characters, well within what browsers accept; a whole novel would be too long for some browsers, which stop at about 80,000 characters.
 
 ### Secret links
 
@@ -184,21 +193,25 @@ A secret link carries a text encrypted with a password, so that the link alone c
 
     https://babel.pellegr.in/#secret=<the text, compressed and encrypted>
 
-The Catalogue makes one with **Copy a secret link**, beside **Copy a public link**, in the **Search** tab. Choose a password (at least 8 characters; a few words make a stronger one, and one easier to remember), then copy the link. Whoever opens it is asked for the password before the Library sets them down before the book, the same book as an ordinary link to that text would lead to. Give the password separately, by voice or in another message: it is in no link, and kept nowhere, so a forgotten password cannot be recovered. Reading the book from there, **Copy a link to it** copies the secret link again, not the text.
+The Catalogue makes one with **Copy a secret link**, beside **Copy a public link**, in the **Find text** sub-tab. Choose a password (at least 8 characters; a few words make a stronger one, and one easier to remember), then copy the link. Whoever opens it is asked for the password before the Library sets them down before the book, the same book as an ordinary link to that text would lead to. Give the password separately, by voice or in another message: it is in no link, and kept nowhere, so a forgotten password cannot be recovered. Reading the book from there, **Copy a link to it** copies the secret link again, not the text.
 
 The text is compressed as in other links, then encrypted with AES-GCM under a key made from the password with PBKDF2 (SHA-256, 600,000 rounds, which makes guessing passwords slow). All of it happens in the browser. A secret link is about 60 characters longer than the compressed link to the same text. Whoever has the link can still try passwords one after another on their own computer, so a short or common password can be found; and whoever opens the book can read the text, and pass it on.
 
 ### Links to books of the collection
 
-A link to a book of the collection (see [Your books](#your-books)) carries no text, only the name of the book's file in `books/compressed/`: `#book=` and 20 characters, such as `https://babel.pellegr.in/#book=3f6bb9d6f78e0293b56a` for *Pride and Prejudice*. A book too long for one volume is set in several parts: `#book=…/3` leads to the third. The Catalogue's **Read** tab copies these links. They lead to the same book whatever the seed.
+A link to a book of the collection (see [Your books](#your-books)) carries no text, only the name of the book's file in `books/compressed/`: `#book=` and 20 characters, such as `https://babel.pellegr.in/#book=3f6bb9d6f78e0293b56a` for *Pride and Prejudice*. A book too long for one volume is set in several parts: `#book=…/3` leads to the third. The Catalogue's **Read book** sub-tab copies these links. They lead to the same book whatever the seed.
 
 A book that a link or the Catalogue has led you to can be shared again from the reading view: **Copy a link to it** copies the link that leads to it.
 
+### Links to paintings of the collection
+
+A link to a painting of the collection names it likewise, by the name of its file in `paintings/compressed/`: `#painting=` and 20 characters, such as `https://babel.pellegr.in/#painting=0d8bc30831c03f9182fb` for Bruegel's *The Tower of Babel*. Whoever opens it is set down in its vestibule, before it. The **View painting** sub-tab copies these links. A picture uploaded to **Find image** has no such link, since a link to it would have to carry the whole painting, over half a million characters.
+
 ## Your books
 
-The Library has a collection of ~1K copyright-free literature classics from the list of most read books of [Project Gutenberg](https://www.gutenberg.org). They are kept in `books/compressed/`. You can access those from the Catalogue's **Read** tab and read them from within the Library.
+The Library has a collection of ~1K copyright-free literature classics from the list of most read books of [Project Gutenberg](https://www.gutenberg.org). They are kept in `books/compressed/`. You can access those from the Catalogue's **Browse** tab, under **Read book**, and read them from within the Library.
 
-The Catalogue loads the list when **Read** is first opened, and a book's text only when you choose it, so the collection works the same whether the Library is opened by double-click or online.
+The Catalogue loads the list when **Read book** is first opened, and a book's text only when you choose it, so the collection works the same whether the Library is opened by double-click or online.
 
 The title, author and year come from the file name. If the name does not give an author, they come from the e-book's header, as for the Gutenberg files. Those can be added as they are: the Catalogue leaves out the licence that comes before and after the text, and the volunteers' credits. Leave a blank line between paragraphs. If there are no blank lines, each line is taken as a paragraph, and a file written on a single line is set as one long paragraph.
 
@@ -223,6 +236,18 @@ Which painting hangs in which hexagon is scrambled by a Feistel network of its o
 Almost every painting is coloured static, as almost every book is gibberish, and a recognisable picture is as rare as a sensible sentence. From a few steps away its million pixels blend, as a screen's few hundred pixels cannot show them all; walk up to the canvas to see them one by one. Only the paintings of the vestibules beside your hexagon are drawn; the others show the colour a painting averages to.
 
 With another configuration, the paintings follow the books: as many pixels as a book has characters, in as many colours as the alphabet has symbols. When the books per hexagon are not a power of the alphabet's size times a divisor of it (with Borges's own figures, 640 books and 25 symbols), no rule on rows can make every painting unique, and the vestibules have no painting.
+
+## Your paintings
+
+The Library has a small collection of famous copyright-free paintings, hung in `paintings/compressed/` and listed in `paintings/index.js`: Leonardo's *Mona Lisa*, Bruegel's *The Tower of Babel*, Vermeer's *Girl with a Pearl Earring*, Turner's *The Shipwreck*, Friedrich's *Wanderer above the Sea of Fog*, Hokusai's *The Great Wave off Kanagawa*, Monet's *Impression, Sunrise*, Van Gogh's *The Starry Night*, Munch's *The Scream* and Klimt's *The Kiss*. The pictures are photographs of the paintings, which are in the public domain, from Wikimedia Commons. Each is kept as the Library holds it, its million colour numbers compressed into a script of its own, which the Catalogue loads only when the painting is chosen.
+
+**Adding paintings.** Put pictures (GIF, JPEG or PNG) in `paintings/originals/`, which is not published, named after their paintings, `Painter - Title (Year).jpg`, such as `Vincent van Gogh - The Starry Night (1889).jpg`. Then hang them with Node.js:
+
+```
+node paintings/hang.js
+```
+
+It fits each new or changed picture whole on a mat, paints it in the Library's colours as **Find image** does, writes it into a script of its own in `paintings/compressed/`, named after a hash of the painting (which is also its `#painting=` link), removes the scripts of the paintings whose picture is gone, and rewrites the list, `paintings/index.js`, oldest first. Node.js reads PNG files itself; JPEG and GIF files are first turned into PNG by the computer, on a Mac by `sips` (which every Mac has), elsewhere by ImageMagick or Python's Pillow. The git hook runs it before every commit too, as it does for the books, if Node.js is installed. Pictures it has hung before, unchanged since, are not read again.
 
 ## Dreams
 
@@ -255,11 +280,13 @@ In `index.html`, every file name is followed by `?v=` and a version, such as `js
 | `tests/library.test.js` | Tests of the mathematics |
 | `books/index.js`, `books/compressed/` | The collection, as the Catalogue reads it, written by `books/shelve.py` from the `.txt` files in `books/uncompressed/` (which are not published) |
 | `books/shelve.py` | Shelves the collection: see [Your books](#your-books) |
-| `.githooks/pre-commit` | Runs `books/shelve.py` before every commit |
+| `paintings/index.js`, `paintings/compressed/` | The collection of paintings, as the Catalogue reads it, written by `paintings/hang.js` from the pictures in `paintings/originals/` (which are not published) |
+| `paintings/hang.js` | Hangs the collection of paintings: see [Your paintings](#your-paintings) |
+| `.githooks/pre-commit` | Runs `books/shelve.py` and `paintings/hang.js` before every commit |
 
 ## Testing
 
-With Node.js installed, run `node tests/library.test.js`. The tests enumerate every shelf of five small libraries and check that each holds a different book and that the inverse map finds every book again. They then check round trips, text search and timing on the Library described by `config.js`, and on Borges's own figures, and finally the Catalogue: preparing texts, setting whole books in pages and splitting long ones into parts, leaving out Project Gutenberg's licence, finding them in books, distances that wrap around the Library, reading back copied addresses, and making and reading links to books, secret ones included. The paintings are checked exhaustively on five small libraries, each painting different, keeping its rule and leading back to its hexagon, every picture that keeps the rule hanging somewhere, and every mirror image a painting too, then on the Library of `config.js`. They also check positions measured from the seam, random hexagons to wake in, and the sentences of dreams: grammatical, varied, and always the same for the same hexagon.
+With Node.js installed, run `node tests/library.test.js`. The tests enumerate every shelf of five small libraries and check that each holds a different book and that the inverse map finds every book again. They then check round trips, text search and timing on the Library described by `config.js`, and on Borges's own figures, and finally the Catalogue: preparing texts, setting whole books in pages and splitting long ones into parts, leaving out Project Gutenberg's licence, finding them in books, distances that wrap around the Library, reading back copied addresses, and making and reading links to books, secret ones included. The paintings are checked exhaustively on five small libraries, each painting different, keeping its rule and leading back to its hexagon, every picture that keeps the rule hanging somewhere, and every mirror image a painting too, then on the Library of `config.js`, with pictures made into paintings, cropped or fitted, always the same for the same picture, and mended to keep the rule. They also check positions measured from the seam, random hexagons to wake in, and the sentences of dreams: grammatical, varied, and always the same for the same hexagon.
 
 ## Credits
 

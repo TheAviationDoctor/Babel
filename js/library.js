@@ -347,6 +347,75 @@
   function unit(rng) { return rng() / 4294967296; }
 
   /* ------------------------------------------------------------------ *
+   * Pictures
+   * ------------------------------------------------------------------ */
+
+  /** A colour in linear light as OKLab (lightness and two opponent axes), where distances match what the eye sees. */
+  function oklab(r, g, b) {
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+    const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+      1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+      0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
+  }
+
+  /** For each of n output pixels along one axis, the input pixels (of `size`) it averages and their weights. */
+  function taps(n, start, span, size) {
+    const scale = span / n, support = Math.max(1, scale), out = [];
+    for (let i = 0; i < n; i++) {
+      const centre = start + (i + 0.5) * scale;
+      const j0 = Math.max(0, Math.floor(centre - support)), j1 = Math.min(size - 1, Math.ceil(centre + support));
+      const w = [];
+      let total = 0;
+      for (let j = j0; j <= j1; j++) {
+        const t = Math.max(0, 1 - Math.abs(j + 0.5 - centre) / support); // a tent, as wide as an output pixel or an input one
+        w.push(t); total += t;
+      }
+      if (!total) { w.fill(0); w[Math.min(w.length - 1, Math.max(0, Math.round(centre - 0.5) - j0))] = 1; total = 1; }
+      out.push({ j0, w: Float64Array.from(w, (t) => t / total) });
+    }
+    return out;
+  }
+
+  /**
+   * Part of a picture (sx, sy, sw, sh, in its pixels) resampled to dw × dh pixels, in linear
+   * light: a tent filter as wide as the larger of an input and an output pixel, so that a
+   * picture made smaller is averaged and one made larger is interpolated. Returns 3 floats
+   * per pixel.
+   */
+  function resample(rgba, width, height, sx, sy, sw, sh, dw, dh, toLin, matte) {
+    const across = taps(dw, sx, sw, width), down = taps(dh, sy, sh, height);
+    const y0 = down[0].j0, y1 = down[dh - 1].j0 + down[dh - 1].w.length;
+    const rows = new Float32Array((y1 - y0) * dw * 3), line = new Float64Array(width * 3);
+    for (let y = y0; y < y1; y++) {
+      for (let x = 0, p = y * width * 4; x < width; x++, p += 4) {
+        const a = rgba[p + 3] / 255;
+        for (let k = 0; k < 3; k++) line[x * 3 + k] = a * toLin[rgba[p + k]] + (1 - a) * matte[k];
+      }
+      const o = (y - y0) * dw * 3;
+      for (let i = 0; i < dw; i++) {
+        const t = across[i];
+        let r = 0, g = 0, b = 0;
+        for (let q = 0; q < t.w.length; q++) {
+          const s = (t.j0 + q) * 3, wt = t.w[q];
+          r += line[s] * wt; g += line[s + 1] * wt; b += line[s + 2] * wt;
+        }
+        rows[o + i * 3] = r; rows[o + i * 3 + 1] = g; rows[o + i * 3 + 2] = b;
+      }
+    }
+    const out = new Float32Array(dw * dh * 3);
+    for (let i = 0; i < dh; i++) {
+      const t = down[i], o = i * dw * 3;
+      for (let q = 0; q < t.w.length; q++) {
+        const s = (t.j0 + q - y0) * dw * 3, wt = t.w[q];
+        for (let x = 0; x < dw * 3; x++) out[o + x] += rows[s + x] * wt;
+      }
+    }
+    return out;
+  }
+
+  /* ------------------------------------------------------------------ *
    * Digit-array arithmetic (base N, least significant digit first)
    * ------------------------------------------------------------------ */
 
@@ -903,6 +972,136 @@
         }
       }
       return rgb;
+    }
+
+    /** The palette in the forms the conversion of pictures needs (worked out once). */
+    _paintingColours() {
+      if (this._colours) return this._colours;
+      const N = this.N, srgb = this.paintingPalette();
+      // sRGB bytes to linear light, and linear light (4,096 steps) to sRGB in 64 steps
+      const toLin = new Float64Array(256);
+      for (let i = 0; i < 256; i++) { const c = i / 255; toLin[i] = c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+      const toStep = new Uint8Array(4096);
+      for (let i = 0; i < 4096; i++) {
+        const v = i / 4095, c = v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
+        toStep[i] = Math.round(Math.min(1, Math.max(0, c)) * 63);
+      }
+      const lin = new Float64Array(N * 3), lab = new Float64Array(N * 3);
+      for (let i = 0; i < N; i++) {
+        for (let k = 0; k < 3; k++) lin[i * 3 + k] = toLin[srgb[i * 3 + k]];
+        lab.set(oklab(lin[i * 3], lin[i * 3 + 1], lin[i * 3 + 2]), i * 3);
+      }
+      const nearestLab = (L, A, B) => {
+        let best = 0, bd = Infinity;
+        for (let i = 0; i < N; i++) {
+          const dl = lab[i * 3] - L, da = lab[i * 3 + 1] - A, db = lab[i * 3 + 2] - B, d = dl * dl + da * da + db * db;
+          if (d < bd) { bd = d; best = i; }
+        }
+        return best;
+      };
+      const w = PIGMENTS[0];
+      const white = nearestLab(...oklab(toLin[w[0]], toLin[w[1]], toLin[w[2]]));
+      this._colours = { srgb, lin, lab, toLin, toStep, nearestLab, white, cache: new Int16Array(1 << 18).fill(-1) };
+      return this._colours;
+    }
+
+    /**
+     * Any picture as a painting of this Library, as the catalogue's "Find image" makes one.
+     * The picture is cut to the painting's proportions, keeping its middle (options.fit
+     * 'crop', the default), or fitted whole on a mat of lead white ('fit'); resampled to the
+     * painting's pixels; and each pixel given the nearest colour of the palette, the
+     * difference carried over to the pixels not yet given theirs (Floyd–Steinberg
+     * dithering), so that from a little way off the eye mixes the colours back. Last, in each
+     * row the rule on rows constrains (see "Paintings" above), the one pixel whose change
+     * shows least is changed to keep it. The same picture always gives the same painting.
+     *
+     * rgba: the picture's pixels, row by row, 4 bytes each (red, green, blue, opacity:
+     * transparent parts are seen against lead white). Returns the colour numbers of the
+     * painting, or null if the Library has no paintings.
+     */
+    paintingOfImage(rgba, width, height, options) {
+      const P = this.painting;
+      if (!P || !(width > 0 && height > 0) || rgba.length < width * height * 4) return null;
+      const W = P.width, H = P.height, C = this._paintingColours(), lin = C.lin;
+      // the part of the picture used (in its pixels), and where it goes on the canvas
+      let sx = 0, sy = 0, sw = width, sh = height, dx = 0, dy = 0, dw = W, dh = H;
+      if (options && options.fit === 'fit') {
+        if (width * H > height * W) { dh = Math.max(1, Math.round((W * height) / width)); dy = Math.floor((H - dh) / 2); }
+        else { dw = Math.max(1, Math.round((H * width) / height)); dx = Math.floor((W - dw) / 2); }
+      } else if (width * H > height * W) { sw = (height * W) / H; sx = (width - sw) / 2; }
+      else { sh = (width * H) / W; sy = (height - sh) / 2; }
+      const img = resample(rgba, width, height, sx, sy, sw, sh, dw, dh, C.toLin, lin.subarray(C.white * 3, C.white * 3 + 3));
+
+      // the nearest colour of the palette, by the 64-step sRGB cell a colour falls in
+      const cache = C.cache, toStep = C.toStep;
+      const step = (v) => toStep[v <= 0 ? 0 : v >= 1 ? 4095 : Math.round(v * 4095)];
+      const nearest = (r, g, b) => {
+        const key = (step(r) << 12) | (step(g) << 6) | step(b);
+        let c = cache[key];
+        if (c < 0) {
+          const s = [key >> 12, (key >> 6) & 63, key & 63].map((q) => C.toLin[Math.round((q * 255) / 63)]);
+          c = cache[key] = C.nearestLab(...oklab(s[0], s[1], s[2]));
+        }
+        return c;
+      };
+      const out = new Uint8Array(W * H).fill(C.white); // the mat, where the picture does not reach
+      for (let y = 0; y < dh; y++) {
+        const ltr = (y & 1) === 0, f = ltr ? 1 : -1; // serpentine: every other row from the right
+        for (let k = 0; k < dw; k++) {
+          const x = ltr ? k : dw - 1 - k, o = (y * dw + x) * 3;
+          const r = Math.min(1, Math.max(0, img[o])), g = Math.min(1, Math.max(0, img[o + 1])), b = Math.min(1, Math.max(0, img[o + 2]));
+          const c = nearest(r, g, b);
+          out[(dy + y) * W + dx + x] = c;
+          const er = r - lin[c * 3], eg = g - lin[c * 3 + 1], eb = b - lin[c * 3 + 2];
+          const spread = (xx, yy, wt) => {
+            if (xx < 0 || xx >= dw || yy >= dh) return;
+            const q = (yy * dw + xx) * 3;
+            img[q] += er * wt; img[q + 1] += eg * wt; img[q + 2] += eb * wt;
+          };
+          spread(x + f, y, 7 / 16); spread(x - f, y + 1, 3 / 16); spread(x, y + 1, 5 / 16); spread(x + f, y + 1, 1 / 16);
+        }
+      }
+      this._keepRule(out);
+      return out;
+    }
+
+    /** Makes a picture keep the rule on rows, changing in each ruled row the one pixel whose change shows least. */
+    _keepRule(pixels) {
+      const P = this.painting, N = this.N, W = P.width, lab = this._paintingColours().lab;
+      const far = (a, b) => {
+        const dl = lab[a * 3] - lab[b * 3], da = lab[a * 3 + 1] - lab[b * 3 + 1], db = lab[a * 3 + 2] - lab[b * 3 + 2];
+        return dl * dl + da * da + db * db;
+      };
+      for (let row = 0; row < P.rows; row++) {
+        const m = row < P.k ? N : P.d, base = row * W;
+        let sum = 0;
+        for (let c = 0; c < W; c++) sum += pixels[base + c];
+        const r = sum % m;
+        if (!r) continue;
+        // a pixel may become any colour whose number is less by r, modulo m
+        let best = -1, to = 0, bd = Infinity;
+        for (let c = 0; c < W; c++) {
+          const v = pixels[base + c];
+          for (let u = (((v - r) % m) + m) % m; u < N; u += m) {
+            const d = far(v, u);
+            if (d < bd) { bd = d; best = c; to = u; }
+          }
+        }
+        pixels[base + best] = to;
+      }
+      return pixels;
+    }
+
+    /** '#painting=<id>': a link to a painting of the collection. */
+    static paintingLink(id) { return `#painting=${id}`; }
+
+    /** The painting a link leads to: { id }, { error } if the link is broken, or null if it is no link to a painting. */
+    static readPaintingLink(hash) {
+      const h = String(hash || '').trim();
+      if (!/^#?painting=/.test(h)) return null;
+      const m = /^#?painting=([0-9a-f]{20})$/.exec(h);
+      if (!m) return { error: 'This link to a painting of the collection is incomplete: part of it may have been lost when it was copied.' };
+      return { id: m[1] };
     }
 
     /* ---------------- Cosmetics (not part of the bijection) ---------------- */

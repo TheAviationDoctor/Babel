@@ -1,8 +1,9 @@
 #!/bin/sh
 # THE LIBRARY OF BABEL — before every commit, puts on the shelf the books of
 # books/uncompressed/ that are new or changed, takes off it those that are gone (see
-# books/shelve.py), and adds what changed to the commit. A copy of the repository
-# without the books' texts leaves the shelf as it is.
+# books/shelve.py), hangs likewise the paintings of paintings/originals/ (see
+# paintings/hang.js), and adds what changed to the commit. A copy of the repository
+# without the books' texts, or the paintings' pictures, leaves them as they are.
 #
 # Git runs it once it has been told where the Library keeps its hooks, which is done
 # once per copy of the repository, in its folder:
@@ -27,5 +28,22 @@ for p in books/index.js books/compressed; do
 done
 if [ -n "$paths" ] && ! git add -A -- $paths; then
   echo "Babel: the shelved books could not be added to the commit. The commit goes ahead without them." >&2
+fi
+
+# the paintings, with Node.js, if there are pictures to hang
+if [ -d paintings/originals ]; then
+  if ! command -v node >/dev/null 2>&1; then
+    echo "Babel: Node.js was not found, so the paintings were not hung. The commit goes ahead without them." >&2
+  elif ! node paintings/hang.js --quiet; then
+    echo "Babel: hanging the paintings failed (see above). The commit goes ahead without them." >&2
+  else
+    paths=""
+    for p in paintings/index.js paintings/compressed; do
+      [ -e "$p" ] && paths="$paths $p"
+    done
+    if [ -n "$paths" ] && ! git add -A -- $paths; then
+      echo "Babel: the hung paintings could not be added to the commit. The commit goes ahead without them." >&2
+    fi
+  fi
 fi
 exit 0

@@ -6,3 +6,9 @@ books/*
 !books/index.js
 !books/compressed/
 books/compressed/*.partial
+# Of the paintings likewise: the list and the paintings as the catalogue reads them, and the
+# script that writes them, paintings/hang.js; not the pictures (see "Your paintings").
+paintings/*
+!paintings/hang.js
+!paintings/index.js
+!paintings/compressed/

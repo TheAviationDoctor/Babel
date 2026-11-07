@@ -347,6 +347,65 @@ test('the paintings of config.js: 1,024 × 1,024 in 128 colours, unrelated from 
   assert.strictEqual(lib.placeOfPainting(broken), null);
 });
 
+test('any picture becomes a painting: cropped or fitted, dithered, keeping the rule', () => {
+  // a picture 300 × 200: a gradient from vermilion to ultramarine, with a transparent corner
+  const w = 300, h = 200, rgba = new Uint8Array(w * h * 4);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const p = (y * w + x) * 4, t = x / (w - 1);
+    rgba[p] = Math.round(214 * (1 - t) + 44 * t); rgba[p + 1] = Math.round(64 * (1 - t) + 52 * t + y / 4); rgba[p + 2] = Math.round(44 * (1 - t) + 150 * t);
+    rgba[p + 3] = x < 20 && y < 20 ? 0 : 255;
+  }
+  const t0 = performance.now();
+  const crop = lib.paintingOfImage(rgba, w, h);
+  console.log(`       ${(performance.now() - t0).toFixed(0)} ms to make a painting of a picture`);
+  assert.strictEqual(crop.length, 1024 * 1024);
+  assert.ok(lib.placeOfPainting(crop), 'the painting keeps the rule');
+  assert.strictEqual(key(lib.paintingOfImage(rgba, w, h)), key(crop), 'the same picture, the same painting');
+  // red on the left, blue on the right; dithered, so many colours in between
+  const pal = lib.paintingPalette(), avg = (x0, x1) => {
+    let r = 0, b = 0, n = 0;
+    for (let y = 400; y < 600; y++) for (let x = x0; x < x1; x++) { const c = crop[y * 1024 + x]; r += pal[c * 3]; b += pal[c * 3 + 2]; n++; }
+    return [r / n, b / n];
+  };
+  const [lr, lb] = avg(0, 100), [rr, rb] = avg(924, 1024);
+  assert.ok(lr > rr + 60 && rb > lb + 40, `left ${lr.toFixed(0)},${lb.toFixed(0)} right ${rr.toFixed(0)},${rb.toFixed(0)}`);
+  assert.ok(new Set(crop).size > 20);
+  // fitted whole: a mat of lead white above and below, its rows keeping the rule untouched
+  const fit = lib.paintingOfImage(rgba, w, h, { fit: 'fit' });
+  const white = fit[0];
+  assert.deepStrictEqual([...pal.slice(white * 3, white * 3 + 3)], [238, 232, 216]);
+  for (let y = 0; y < 160; y++) for (let x = 0; x < 1024; x += 37) assert.strictEqual(fit[y * 1024 + x], white);
+  assert.ok(fit.subarray(0, 2048).every((c) => c === white), 'the rows of the rule are all mat');
+  assert.ok(lib.placeOfPainting(fit));
+  // the transparent corner is seen against lead white
+  assert.strictEqual(fit[175 * 1024 + 5], white);
+  // a picture of one colour of the palette is painted in it, but for at most a pixel per ruled row
+  const c = 7 + 16 * 3, one = new Uint8Array(64 * 64 * 4);
+  for (let i = 0; i < 64 * 64; i++) one.set([pal[c * 3], pal[c * 3 + 1], pal[c * 3 + 2], 255], i * 4);
+  const flat = lib.paintingOfImage(one, 64, 64);
+  assert.ok(flat.filter((v) => v !== c).length <= 2);
+  assert.ok(lib.placeOfPainting(flat));
+});
+
+test('a picture breaking the rule is mended by the pixel whose change shows least', () => {
+  const pic = lib.paintingOfImage(new Uint8Array([10, 20, 30, 255, 200, 180, 90, 255, 60, 140, 70, 255, 250, 250, 250, 255]), 2, 2);
+  const broken = pic.slice();
+  broken[3] = (broken[3] + 5) % 128; broken[1024 + 9] = (broken[1024 + 9] + 1) % 128;
+  assert.strictEqual(lib.placeOfPainting(broken), null);
+  const mended = lib._keepRule(broken.slice());
+  assert.ok(lib.placeOfPainting(mended));
+  let changed = 0;
+  for (let i = 0; i < mended.length; i++) if (mended[i] !== broken[i]) changed++;
+  assert.ok(changed >= 1 && changed <= 2, `${changed} pixels changed`);
+});
+
+test('links to paintings of the collection name them', () => {
+  assert.strictEqual(Library.paintingLink('0123456789abcdef0123'), '#painting=0123456789abcdef0123');
+  assert.deepStrictEqual(Library.readPaintingLink('#painting=0123456789abcdef0123'), { id: '0123456789abcdef0123' });
+  assert.ok(Library.readPaintingLink('#painting=0123').error);
+  assert.strictEqual(Library.readPaintingLink('#book=0123456789abcdef0123'), null);
+});
+
 test('the palette has as many different colours as the alphabet has symbols', () => {
   for (const alphabet of ['AB', 'ABCDEFGHIJKLMNOPQRSTUV,. ', null]) {
     const l = alphabet ? new Library({ alphabet }) : lib;
