@@ -9,7 +9,7 @@
   const $ = (id) => document.getElementById(id);
   const isTouch = matchMedia('(hover: none) and (pointer: coarse)').matches;
 
-  let raw, lib, assets, world, player, renderer, scene, camera, reflector, sinkReflector, figure, figureLight, terminal;
+  let raw, lib, assets, world, player, renderer, scene, camera, reflector, sinkReflector, figure, figureLight, figureKey, terminal;
   let mode = 'walking';
   let gaze = null, gazeKey = '';
   let reading = null;
@@ -97,11 +97,18 @@
         try { render.call(this, a, b, c); } finally { reflecting = false; }
       };
     }
-    figure = makeFigure();
+    figure = Babel.Figure.make();
     figure.traverse((o) => o.layers.set(1));
     scene.add(figure);
-    figureLight = new THREE.HemisphereLight(0xb08a5e, 0x140e09, 1.1);
+    // the light on the figure: from above, and from the lamps at the ends of the vestibule,
+    // which bring out the folds of the habit (only mirrors draw what these light)
+    figureLight = new THREE.HemisphereLight(0xb08a5e, 0x140e09, 0.8);
+    figureLight.layers.set(1);
     scene.add(figureLight);
+    figureKey = new THREE.DirectionalLight(0xffc48a, 0.9);
+    figureKey.position.set(-1.3, 1.9, 0.6);
+    figureKey.layers.set(1);
+    scene.add(figureKey);
     sizeMirror();
 
     terminal = new Babel.Terminal({
@@ -123,24 +130,6 @@
     requestAnimationFrame(frame);
     Babel.started = true;
     void d;
-  }
-
-  /** A hooded librarian. Only mirrors show it. */
-  function makeFigure() {
-    const pts = [
-      [0, 0], [0.27, 0], [0.28, 0.05], [0.25, 0.55], [0.22, 1.05], [0.23, 1.33], [0.17, 1.46],
-      [0.1, 1.5], [0.12, 1.56], [0.135, 1.65], [0.125, 1.75], [0.08, 1.83], [0, 1.86],
-    ].map(([r, y]) => new THREE.Vector2(r, y));
-    const g = new THREE.LatheGeometry(pts, 28);
-    const m = new THREE.MeshLambertMaterial({ color: 0x382d24 });
-    const body = new THREE.Mesh(g, m);
-    const group = new THREE.Group();
-    group.add(body);
-    // the face, a little darker, under the hood
-    const face = new THREE.Mesh(new THREE.SphereGeometry(0.075, 16, 12), new THREE.MeshLambertMaterial({ color: 0x6b5644 }));
-    face.position.set(0, 1.63, -0.07);
-    group.add(face);
-    return group;
   }
 
   function sizeMirror() {
@@ -798,7 +787,9 @@
     player.update(dt);
     world.update(player.ch, player.cf);
     world.tick(dt);
-    figureLight.intensity = 1.1 * lightOnReader();
+    const lit = lightOnReader();
+    figureLight.intensity = 0.8 * lit;
+    figureKey.intensity = 0.9 * lit;
 
     if (mode === 'walking') updateGaze();
 
@@ -812,8 +803,7 @@
     const cellShown = world.doorOpenness(player.ch + off, player.cf) > 0.05 || player.z < d.cellZ0;
     sinkReflector.visible = cellShown && Math.abs(player.y) < 1 && Math.abs(player.x - sx) < 3 && player.z < 0;
     sinkReflector.position.set(sx, d.sinkMirror.y0 + d.sinkMirror.h / 2, d.cellZ0 - 0.014);
-    figure.position.set(player.x, player.y, player.z);
-    figure.rotation.y = player.yaw;
+    Babel.Figure.pose(figure, player, dt);
 
     // asleep, the dream is drawn instead of the Library, and the Library while it fades
     const picture = sleep ? updateSleep(now / 1000) : null;

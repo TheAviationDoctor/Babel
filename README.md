@@ -270,6 +270,7 @@ In `index.html`, every file name is followed by `?v=` and a version, such as `js
 | `js/architecture.js` | Dimensions, geometry and lighting of hexagons, vestibules, stairs and cells |
 | `js/paintings.js` | Draws the paintings of the vestibules near the reader, a step at a time |
 | `js/world.js` | Streams the hexagons around the reader and dresses their books |
+| `js/figure.js` | The reader as the mirrors show them: a monk in a hooded habit, the face lost in the hood's shadow |
 | `js/player.js` | Walking, the spiral stair, and picking a book, door, lamp, bed or Catalogue by gaze |
 | `js/terminal.js` | The Catalogue's screen: the current position, finding texts and books, and going to hexagons |
 | `js/textures.js` | Wood, plaster, stone, floor tiles and leather spines, painted at start-up |
