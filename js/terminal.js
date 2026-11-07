@@ -689,7 +689,7 @@
         if (by) line.appendChild(el('span', 'by', by));
         line.append([by ? '' : null, book.language && !/^english$/i.test(book.language) ? book.language : null, `${fmt(book.characters)} characters`].filter((x) => x !== null).join(' · '));
         info.appendChild(line);
-        const button = el('button', '', 'Find it');
+        const button = el('button', '', 'Locate it');
         button.type = 'button';
         button.addEventListener('click', () => this.findShelfBook(book));
         li.append(info, button);
@@ -853,7 +853,7 @@
         const line = el('span', 'note');
         line.appendChild(el('span', 'by', [painting.artist, painting.year].filter(Boolean).join(', ')));
         info.appendChild(line);
-        const button = el('button', '', 'Find it');
+        const button = el('button', '', 'Locate it');
         button.type = 'button';
         button.addEventListener('click', () => this.findPainting(painting));
         li.append(info, button);
