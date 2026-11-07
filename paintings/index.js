@@ -2,14 +2,18 @@
 // Written by hang.js, beside it, from the pictures in originals/: run it again whenever
 // they change (the git hook in .githooks/ does, before every commit).
 window.BABEL_PAINTINGS = [
-{"file":"Leonardo da Vinci - Mona Lisa (c. 1503–1519).jpg","artist":"Leonardo da Vinci","title":"Mona Lisa","year":"c. 1503–1519","id":"537b571ea6db43236fd7","width":1024,"height":1024,"colours":128},
 {"file":"Pieter Bruegel the Elder - The Tower of Babel (1563).jpg","artist":"Pieter Bruegel the Elder","title":"The Tower of Babel","year":"1563","id":"0d8bc30831c03f9182fb","width":1024,"height":1024,"colours":128},
-{"file":"Johannes Vermeer - Girl with a Pearl Earring (c. 1665).jpg","artist":"Johannes Vermeer","title":"Girl with a Pearl Earring","year":"c. 1665","id":"d58e2df6ce335f4a791a","width":1024,"height":1024,"colours":128},
 {"file":"J. M. W. Turner - The Shipwreck (1805).jpg","artist":"J. M. W. Turner","title":"The Shipwreck","year":"1805","id":"31a25aebeeadfa7a5304","width":1024,"height":1024,"colours":128},
 {"file":"Caspar David Friedrich - Wanderer above the Sea of Fog (c. 1818).jpg","artist":"Caspar David Friedrich","title":"Wanderer above the Sea of Fog","year":"c. 1818","id":"893b8c3023f41d9d06a4","width":1024,"height":1024,"colours":128},
-{"file":"Katsushika Hokusai - The Great Wave off Kanagawa (c. 1831).jpg","artist":"Katsushika Hokusai","title":"The Great Wave off Kanagawa","year":"c. 1831","id":"69c690f8109fa488f0df","width":1024,"height":1024,"colours":128},
-{"file":"Claude Monet - Impression, Sunrise (1872).jpg","artist":"Claude Monet","title":"Impression, Sunrise","year":"1872","id":"b3d27dd3fcd5fe64e843","width":1024,"height":1024,"colours":128},
-{"file":"Vincent van Gogh - The Starry Night (1889).jpg","artist":"Vincent van Gogh","title":"The Starry Night","year":"1889","id":"85473f64b94c52279ed2","width":1024,"height":1024,"colours":128},
 {"file":"Edvard Munch - The Scream (1893).jpg","artist":"Edvard Munch","title":"The Scream","year":"1893","id":"ca6ec2e550e058ca37e9","width":1024,"height":1024,"colours":128},
-{"file":"Gustav Klimt - The Kiss (1907–1908).jpg","artist":"Gustav Klimt","title":"The Kiss","year":"1907–1908","id":"b476e19f49d77f9e5041","width":1024,"height":1024,"colours":128}
+{"file":"Zdzisław Beksiński - AA72 (1972).jpg","artist":"Zdzisław Beksiński","title":"AA72","year":"1972","id":"e1b05b2ef05965d02034","width":1024,"height":1024,"colours":128},
+{"file":"Zdzisław Beksiński - BG76 (1976).jpg","artist":"Zdzisław Beksiński","title":"BG76","year":"1976","id":"ed814b7373db700d9623","width":1024,"height":1024,"colours":128},
+{"file":"Zdzisław Beksiński - Forest of Organic Pillars (1978).jpg","artist":"Zdzisław Beksiński","title":"Forest of Organic Pillars","year":"1978","id":"570594685ab57e4e2055","width":1024,"height":1024,"colours":128},
+{"file":"Zdzisław Beksiński - Crowned Head (1982).jpg","artist":"Zdzisław Beksiński","title":"Crowned Head","year":"1982","id":"3f7ccff8078606ecbe25","width":1024,"height":1024,"colours":128},
+{"file":"Zdzisław Beksiński - Figures Riding (1983).jpg","artist":"Zdzisław Beksiński","title":"Figures Riding","year":"1983","id":"a78d69a0589d199b8649","width":1024,"height":1024,"colours":128},
+{"file":"Zdzisław Beksiński - The Cathedral (1983).jpg","artist":"Zdzisław Beksiński","title":"The Cathedral","year":"1983","id":"944a368c627d750b383f","width":1024,"height":1024,"colours":128},
+{"file":"Zdzisław Beksiński - Bony Head (1984).jpg","artist":"Zdzisław Beksiński","title":"Bony Head","year":"1984","id":"514af0cc8fc4fde732c1","width":1024,"height":1024,"colours":128},
+{"file":"Zdzisław Beksiński - The Fortress (1984).jpg","artist":"Zdzisław Beksiński","title":"The Fortress","year":"1984","id":"934199bfdbbfc615e6c0","width":1024,"height":1024,"colours":128},
+{"file":"Zdzisław Beksiński - XXX (1984).jpg","artist":"Zdzisław Beksiński","title":"XXX","year":"1984","id":"ab9f6f65425924d25b38","width":1024,"height":1024,"colours":128},
+{"file":"Hieronymus Bosch - The Garden of Earthly Delights.jpeg","artist":"Hieronymus Bosch","title":"The Garden of Earthly Delights","year":"","id":"0bcff45005c7c6cd3917","width":1024,"height":1024,"colours":128}
 ];
