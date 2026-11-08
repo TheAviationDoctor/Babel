@@ -133,6 +133,8 @@ Because the map can be inverted, any text can be located: `findText` in `js/libr
 
 **Cosmetics.** Spine colours and the letters on the spines come from a separate hash of the hexagon's address. They are not part of the bijection and, as in the story, they say nothing about what the pages contain.
 
+**Patina.** The hexagons are built alike, as in the story, but no two have aged alike. From the same hash, each has its own wear and its own lamps, the same on every visit: the grain of its wood and the texture of its plaster start in different places; its wood is a little darker or lighter, and grimy low down where feet have kicked it; damp has risen up its walls to a tide line of its own, and water has left stains on them and soot on its ceiling; its floor is worn paler where feet go, round the shaft (more on one side than the other) and along the vestibule, and here and there stained with spilt ink. Its two lamps burn a little warmer or cooler, brighter or dimmer than others. In about one hexagon in forty, a lamp flickers, and in one in two hundred, a lamp has gone out.
+
 ## The Catalogue
 
 Every vestibule has one. There is no menu in the Library, so the Catalogue is also where you find your bearings. It has four tabs.

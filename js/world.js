@@ -20,6 +20,21 @@
 
   const SHADE_OUT = new THREE.Color(0.085, 0.05, 0.022);
   const BULB_OUT = new THREE.Color(0.1, 0.04, 0.014);
+  const TAU = Math.PI * 2;
+
+  // the surfaces that age, and how
+  const PATINAS = [['hexWood', 'wood'], ['hexPlaster', 'plaster'], ['hexTiles', 'tiles'], ['vesWood', 'wood'], ['vesPlaster', 'plaster'], ['vesTiles', 'tiles']];
+
+  /** A failing filament: steady most of the time, now and then a burst of quick dips. */
+  function flicker(t, seed) {
+    const noise = (x) => {
+      const i = Math.floor(x), f = x - i, w = f * f * (3 - 2 * f);
+      const h = (k) => { const v = Math.sin((k + seed * 13.1) * 127.1) * 43758.5453; return v - Math.floor(v); };
+      return h(i) * (1 - w) + h(i + 1) * w;
+    };
+    const b = Math.min(1, Math.max(0, (noise(t * 0.6) - 0.55) / 0.15)), burst = b * b * (3 - 2 * b);
+    return 1 - burst * 0.7 * (1 - noise(t * 23)) - 0.03 * noise(t * 3);
+  }
 
   class World {
     constructor(scene, assets, library) {
@@ -39,6 +54,7 @@
       this.view = { nearFloors: 1, nearHexagons: 3, farFloors: 6, farHexagons: 1 };
       this.doors = new Map(); // "dh,df" → { target: 0 or 1, t: 0…1 } for doors that have been touched
       this.lamps = new Map(); // "dh,df" → { target: 0 or 1, t: 0…1 } for night lamps that have been switched
+      this.time = 0; // for the lamps that flicker
       // the painting in each vestibule, if the Library has paintings
       this.paintings = assets.paintingMaterial && library.painting ? new Babel.Paintings(library, assets) : null;
     }
@@ -106,6 +122,8 @@
 
     /** Swings doors, dims lamps towards their targets, and goes on making the nearest paintings. */
     tick(dt) {
+      this.time += dt;
+      for (const cell of this.cells.values()) if (cell.looks && cell.looks.flickers) this._applyLamps(cell);
       if (this.paintings && this.paintings.step(6)) this._showPaintings();
       for (const [key, s] of this.doors) {
         if (s.t === s.target) continue;
@@ -223,16 +241,31 @@
     _createCell() {
       const A = this.assets, G = A.geometries, M = A.materials, d = this.d;
       const group = new THREE.Group();
+      // each hexagon has its own patina and its own lamps, so its own copies of what they colour
+      const mine = (m) => {
+        const c = m.clone();
+        if (c.uniforms.map) c.uniforms.map.value = m.uniforms.map.value; // share the texture
+        c.uniforms.uLightColors.value = m.uniforms.uLightColors.value.map((x) => x.clone());
+        if (c.uniforms.uPath) c.uniforms.uPath.value = m.uniforms.uPath.value;
+        return c;
+      };
+      const look = { mats: {}, hex: [], ves: [], lamps: [] };
       for (const k of ['hexWood', 'hexPlaster', 'hexTiles', 'vesWood', 'vesPlaster', 'vesTiles', 'wellPlaster', 'wellStone']) {
-        group.add(new THREE.Mesh(G[k], M[k]));
+        const ages = PATINAS.some(([name]) => name === k), mat = ages ? mine(M[k]) : M[k];
+        group.add(new THREE.Mesh(G[k], mat));
+        if (ages) { look.mats[k] = mat; (k.startsWith('hex') ? look.hex : look.ves).push(mat); }
       }
-      group.add(new THREE.Mesh(G.lamps, M.lamp));
+      // the two lamps of the hexagon, the first towards +z as its light is
       for (const s of [1, -1]) {
-        const sp = new THREE.Sprite(M.glow);
-        sp.position.set(0, d.lampY, s * d.lampZ);
-        sp.scale.set(1.5, 1.5, 1.5);
-        group.add(sp);
+        const globe = new THREE.Mesh(G.lamp, M.lamp.clone());
+        globe.position.z = s * d.lampZ;
+        const glow = new THREE.Sprite(M.glow.clone());
+        glow.position.set(0, d.lampY, s * d.lampZ);
+        glow.scale.set(1.5, 1.5, 1.5);
+        group.add(globe, glow);
+        look.lamps.push({ globe, glow });
       }
+      if (G.pictureGlow) group.add(new THREE.Mesh(G.pictureGlow, M.lamp));
       const mirror = new THREE.Mesh(G.mirror, M.mirrorDark);
       mirror.position.set(d.mirrorX, d.mirrorY0 + d.mirrorH / 2, -d.hallW / 2 + 0.041);
       group.add(mirror);
@@ -307,10 +340,12 @@
       geo.setAttribute('aTint', tint);
       geo.setAttribute('aVariant', variant);
       geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, d.roomH / 2, 0), d.a + d.roomH);
-      const books = new THREE.InstancedMesh(geo, M.books, S);
+      const booksLit = mine(M.books);
+      look.hex.push(booksLit);
+      const books = new THREE.InstancedMesh(geo, booksLit, S);
       books.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       group.add(books);
-      return { group, books, tint, variant, tints: new Float32Array(S * 3), dh: 0, df: 0, door, interior, niche, signs, light, canvas };
+      return { group, books, tint, variant, tints: new Float32Array(S * 3), dh: 0, df: 0, door, interior, niche, signs, light, canvas, look, looks: null };
     }
 
     _acquire() { return this.pool.pop() || this._createCell(); }
@@ -365,9 +400,69 @@
       cell.books.count = count;
       this._applyDoor(cell);
       this._applyLight(cell);
+      this._applyLook(cell);
       cell.books.instanceMatrix.needsUpdate = true;
       cell.tint.needsUpdate = true;
       cell.variant.needsUpdate = true;
+    }
+
+    /* ---------------- each hexagon's own look ---------------- */
+
+    /**
+     * How time and use have marked a hexagon, and how its two lamps burn: drawn from its
+     * fingerprint, so the same on every visit. Cosmetic, like the spines: it says nothing of
+     * the books. Most lamps burn a little warmer or cooler, brighter or dimmer than others;
+     * about one hexagon in forty has a lamp that flickers, and one in two hundred a lamp gone out.
+     */
+    _look(dh, df) {
+      const fp = this.fingerprint(dh, df), U = BabelCore.util;
+      const rng = U.sfc32(fp[0] ^ 0x51ed270b, fp[1], 0x2545f491, 0x9e3779b9), u = () => U.unit(rng);
+      const lamps = [0, 1].map(() => ({ gain: 0.84 + 0.26 * u(), warmth: 2 * u() - 1, flicker: 0, dark: false }));
+      const fault = u(), which = u() < 0.5 ? 0 : 1;
+      if (fault < 1 / 200) { lamps[which].dark = true; lamps[which].gain = 0; }
+      else if (fault < 1 / 200 + 1 / 40) lamps[which].flicker = 1 + 97 * u();
+      const shade = 0.86 + 0.26 * u(), red = 2 * u() - 1;
+      return {
+        seed: [u(), u(), u() * TAU, 40 * u()], // where the textures start, how plaster turns, the stains
+        plaster: [Math.pow(u(), 1.5), 0.22 + 0.6 * u(), Math.pow(u(), 2), u()], // damp, its tide line, stains, soot
+        wood: [shade * (1 + 0.05 * red), shade, shade * (1 - 0.07 * red), u()], // shade, grime
+        tiles: [0.35 + 0.65 * u(), u(), Math.pow(u(), 3), 0], // wear, which side of the shaft more, ink
+        lamps,
+      };
+    }
+
+    /** Gives a cell the look of its hexagon (and its vestibule the light of the next hexagon's lamps too). */
+    _applyLook(cell) {
+      const me = this._look(cell.dh, cell.df), east = this._look(cell.dh + 1, cell.df);
+      cell.looks = { me, east, flickers: me.lamps.some((l) => l.flicker) || east.lamps.some((l) => l.flicker) };
+      for (const [k, kind] of PATINAS) {
+        const un = cell.look.mats[k].uniforms;
+        un.uSeed.value.fromArray(me.seed);
+        un.uPatina.value.fromArray(me[kind]);
+      }
+      this._applyLamps(cell);
+    }
+
+    /** Lights a hexagon by its own two lamps, and its vestibule by them at its west end and by the next hexagon's at its east end. */
+    _applyLamps(cell) {
+      const { me, east } = cell.looks, t = this.time;
+      const burn = (l) => (l.dark ? 0 : l.gain * (l.flicker ? flicker(t, l.flicker) : 1));
+      const here = me.lamps.map(burn), there = east.lamps.map(burn);
+      for (const m of cell.look.hex) {
+        const g = m.uniforms.uGain.value, c = m.uniforms.uLightColors.value;
+        for (let i = 0; i < 2; i++) { g[i] = here[i]; c[i].setRGB(1, 0.78 + 0.045 * me.lamps[i].warmth, 0.52 + 0.07 * me.lamps[i].warmth); }
+      }
+      for (const m of cell.look.ves) {
+        const g = m.uniforms.uGain.value;
+        g[0] = (here[0] + here[1]) / 2;
+        g[1] = (there[0] + there[1]) / 2;
+      }
+      cell.look.lamps.forEach(({ globe, glow }, i) => {
+        const v = here[i], w = me.lamps[i].warmth;
+        globe.material.color.setRGB(1, 0.914 + 0.03 * w, 0.77 + 0.06 * w).multiplyScalar(0.16 + 0.84 * Math.min(1, v));
+        glow.material.color.setRGB(1, 0.95 + 0.03 * w, 0.88 + 0.06 * w);
+        glow.material.opacity = 0.9 * Math.min(1, v);
+      });
     }
 
     _wanted(ph, pf) {
