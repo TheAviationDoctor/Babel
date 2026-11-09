@@ -805,7 +805,7 @@
       // PATINA is 1 for plaster, 2 for wood, 3 for floor tiles.
       uniform vec4 uSeed; // where the texture starts (xy), how plaster is turned (z), a seed for the stains (w)
       uniform vec4 uPatina; // by kind: plaster (damp, tide line, stains, soot); wood (shade rgb, grime); tiles (wear, side, ink)
-      uniform vec4 uPatinaEast; // the same, of the next hexagon east, which a vestibule's floor wears towards
+      uniform vec4 uSeedEast, uPatinaEast; // the same, of the next hexagon east, which a vestibule turns into towards its east end
       uniform vec4 uPath; // the middle of the walkway round the shaft (x), where the hexagon gives onto its vestibule (y) and the vestibule onto the next hexagon (z)
       float hash3(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.yzx + 33.33); return fract((p.x + p.y) * p.z); }
       float vnoise(vec3 p) {
@@ -818,13 +818,14 @@
     #endif
     ${LIGHTING_GLSL}
     #ifdef DOORS
-      // Near each end of a vestibule, the light is that of the hexagon beyond the door: its two
-      // lamps, as they light the floor inside the hexagon, giving way to the vestibule's own light
-      // further in. So the floor is lit alike on both sides of a doorway, and runs on without a seam.
-      uniform vec4 uDoorLamps[4]; // the lamps of the hexagon at the west end (0, 1) and of the one at the east end (2, 3), with their brightness (w)
-      uniform vec3 uDoorColors[4];
-      uniform vec3 uDoors; // where the vestibule meets its hexagons (x west, y east), and how far in their light reaches (z)
-      vec3 doorLamp(vec4 l, vec3 c, vec3 p, vec3 n) {
+      // Through its doorways, a hexagon's light gives way to the light of the vestibule beyond:
+      // from where a doorway begins, its own lamps fade, and where the vestibule begins, the
+      // vestibule's light holds alone. So floor and walls are lit alike either side of a threshold.
+      uniform vec4 uVesLights[4]; // a vestibule's lights, in the frame of the hexagon at its west end
+      uniform vec3 uVesColors[4];
+      uniform vec4 uVesGains; // how brightly the lights at a vestibule's two ends burn: the vestibule east of this hexagon (xy), the one west of it (zw)
+      uniform vec3 uDoors; // how far from the hexagon's middle the change begins (x) and ends (y); the distance from one hexagon to the next (z)
+      vec3 vesLamp(vec4 l, vec3 c, vec3 p, vec3 n) {
         vec3 L = l.xyz - p;
         float d2 = max(dot(L, L), 0.01);
         float wrap = clamp((dot(n, L) * inversesqrt(d2) + 0.25) / 1.25, 0.0, 1.0);
@@ -832,17 +833,40 @@
       }
     #endif
     #include <fog_pars_fragment>
+    // texture coordinates: the floor's and ceiling's own, or along a wall and up it
+    vec2 uvAt(vec3 p, vec3 n) {
+      if (abs(n.y) > 0.6) return p.xz;
+      vec3 t = normalize(vec3(-n.z, 0.0, n.x));
+      return vec2(dot(p, t), p.y);
+    }
+    #ifdef PATINA
+      #if PATINA == 1
+        // plaster has no grain to keep upright, so each hexagon's is turned its own way
+        vec3 plasterAt(vec2 uv, vec4 seed) {
+          return texture2D(map, mat2(cos(seed.z), sin(seed.z), -sin(seed.z), cos(seed.z)) * uv * uScale + seed.xy).rgb;
+        }
+      #endif
+    #endif
     void main() {
       vec3 n = normalize(vN);
       if (!gl_FrontFacing) n = -n;
-      vec2 uv;
-      if (abs(n.y) > 0.6) uv = vLocal.xz;
-      else { vec3 t = normalize(vec3(-n.z, 0.0, n.x)); uv = vec2(dot(vLocal, t), vLocal.y); }
+      vec2 uv = uvAt(vLocal, n);
       #ifdef PATINA
-        #if PATINA == 1
-          uv = mat2(cos(uSeed.z), sin(uSeed.z), -sin(uSeed.z), cos(uSeed.z)) * uv; // plaster has no grain to keep upright
+        #if PATINA != 2
+          // along a vestibule, from its own hexagon (0) to the next (1)
+          float along = smoothstep(uPath.y, uPath.z, vLocal.x);
+          // away from the doorways (1), where nothing that marks one hexagon alone comes up to the threshold (0)
+          float own = smoothstep(0.0, 0.35, min(abs(abs(vLocal.x) - uPath.y), abs(vLocal.x - uPath.z)));
         #endif
-        vec3 base = texture2D(map, uv * uScale + uSeed.xy).rgb * uTint;
+        #if PATINA == 1
+          vec3 base = plasterAt(uv, uSeed);
+          // towards the east end of a vestibule, the plaster of the next hexagon, which it meets there
+          float toEast = smoothstep(uPath.z - 1.0, uPath.z, vLocal.x);
+          if (toEast > 0.0) base = mix(base, plasterAt(uvAt(vLocal - vec3(uPath.y + uPath.z, 0.0, 0.0), n), uSeedEast), toEast);
+          base *= uTint;
+        #else
+          vec3 base = texture2D(map, uv * uScale + uSeed.xy).rgb * uTint;
+        #endif
       #else
         vec3 base = texture2D(map, uv * uScale).rgb * uTint;
       #endif
@@ -852,14 +876,16 @@
       #ifdef PATINA
         vec3 q = vLocal + uSeed.w * vec3(1.0, 0.71, 1.37);
         #if PATINA == 1
-          // damp risen from the floor, below an uneven tide line; water stains, each with a darker rim; soot on the ceiling
-          float line = uPatina.y + 0.16 * (fbm(vec3(q.x, 0.0, q.z) * 1.6) - 0.5);
-          float damp = uPatina.x * (1.0 - smoothstep(line - 0.2, line, vLocal.y));
-          float tide = uPatina.x * (smoothstep(line - 0.05, line, vLocal.y) - smoothstep(line, line + 0.025, vLocal.y));
+          // damp risen from the floor, below an uneven tide line; water stains, each with a darker rim; soot on the ceiling.
+          // A vestibule's walls go from its hexagon's damp to the next one's, and at the doorways the tide line is even.
+          vec4 pat = mix(uPatina, uPatinaEast, along);
+          float line = pat.y + 0.16 * (fbm(vec3(q.x, 0.0, q.z) * 1.6) - 0.5) * own;
+          float damp = pat.x * (1.0 - smoothstep(line - 0.2, line, vLocal.y));
+          float tide = pat.x * (smoothstep(line - 0.05, line, vLocal.y) - smoothstep(line, line + 0.025, vLocal.y));
           float st = fbm(q * 0.85);
-          float stain = uPatina.z * smoothstep(0.6, 0.7, st);
-          float rim = uPatina.z * (smoothstep(0.575, 0.6, st) - smoothstep(0.6, 0.64, st));
-          float soot = n.y < -0.5 ? uPatina.w * fbm(q * 1.2) : 0.0;
+          float stain = pat.z * own * smoothstep(0.6, 0.7, st);
+          float rim = pat.z * own * (smoothstep(0.575, 0.6, st) - smoothstep(0.6, 0.64, st));
+          float soot = n.y < -0.5 ? pat.w * fbm(q * 1.2) : 0.0;
           base *= 1.0 - 0.2 * damp - 0.16 * tide - 0.1 * stain - 0.09 * rim - 0.22 * soot;
           base *= mix(vec3(1.0), vec3(0.93, 0.96, 0.86), damp); // a greenish cast where it is damp
         #elif PATINA == 2
@@ -869,8 +895,8 @@
           // A vestibule's floor wears from its hexagon's way to the next one's; and what marks one
           // hexagon's floor alone (the grain of its wear, spilt ink) stops short of the doorways. So
           // the floor runs on unbroken from each hexagon through its vestibules into the next.
-          vec4 pat = mix(uPatina, uPatinaEast, smoothstep(uPath.y, uPath.z, vLocal.x));
-          float ax = abs(vLocal.x), own = smoothstep(0.0, 0.35, min(abs(ax - uPath.y), abs(vLocal.x - uPath.z)));
+          vec4 pat = mix(uPatina, uPatinaEast, along);
+          float ax = abs(vLocal.x);
           // worn where feet go: round the shaft, more on one side than the other, and out through the doors
           float circuit = exp(-pow((length(vLocal.xz) - uPath.x) / 0.32, 2.0)) * mix(1.0 - pat.y, pat.y, smoothstep(-0.5, 0.5, vLocal.z));
           float hall = exp(-pow(vLocal.z / 0.42, 2.0)) * smoothstep(uPath.x, uPath.y, ax);
@@ -881,11 +907,17 @@
       #endif
       vec3 light = lampLight(vLocal, n);
       #ifdef DOORS
-        float west = 1.0 - smoothstep(uDoors.x, uDoors.x + uDoors.z, vLocal.x);
-        float east = smoothstep(uDoors.y - uDoors.z, uDoors.y, vLocal.x);
-        vec3 lw = vec3(uAmbient) + doorLamp(uDoorLamps[0], uDoorColors[0], vLocal, n) + doorLamp(uDoorLamps[1], uDoorColors[1], vLocal, n);
-        vec3 le = vec3(uAmbient) + doorLamp(uDoorLamps[2], uDoorColors[2], vLocal, n) + doorLamp(uDoorLamps[3], uDoorColors[3], vLocal, n);
-        light = light * (1.0 - west - east) + lw * west + le * east;
+        float toward = smoothstep(uDoors.x, uDoors.y, abs(vLocal.x));
+        if (toward > 0.0) {
+          // the vestibule beyond the nearer door, as it lights itself
+          vec3 p = vLocal;
+          vec2 g = uVesGains.xy;
+          if (vLocal.x < 0.0) { p.x += uDoors.z; g = uVesGains.zw; }
+          vec3 lv = vec3(uAmbient)
+            + vesLamp(uVesLights[0], uVesColors[0] * g.x, p, n) + vesLamp(uVesLights[1], uVesColors[1] * g.y, p, n)
+            + vesLamp(uVesLights[2], uVesColors[2], p, n) + vesLamp(uVesLights[3], uVesColors[3], p, n);
+          light = mix(light, lv, toward);
+        }
       #endif
       vec3 c = expose(base * light);
       gl_FragColor = vec4(c + dither(gl_FragCoord.xy) / 255.0, 1.0);
@@ -1019,15 +1051,17 @@
       defines.PATINA = { plaster: 1, wood: 2, tiles: 3 }[opts.patina];
       uniforms.uSeed = { value: new THREE.Vector4(0, 0, 0, 0) };
       uniforms.uPatina = { value: opts.patina === 'wood' ? new THREE.Vector4(1, 1, 1, 0) : new THREE.Vector4(0, 0, 0, 0) };
+      uniforms.uSeedEast = { value: new THREE.Vector4(0, 0, 0, 0) };
       uniforms.uPatinaEast = { value: uniforms.uPatina.value.clone() };
       uniforms.uPath = { value: opts.path || new THREE.Vector4(0, 0, 0, 0) };
     }
     if (opts.doors) {
-      // the lamps of the hexagons at either end of a vestibule, which light its ends (World._applyLamps says how brightly)
+      // the light of the vestibules beyond a hexagon's doors, which its doorways turn into (World._applyLamps says how brightly their door lights burn)
       defines.DOORS = '';
-      uniforms.uDoorLamps = { value: opts.doors.lamps.map((l) => l.clone()) };
-      uniforms.uDoorColors = { value: opts.doors.lamps.map(() => LAMP.clone()) };
-      uniforms.uDoors = { value: new THREE.Vector3(opts.doors.west, opts.doors.east, opts.doors.reach) };
+      uniforms.uVesLights = { value: opts.doors.lights };
+      uniforms.uVesColors = { value: [LAMP, LAMP, LAMP, SCREEN] };
+      uniforms.uVesGains = { value: new THREE.Vector4(1, 1, 1, 1) };
+      uniforms.uDoors = { value: new THREE.Vector3(opts.doors.from, opts.doors.to, opts.doors.span) };
     }
     return new THREE.ShaderMaterial({ uniforms, defines, vertexShader: ARCH_VERT, fragmentShader: ARCH_FRAG, fog: true, side: opts.side || THREE.FrontSide, vertexColors: !!opts.vertexColors });
   }
@@ -1120,21 +1154,19 @@
     const tileScale = [1 / tileRepeat, 1 / (tileRepeat * textures.tilesAspect)];
     // the walkway's middle, round the shaft, and where the hexagon gives onto its vestibule and the vestibule onto the next: for the worn path
     const path = new THREE.Vector4((d.shaftA + d.aIn) / 2, d.a, d.Dx - d.a, 0);
-    // a vestibule's ends, lit by the lamps of the hexagons beyond its doors
-    const doors = {
-      west: d.a, east: d.Dx - d.a, reach: 1.4,
-      lamps: [[0, d.lampZ], [0, -d.lampZ], [d.Dx, d.lampZ], [d.Dx, -d.lampZ]].map(([x, z]) => new THREE.Vector4(x, d.lampY, z, 1)),
-    };
+    // A hexagon's doorways, where its light turns into its vestibules' (on the floor, from a little
+    // before the doorway, so that the change is gentler there)
+    const doors = (lights, from) => ({ lights, from, to: d.a, span: d.Dx });
     const screenLit = { colors: [null, null, null, SCREEN] };
     // up the stairwell, a whole number of repeats of a texture to a floor, so that it runs on from floor to floor
     const perFloor = (scale) => Math.max(1, Math.round(d.Hf * scale)) / d.Hf;
     const materials = {
       hexWood: archMaterial(textures.wood, [0.9, 2.2], 0xb0845a, L.hexagon, { patina: 'wood' }),
-      hexPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.hexagon, { patina: 'plaster' }),
-      hexTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.hexagon, { patina: 'tiles', path }),
+      hexPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.hexagon, { patina: 'plaster', path, doors: doors(L.walls, d.aIn) }),
+      hexTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.hexagon, { patina: 'tiles', path, doors: doors(L.vestibule, d.aIn - 0.3) }),
       vesWood: archMaterial(textures.wood, [0.9, 2.2], 0xb0845a, L.walls, Object.assign({ patina: 'wood' }, screenLit)),
-      vesPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.walls, Object.assign({ patina: 'plaster' }, screenLit)),
-      vesTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.vestibule, Object.assign({ patina: 'tiles', path, doors }, screenLit)),
+      vesPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.walls, Object.assign({ patina: 'plaster', path }, screenLit)),
+      vesTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.vestibule, Object.assign({ patina: 'tiles', path }, screenLit)),
       niche: archMaterial(textures.plaster, [0.4, 0.4], 0xffffff, L.niche, { vertexColors: true, colors: [SCREEN], falloff: 1.4, ambient: 0.04 }),
       screen: new THREE.MeshBasicMaterial({ map: textures.screen, fog: true }),
       signs: signMaterial(textures.signs, L.vestibule, { colors: [null, null, null, SCREEN], ambient: 0.08 }),
