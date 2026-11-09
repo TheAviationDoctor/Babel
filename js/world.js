@@ -250,7 +250,7 @@
         return c;
       };
       const look = { mats: {}, hex: [], ves: [], lamps: [] };
-      for (const k of ['hexWood', 'hexPlaster', 'hexTiles', 'vesWood', 'vesPlaster', 'vesTiles', 'wellPlaster', 'wellFace', 'wellStone']) {
+      for (const k of ['hexWood', 'hexPlaster', 'hexTiles', 'vesWood', 'vesPlaster', 'vesTiles', 'wellPlaster', 'wellStone']) {
         const ages = PATINAS.some(([name]) => name === k), mat = ages ? mine(M[k]) : M[k];
         group.add(new THREE.Mesh(G[k], mat));
         if (ages) { look.mats[k] = mat; (k.startsWith('hex') ? look.hex : look.ves).push(mat); }

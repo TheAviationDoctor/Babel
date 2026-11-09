@@ -178,7 +178,7 @@
       const P = pts.map((p) => new THREE.Vector3(p[0], p[1], p[2]).applyMatrix4(this.m));
       const n = new THREE.Vector3(normal[0], normal[1], normal[2]).applyMatrix3(this.r).normalize();
       _e1.subVectors(P[1], P[0]); _e2.subVectors(P[2], P[0]); _n.crossVectors(_e1, _e2);
-      if (_n.dot(n) < 0) P.reverse();
+      if (_n.dot(n) < 0) P.splice(1, P.length - 1, ...P.slice(1).reverse()); // turned round, from the same first vertex
       for (let i = 1; i < P.length - 1; i++) { this._push(P[0], n); this._push(P[i], n); this._push(P[i + 1], n); }
       return this;
     }
@@ -244,6 +244,26 @@
     }
   }
 
+  /**
+   * A wall in the plane z, facing nz (±1), from x0 to x1 and y0 to y1, with rectangular holes
+   * [xa, xb, ya, yb]. It is drawn as a grid of rectangles that meet corner to corner: where a
+   * corner of one lies along the side of another, the rasteriser can leave a seam of stray pixels
+   * between them, through which whatever is behind the wall shows. ys: more heights at which to
+   * divide it, so that it meets other walls corner to corner too.
+   */
+  function gridWall(b, x0, x1, y0, y1, z, nz, holes, ys) {
+    const sorted = (v) => [...new Set(v)].sort((p, q) => p - q);
+    const X = sorted([x0, x1, ...holes.flatMap((h) => [h[0], h[1]])]);
+    const Y = sorted([y0, y1, ...holes.flatMap((h) => [h[2], h[3]]), ...(ys || [])]);
+    for (let i = 0; i + 1 < X.length; i++) {
+      for (let k = 0; k + 1 < Y.length; k++) {
+        const xa = X[i], xb = X[i + 1], ya = Y[k], yb = Y[k + 1];
+        if (holes.some((h) => xa >= h[0] && xb <= h[1] && ya >= h[2] && yb <= h[3])) continue;
+        b.poly([[xa, ya, z], [xb, ya, z], [xb, yb, z], [xa, yb, z]], [0, 0, nz]);
+      }
+    }
+  }
+
   /** Sutherland–Hodgman clip of a planar polygon to the half-space z ≥ zMin. */
   function clipZ(pts, zMin) {
     const out = [];
@@ -283,7 +303,14 @@
     for (let k = 0; k < 6; k++) {
       const s0 = hexVertex(d.shaftA, k - 1), s1 = hexVertex(d.shaftA, k);
       const v0 = hexVertex(d.aIn, k - 1), v1 = hexVertex(d.aIn, k);
-      tiles.poly([[s0[0], 0, s0[1]], [v0[0], 0, v0[1]], [v1[0], 0, v1[1]], [s1[0], 0, s1[1]]], [0, 1, 0]);
+      // on the sides with doors, the edge is divided where the doorway's floor meets it
+      const outer = [v0];
+      if (k === 0 || k === 3) {
+        const len = Math.hypot(v1[0] - v0[0], v1[1] - v0[1]), t = (len / 2 - d.hallW / 2) / len;
+        outer.push([v0[0] + (v1[0] - v0[0]) * t, v0[1] + (v1[1] - v0[1]) * t], [v1[0] + (v0[0] - v1[0]) * t, v1[1] + (v0[1] - v1[1]) * t]);
+      }
+      outer.push(v1);
+      tiles.poly([[s0[0], 0, s0[1]], ...outer.map((v) => [v[0], 0, v[1]]), [s1[0], 0, s1[1]]], [0, 1, 0]);
       plaster.poly([[s0[0], d.roomH, s0[1]], [v0[0], d.roomH, v0[1]], [v1[0], d.roomH, v1[1]], [s1[0], d.roomH, s1[1]]], [0, -1, 0]);
     }
 
@@ -317,12 +344,10 @@
       if (free) {
         plaster.setMatrix(m);
         const hw = d.hallW / 2;
-        plaster.poly([[-half, 0, d.aIn], [-hw, 0, d.aIn], [-hw, d.roomH, d.aIn], [-half, d.roomH, d.aIn]], [0, 0, -1]);
-        plaster.poly([[hw, 0, d.aIn], [half, 0, d.aIn], [half, d.roomH, d.aIn], [hw, d.roomH, d.aIn]], [0, 0, -1]);
-        plaster.poly([[-hw, d.doorH, d.aIn], [hw, d.doorH, d.aIn], [hw, d.roomH, d.aIn], [-hw, d.roomH, d.aIn]], [0, 0, -1]);
-        // door reveal (the passage through the thickness of the wall)
-        plaster.poly([[-hw, 0, d.aIn], [-hw, 0, d.a], [-hw, d.doorH, d.a], [-hw, d.doorH, d.aIn]], [1, 0, 0]);
-        plaster.poly([[hw, 0, d.aIn], [hw, 0, d.a], [hw, d.doorH, d.a], [hw, d.doorH, d.aIn]], [-1, 0, 0]);
+        gridWall(plaster, -half, half, 0, d.roomH, d.aIn, -1, [[-hw, hw, 0, d.doorH]]);
+        // door reveal (the passage through the thickness of the wall), divided where the vestibule's walls are, which it meets
+        plaster.poly([[-hw, 0, d.aIn], [-hw, 0, d.a], [-hw, d.closetH, d.a], [-hw, d.doorH, d.a], [-hw, d.doorH, d.aIn]], [1, 0, 0]);
+        plaster.poly([[hw, 0, d.aIn], [hw, 0, d.a], [hw, d.closetH, d.a], [hw, d.doorH, d.a], [hw, d.doorH, d.aIn]], [-1, 0, 0]);
         plaster.poly([[-hw, d.doorH, d.aIn], [hw, d.doorH, d.aIn], [hw, d.doorH, d.a], [-hw, d.doorH, d.a]], [0, -1, 0]);
         plaster.reset();
         tiles.setMatrix(m);
@@ -457,9 +482,7 @@
     plaster.poly([[x1, d.doorH, -hw], [x1, d.doorH, hw], [x1, H, hw], [x1, H, -hw]], [-1, 0, 0]);
     // south wall (−z): the door of the cell, then the mirror
     const dx0 = d.hingeX, dx1 = d.hingeX + d.closetW, dH = d.closetH, cz0 = d.cellZ0;
-    plaster.poly([[x0, 0, -hw], [dx0, 0, -hw], [dx0, H, -hw], [x0, H, -hw]], [0, 0, 1]);
-    plaster.poly([[dx1, 0, -hw], [x1, 0, -hw], [x1, H, -hw], [dx1, H, -hw]], [0, 0, 1]);
-    plaster.poly([[dx0, dH, -hw], [dx1, dH, -hw], [dx1, H, -hw], [dx0, H, -hw]], [0, 0, 1]);
+    gridWall(plaster, x0, x1, 0, H, -hw, 1, [[dx0, dx1, 0, dH]], [d.doorH]);
     // the doorway through the thickness of the wall, and its threshold
     plaster.poly([[dx0, 0, -hw], [dx0, 0, cz0], [dx0, dH, cz0], [dx0, dH, -hw]], [1, 0, 0]);
     plaster.poly([[dx1, 0, -hw], [dx1, 0, cz0], [dx1, dH, cz0], [dx1, dH, -hw]], [-1, 0, 0]);
@@ -467,11 +490,7 @@
     wood.box(dx0, 0, cz0, dx1, 0.012, -hw, 'YzZ');
     // north wall (+z): the niche of the catalogue, then the opening onto the stair
     const nx0 = d.closetX - d.closetW / 2, nx1 = d.closetX + d.closetW / 2;
-    plaster.poly([[x0, 0, hw], [nx0, 0, hw], [nx0, H, hw], [x0, H, hw]], [0, 0, -1]);
-    plaster.poly([[nx1, 0, hw], [ox0, 0, hw], [ox0, H, hw], [nx1, H, hw]], [0, 0, -1]);
-    plaster.poly([[nx0, dH, hw], [nx1, dH, hw], [nx1, H, hw], [nx0, H, hw]], [0, 0, -1]);
-    plaster.poly([[ox1, 0, hw], [x1, 0, hw], [x1, H, hw], [ox1, H, hw]], [0, 0, -1]);
-    plaster.poly([[ox0, d.doorH, hw], [ox1, d.doorH, hw], [ox1, H, hw], [ox0, H, hw]], [0, 0, -1]);
+    gridWall(plaster, x0, x1, 0, H, hw, -1, [[nx0, nx1, 0, dH], [ox0, ox1, 0, d.doorH]]);
 
     // the lintels over the two doorways, and the boards of their signs
     const ld = d.lintelDepth, sd = d.signDepth, sw = d.signW / 2 + 0.012, sh = d.signH / 2 + 0.012, sy = d.signY;
@@ -529,11 +548,8 @@
     // where the next floor's begins (behind the slab of a landing runs the wall of the floor below:
     // were the two to overlap there, they would flicker as each showed through the other)
     well.cylinder(cx, cz, R, -Math.PI / 2 + gamma, (3 * Math.PI) / 2 - gamma, 0, d.Hf, true, 64);
-    // flat wall above the opening (stair side). It lies in the same plane as the vestibule's wall
-    // above the opening, which faces the other way, so it is drawn from the stair side only (seen
-    // from both, the two would flicker as each showed through the other).
-    const face = new Builder();
-    face.poly([[ox0, d.doorH, zc], [ox1, d.doorH, zc], [ox1, d.Hf, zc], [ox0, d.Hf, zc]], [0, 0, 1]);
+    // flat wall above the opening (stair side)
+    well.poly([[ox0, d.doorH, zc], [ox1, d.doorH, zc], [ox1, d.Hf, zc], [ox0, d.Hf, zc]], [0, 0, 1]);
     // central column, likewise from floor to floor
     steps.cylinder(cx, cz, d.colR, 0, 2 * Math.PI, 0, d.Hf, false, 20);
     // landing (part of this floor), with its underside and edges
@@ -565,7 +581,7 @@
 
     return {
       wood: wood.geometry(), plaster: plaster.geometry(), tiles: tiles.geometry(),
-      well: well.geometry(), wellFace: face.geometry(), steps: steps.geometry(),
+      well: well.geometry(), steps: steps.geometry(),
     };
   }
 
@@ -1229,8 +1245,10 @@
       niche: archMaterial(textures.plaster, [0.4, 0.4], 0xffffff, L.niche, { vertexColors: true, colors: [SCREEN], falloff: 1.4, ambient: 0.04 }),
       screen: new THREE.MeshBasicMaterial({ map: textures.screen, fog: true }),
       signs: signMaterial(textures.signs, L.vestibule, { colors: [null, null, null, SCREEN], ambient: 0.08 }),
-      wellPlaster: archMaterial(textures.plaster, [0.4, perFloor(0.4)], 0xc4b597, L.well, { side: THREE.DoubleSide, ambient: 0.08 }),
-      wellFace: archMaterial(textures.plaster, [0.4, perFloor(0.4)], 0xc4b597, L.well, { ambient: 0.08 }),
+      // the stairwell's walls, seen from inside it only: the flat one above the opening lies in the
+      // plane of the vestibule's wall, back to back with it, and the round one meets that plane at
+      // the opening's sides; seen from the vestibule too, each would flicker through its wall
+      wellPlaster: archMaterial(textures.plaster, [0.4, perFloor(0.4)], 0xc4b597, L.well, { ambient: 0.08 }),
       wellStone: archMaterial(textures.stone, [0.7, perFloor(0.7)], 0xdccdb0, L.well, { side: THREE.DoubleSide, ambient: 0.08 }),
       cellWood: archMaterial(textures.wood, [0.9, 2.2], 0xffffff, L.cell, { vertexColors: true, falloff: 1.1, ambient: 0.05 }),
       doorWood: archMaterial(textures.wood, [0.9, 2.2], 0xb0845a, L.door, { cellMatrix: true }),
@@ -1250,7 +1268,7 @@
     const geometries = {
       hexWood: hex.wood, hexPlaster: hex.plaster, hexTiles: hex.tiles,
       vesWood: ves.wood, vesPlaster: ves.plaster, vesTiles: ves.tiles,
-      wellPlaster: ves.well, wellFace: ves.wellFace, wellStone: ves.steps,
+      wellPlaster: ves.well, wellStone: ves.steps,
       lampGlow: buildLampGlow(d),
       lampWash: d.roomH > d.shelfTop + 0.2 ? buildLampWash(d) : null,
       pictureGlow: d.painting ? buildPictureGlow(d) : null,
