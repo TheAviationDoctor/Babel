@@ -18,6 +18,15 @@
     [0.55, 0.42, 0.25], [0.4, 0.12, 0.1],
   ];
 
+  /** A book's leather, from its own random generator: its colour, how dark, how sun-faded (towards grey). */
+  function leatherOf(rng) {
+    const unit = BabelCore.util.unit;
+    const c = LEATHER[Math.floor(unit(rng) * LEATHER.length)];
+    const shade = 0.75 + 0.45 * unit(rng);
+    const fade = unit(rng) * 0.25;
+    return c.map((v) => (v * (1 - fade) + 0.4 * fade) * shade);
+  }
+
   const SHADE_OUT = new THREE.Color(0.085, 0.05, 0.022);
   const BULB_OUT = new THREE.Color(0.1, 0.04, 0.014);
   const TAU = Math.PI * 2;
@@ -373,13 +382,10 @@
       const m = new THREE.Matrix4();
       for (let slot = 0; slot < count; slot++) {
         const rng = lib.bookRng(fp, slot);
-        const c = LEATHER[Math.floor(unit(rng) * LEATHER.length)];
-        const shade = 0.75 + 0.45 * unit(rng);
-        const fade = unit(rng) * 0.25; // sun-faded towards grey
+        const leather = leatherOf(rng);
         for (let k = 0; k < 3; k++) {
-          const v = (c[k] * (1 - fade) + 0.4 * fade) * shade;
-          cell.tints[slot * 3 + k] = v;
-          cell.tint.array[slot * 3 + k] = v;
+          cell.tints[slot * 3 + k] = leather[k];
+          cell.tint.array[slot * 3 + k] = leather[k];
         }
         cell.variant.array[slot] = Math.floor(unit(rng) * Babel.Textures.SPINE_VARIANTS);
         const L = this._bookLayout[slot];
@@ -592,6 +598,9 @@
       this.hover = null;
     }
   }
+
+  /** The leather of the book in `slot` of the hexagon with fingerprint `fp`, as on the shelf (linear RGB). */
+  World.leather = (lib, fp, slot) => leatherOf(lib.bookRng(fp, slot));
 
   Babel.World = World;
 })();

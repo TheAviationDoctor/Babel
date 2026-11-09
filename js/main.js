@@ -151,7 +151,7 @@
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     sizeMirror();
-    if (mode === 'reading') sizePage();
+    if (mode === 'reading') renderPage();
   }
 
   /** Wakes the reader in a hexagon chosen at random, a different one on every visit. */
@@ -437,7 +437,14 @@
       content, returnTo: o.returnTo || 'walking', page: 0,
       title: lib.spineTitle(fp, o.slot),
       link: o.link || null,
+      paper: Babel.Paper.look(fp, o.slot, c.pagesPerBook), // how the years have marked its leaves
     };
+    // its leather, as on the shelf, and its ink
+    const spread = $('spread');
+    const tone = Babel.World.leather(lib, fp, o.slot).map((v) => Math.round(255 * Math.pow(Math.min(1, v * 0.6), 1 / 2.2)));
+    spread.style.setProperty('--leather', `rgb(${tone.join(', ')})`);
+    spread.style.setProperty('--ink-book', reading.paper.ink);
+    spread.style.setProperty('--columns', c.charactersPerLine);
     $('copy-book-link').hidden = !reading.link;
     $('book-title').textContent = reading.title;
     $('book-where').textContent = `Wall ${wall + 1}, shelf ${shelf + 1}, volume ${volume + 1}`;
@@ -447,35 +454,88 @@
     $('book-keys').textContent = reading.returnTo === 'terminal' ? 'Arrow keys turn pages. Esc returns to the catalogue.' : 'Arrow keys turn pages. Esc puts the book back.';
     setMode('reading');
     renderPage();
-    $('page').focus({ preventScroll: true });
+    $('spread').focus({ preventScroll: true });
   }
 
-  /** Fits the page to the window, whatever the number of lines and characters. */
+  /**
+   * Fits the book to the window, whatever the number of lines and characters: open at two
+   * facing pages, or, where two would be much smaller than one (a narrow screen), at one.
+   */
   function sizePage() {
     const c = lib.config;
     const W = window.innerWidth - 40, H = window.innerHeight - 210;
-    const size = Math.min(W / (c.charactersPerLine * 0.6 + 5.4), H / (c.linesPerPage * 1.3 + 6.9));
-    $('page').style.fontSize = Math.max(6, Math.min(22, size)).toFixed(2) + 'px';
+    const across = c.charactersPerLine * 0.6 + 5.2, down = c.linesPerPage * 1.3 + 7.9; // a page, in ems, with the covers about it
+    const fit = (wide) => Math.max(6, Math.min(22, W / wide, H / down));
+    const one = fit(across + 2.9), two = fit(2 * across + 2.9);
+    reading.spread = two >= 0.85 * one;
+    reading.size = reading.spread ? two : one;
+    $('spread').style.fontSize = reading.size.toFixed(2) + 'px';
+  }
+
+  /** The pages in view (0-based), as [left, right]: -1 and the number of pages stand for the insides of the covers. */
+  function pagesInView() {
+    const P = lib.config.pagesPerBook, p = reading.page;
+    if (!reading.spread) return p % 2 ? [p, null] : [null, p];
+    // as in print, odd pages on the right: page 1 faces the inside of the front cover
+    const k = Math.floor((p + 1) / 2);
+    return [k ? 2 * k - 1 : -1, 2 * k < P ? 2 * k : P];
   }
 
   function renderPage() {
-    const P = lib.config.pagesPerBook;
+    const P = lib.config.pagesPerBook, c = lib.config;
     sizePage();
     reading.page = Math.max(0, Math.min(P - 1, reading.page));
-    const pre = $('page');
-    const lines = lib.pageLines(reading.content, reading.page);
-    pre.textContent = '';
-    lines.forEach((line, i) => {
-      appendText(pre, line);
-      if (i < lines.length - 1) pre.appendChild(document.createTextNode('\n'));
-    });
-    const folio = document.createElement('span');
-    folio.className = 'folio';
-    folio.textContent = String(reading.page + 1);
-    pre.appendChild(folio);
+    const view = pagesInView();
+    reading.shown = view.filter((p) => p !== null && p >= 0 && p < P);
+    const sides = ['left', 'right'];
+    const leaves = view.map((p, i) => {
+      const leaf = $('leaf-' + sides[i]);
+      leaf.hidden = p === null;
+      if (p === null) return null;
+      const pre = leaf.querySelector('pre');
+      const text = p >= 0 && p < P;
+      pre.textContent = '';
+      pre.classList.toggle('blank', !text);
+      // the inside of a cover is a leaf without words, the size of the others
+      const lines = text ? lib.pageLines(reading.content, p) : new Array(c.linesPerPage).fill(' '.repeat(c.charactersPerLine));
+      lines.forEach((line, n) => {
+        appendText(pre, line);
+        if (n < lines.length - 1) pre.appendChild(document.createTextNode('\n'));
+      });
+      const folio = document.createElement('span');
+      folio.className = 'folio';
+      folio.textContent = text ? String(p + 1) : ' ';
+      pre.appendChild(folio);
+      if (text) { pre.setAttribute('aria-label', `Page ${p + 1}`); pre.removeAttribute('aria-hidden'); }
+      else { pre.removeAttribute('aria-label'); pre.setAttribute('aria-hidden', 'true'); }
+      return { leaf, p, side: sides[i] };
+    }).filter(Boolean);
+    // the leaves' paper, drawn at their size; the pages under them, as many as there are on each side
+    const scale = Math.min(3, window.devicePixelRatio || 1);
+    const before = reading.page / Math.max(1, P - 1);
+    for (const { leaf, p, side } of leaves) {
+      Babel.Paper.draw(leaf.querySelector('canvas'), reading.paper, {
+        page: p, side, width: leaf.offsetWidth, height: leaf.offsetHeight, scale, em: reading.size,
+      });
+      const share = side === 'left' ? before : 1 - before;
+      const layers = Math.round(share * 0.42 * reading.size), out = side === 'left' ? -1 : 1;
+      const shadows = [];
+      for (let i = 1; i <= layers; i++) {
+        shadows.push(`${out * i}px ${i * 0.5}px 0 ${reading.paper.stack}`, `${out * (i + 0.5)}px ${i * 0.5 + 0.25}px 0 rgba(60, 40, 20, 0.35)`);
+      }
+      leaf.style.boxShadow = shadows.join(', ');
+    }
     $('page-input').value = reading.page + 1;
-    $('prev-page').disabled = reading.page === 0;
-    $('next-page').disabled = reading.page === P - 1;
+    const two = reading.shown.length > 1;
+    $('copy-page').textContent = two ? 'Copy pages' : 'Copy page';
+    if (reading.spread) {
+      const k = Math.floor((reading.page + 1) / 2);
+      $('prev-page').disabled = k === 0;
+      $('next-page').disabled = k === Math.floor(P / 2);
+    } else {
+      $('prev-page').disabled = reading.page === 0;
+      $('next-page').disabled = reading.page === P - 1;
+    }
   }
 
   // Symbols that must be set in a column box of their own: control pictures ('ctl'), and
@@ -507,7 +567,7 @@
     fitted = new Map();
     try {
       const ctx = document.createElement('canvas').getContext('2d');
-      ctx.font = `100px ${getComputedStyle($('page')).fontFamily}`;
+      ctx.font = `100px ${getComputedStyle(document.querySelector('#reader .page')).fontFamily}`;
       const cell = ctx.measureText('0').width;
       let widestCtl = 0, widestFit = 0;
       for (const g of lib.glyphs) {
@@ -524,7 +584,15 @@
     if (reading) renderPage();
   }
 
-  function turn(delta) { reading.page += delta; renderPage(); }
+  /** Turns a leaf (two pages, in a spread) forwards or back. */
+  function turn(delta) {
+    const P = lib.config.pagesPerBook;
+    if (reading.spread) {
+      const k = Math.max(0, Math.min(Math.floor(P / 2), Math.floor((reading.page + 1) / 2) + delta));
+      reading.page = Math.max(0, 2 * k - 1); // the left-hand page, or page 1
+    } else reading.page += delta;
+    renderPage();
+  }
 
   function closeBook() {
     const back = reading && reading.returnTo;
@@ -688,7 +756,9 @@
     $('prev-page').addEventListener('click', () => turn(-1));
     $('next-page').addEventListener('click', () => turn(1));
     $('copy-page').addEventListener('click', () => {
-      copyText(lib.pageLines(reading.content, reading.page).join('\n'), `Copied page ${reading.page + 1}.`);
+      const shown = reading.shown;
+      copyText(shown.map((p) => lib.pageLines(reading.content, p).join('\n')).join('\n\n'),
+        shown.length > 1 ? `Copied pages ${shown[0] + 1} and ${shown[1] + 1}.` : `Copied page ${shown[0] + 1}.`);
     });
     $('close-book').addEventListener('click', closeBook);
     $('copy-book-link').addEventListener('click', () => {
@@ -698,7 +768,7 @@
       const long = url.length > 60000 ? ` It is ${fmt(url.length)} characters long, which is more than some browsers and websites accept.` : '';
       copyText(url, `Copied a link to this book. Whoever opens it is set down before it.${long}`);
     });
-    $('page-form').addEventListener('submit', (e) => { e.preventDefault(); reading.page = Number($('page-input').value) - 1; renderPage(); $('page').focus(); });
+    $('page-form').addEventListener('submit', (e) => { e.preventDefault(); reading.page = Number($('page-input').value) - 1; renderPage(); $('spread').focus(); });
     $('page-input').addEventListener('change', () => { reading.page = Number($('page-input').value) - 1; renderPage(); });
 
     // waking from a dream

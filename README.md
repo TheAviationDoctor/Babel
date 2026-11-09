@@ -138,6 +138,8 @@ Because the map can be inverted, any text can be located: `findText` in `js/libr
 
 **Patina.** The hexagons are built alike, as in the story, but no two have aged alike. From the same hash, each has its own wear and its own lamps, the same on every visit: the texture of its plaster starts in a different place and turns a different way; its wood is a little darker or lighter, and grimy low down where feet have kicked it; damp has risen up its walls to a tide line of its own, and water has left stains on them and soot on its ceiling; its floor is worn paler where feet go, round the shaft (more on one side than the other) and along the vestibule, and here and there stained with spilt ink. The lamps above its bookcases burn a little warmer or cooler, brighter or dimmer than others. In about one hexagon in thirty, a lamp flickers, and in one in a hundred and fifty, a lamp has gone out.
 
+**Paper.** A book opens at two facing pages, odd pages on the right as in print, so that page 1 faces the inside of the front cover; on a narrow screen, at one page at a time. It lies open on its own leather, the colour of its spine on the shelf, and the leaves already read, or still to read, show at its fore-edges. Like the spines, its paper says nothing about what the pages contain: it comes from the book's place in the Library, so it is the same on every visit. Each book has its own paper, from nearly white to deep yellow, and its own ink, a little faded on old paper. Its edges are browned by light and air (the head most of all, where the dust of the shelf settles), frayed, worn round at the corners, and here and there chipped or torn. There are clouds in the paper, and in many books foxing, small rust-brown spots in clusters; the grey of thumbs at the corner where the pages are turned; now and then a corner folded down. In some books, water once soaked in: its tide line marks the same place on every page it reached, fainter towards the last.
+
 ## The Catalogue
 
 Every vestibule has one. There is no menu in the Library, so the Catalogue is also where you find your bearings. It has four tabs.
@@ -301,6 +303,7 @@ In `index.html`, every file name is followed by `?v=` and a version, such as `js
 | `js/quotes.js` | The sentences of dreams: a small English grammar and its vocabulary |
 | `js/dream.js` | The moving picture of dreams, drawn by one shader |
 | `js/music.js` | The music of the hexagons, made as it plays |
+| `js/paper.js` | The paper of the books, each aged in its own way |
 | `js/main.js` | Start-up, reading, sleep |
 | `lib/` | three.js r147 and its `Reflector` (MIT licence, see `lib/three.LICENSE`) |
 | `tests/library.test.js` | Tests of the mathematics |
