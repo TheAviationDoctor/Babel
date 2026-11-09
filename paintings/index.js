@@ -46,7 +46,10 @@ window.BABEL_PAINTINGS = [
 {"file":"Zdzisław Beksiński - Bony Head (1984).jpg","artist":"Zdzisław Beksiński","title":"Bony Head","year":"1984","id":"514af0cc8fc4fde732c1","width":1024,"height":1024,"colours":128},
 {"file":"Zdzisław Beksiński - The Fortress (1984).jpg","artist":"Zdzisław Beksiński","title":"The Fortress","year":"1984","id":"934199bfdbbfc615e6c0","width":1024,"height":1024,"colours":128},
 {"file":"Zdzisław Beksiński - XXX (1984).jpg","artist":"Zdzisław Beksiński","title":"XXX","year":"1984","id":"ab9f6f65425924d25b38","width":1024,"height":1024,"colours":128},
+{"file":"Tye Martinez - Nothing Good Happens After 2am I (2022).jpg","artist":"Tye Martinez","title":"Nothing Good Happens After 2am I","year":"2022","id":"d6a14ba66326cf70ce1a","width":1024,"height":1024,"colours":128},
 {"file":"John Martin -The Destruction of Sodom and Gomorrah (1852).jpg","artist":"","title":"John Martin -The Destruction of Sodom and Gomorrah (1852)","year":"","id":"f3303dbc0751e9b52006","width":1024,"height":1024,"colours":128},
+{"file":"Tye Martinez - Nothing Good Happens After 2am II (2022).jpg.jpg","artist":"Tye Martinez","title":"Nothing Good Happens After 2am II (2022).jpg","year":"","id":"88d5313c5d5cb64f31c4","width":1024,"height":1024,"colours":128},
 {"file":"Hieronymus Bosch - The Garden of Earthly Delights.jpeg","artist":"Hieronymus Bosch","title":"The Garden of Earthly Delights","year":"","id":"0bcff45005c7c6cd3917","width":1024,"height":1024,"colours":128},
+{"file":"Tye Martinez - Time Stands Still (2022).jpg.jpg","artist":"Tye Martinez","title":"Time Stands Still (2022).jpg","year":"","id":"ff11aade306f3f502034","width":1024,"height":1024,"colours":128},
 {"file":"William Blake -The Song of Los (1795).jpg","artist":"","title":"William Blake -The Song of Los (1795)","year":"","id":"da6aa39c97ec331b3015","width":1024,"height":1024,"colours":128}
 ];

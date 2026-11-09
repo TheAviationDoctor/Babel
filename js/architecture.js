@@ -33,19 +33,23 @@
     d.board = 0.03;
     d.cornice = 0.12;
     // vertical distance between shelves; with few shelves they spread out, so that the
-    // ceiling stays a little above a librarian's head
+    // bookcases stand a little above a librarian's head
     d.pitch = Math.max(0.5, (2.25 - d.base - d.board - d.cornice) / d.shelves);
     d.shelfDepth = 0.34;
     d.postW = 0.06;
 
     d.rowLen = d.books * d.bookT;
     d.shelfLen = Math.max(d.rowLen + 0.06, 1.6);
-    d.sIn = d.shelfLen + 2 * d.postW; // side of the room's inner hexagon
+    // wooden panelling at either end of each wall's bookcase, which makes the room roomier than
+    // its shelves alone would
+    d.panel = 0.35;
+    d.sIn = d.shelfLen + 2 * (d.postW + d.panel); // side of the room's inner hexagon
     d.aIn = (d.sIn * SQ3) / 2; // apothem of the room (to the face of the shelves)
     d.a = d.aIn + d.shelfDepth; // apothem to the back of the shelves
-    d.shaftA = Math.max(0.45, d.aIn - 1.0); // apothem of the central air shaft
+    d.shaftA = Math.max(0.45, d.aIn - 1.1); // apothem of the central air shaft, with a walkway round it
     d.railH = 0.46; // "very low railings"
-    d.roomH = d.base + d.shelves * d.pitch + d.board + d.cornice;
+    d.shelfTop = d.base + d.shelves * d.pitch + d.board + d.cornice; // height of the bookcases
+    d.roomH = Math.max(d.shelfTop, 3.2); // and of the ceiling, with plaster between them
     d.slabT = 0.36;
     d.Hf = d.roomH + d.slabT; // floor-to-floor height
 
@@ -67,7 +71,7 @@
     // lamps: two per hexagon, placed across the floor's east–west axis, above the walkway
     const mid = (d.shaftA + d.aIn) / 2;
     d.lampZ = mid / (SQ3 / 2);
-    d.lampY = d.roomH - 0.3;
+    d.lampY = Math.min(d.roomH - 0.3, 2.5); // hung low from a high ceiling
 
     // closets, mirror, stairwell (all within the vestibule)
     d.closetW = 0.8;
@@ -302,7 +306,8 @@
       wood.reset();
     }
 
-    // The six sides.
+    // The six sides. Above the bookcases, if the ceiling is higher than they are, plaster.
+    const above = d.roomH > d.shelfTop + 0.01;
     for (let j = 0; j < 6; j++) {
       const m = sideMatrix(j);
       const free = j === 0 || j === 3;
@@ -336,6 +341,15 @@
         wood.reset();
       } else if (wallIndex >= 0) {
         buildShelfUnit(wood, m, d);
+        if (above) {
+          // plaster from the top of the bookcase to the ceiling, and a moulding where they meet
+          plaster.setMatrix(m);
+          plaster.poly([[-half, d.shelfTop, d.aIn], [half, d.shelfTop, d.aIn], [half, d.roomH, d.aIn], [-half, d.roomH, d.aIn]], [0, 0, -1]);
+          plaster.reset();
+          wood.setMatrix(m);
+          wood.box(-half, d.roomH - 0.08, d.aIn - 0.03, half, d.roomH, d.aIn, 'yz');
+          wood.reset();
+        }
       } else {
         plaster.setMatrix(m);
         plaster.poly([[-half, 0, d.aIn], [half, 0, d.aIn], [half, d.roomH, d.aIn], [-half, d.roomH, d.aIn]], [0, 0, -1]);
@@ -343,6 +357,13 @@
         wood.setMatrix(m);
         wood.box(-half, 0, d.aIn - 0.02, half, 0.11, d.aIn, 'Yz');
         wood.box(-half, d.roomH - 0.08, d.aIn - 0.03, half, d.roomH, d.aIn, 'yz');
+        wood.reset();
+      }
+      if (above) {
+        // the line of the bookcases' cornice, carried round the room above the doors and any bare walls
+        wood.setMatrix(m);
+        if (wallIndex >= 0) wood.box(-half, d.shelfTop, d.aIn - 0.035, half, d.shelfTop + 0.03, d.aIn, 'Yz');
+        else wood.box(-half, d.shelfTop - d.cornice, d.aIn - 0.035, half, d.shelfTop + 0.03, d.aIn, 'yYz');
         wood.reset();
       }
     }
@@ -354,10 +375,10 @@
     const L = d.shelfLen / 2, half = d.sIn / 2;
     const front = d.aIn, back = d.a;
     // back panel
-    wood.poly([[-L, 0, back - 0.02], [L, 0, back - 0.02], [L, d.roomH, back - 0.02], [-L, d.roomH, back - 0.02]], [0, 0, -1]);
-    // end posts (they meet the neighbouring wall's posts at the corner)
-    wood.box(-half, 0, front, -L, d.roomH, back, 'Xz');
-    wood.box(L, 0, front, half, d.roomH, back, 'xz');
+    wood.poly([[-L, 0, back - 0.02], [L, 0, back - 0.02], [L, d.shelfTop, back - 0.02], [-L, d.shelfTop, back - 0.02]], [0, 0, -1]);
+    // end posts, with the panelling beside the shelves (they meet the neighbouring wall's at the corner)
+    wood.box(-half, 0, front, -L, d.shelfTop, back, 'Xz');
+    wood.box(L, 0, front, half, d.shelfTop, back, 'xz');
     // plinth
     wood.box(-L, 0, front + 0.015, L, d.base, back, 'Yz');
     // shelves
@@ -367,7 +388,7 @@
     }
     // cornice
     const top = d.base + d.shelves * d.pitch + d.board;
-    wood.box(-half, top, front - 0.035, half, d.roomH, back, 'yz');
+    wood.box(-half, top, front - 0.035, half, d.shelfTop, back, 'yz');
     wood.reset();
   }
 
@@ -1092,7 +1113,8 @@
   function lightSets(d) {
     const V = (x, y, z, w) => new THREE.Vector4(x, y, z, w);
     return {
-      hexagon: [V(0, d.lampY, d.lampZ, 1.0), V(0, d.lampY, -d.lampZ, 1.0), V(0, d.lampY, 0, 0), V(0, 0, 0, 0)],
+      // the two lamps, bright enough for a tall room
+      hexagon: [V(0, d.lampY, d.lampZ, 1.4), V(0, d.lampY, -d.lampZ, 1.4), V(0, d.lampY, 0, 0), V(0, 0, 0, 0)],
       vestibule: [
         V(d.hallX0 - 0.25, 1.8, 0, 0.72),
         V(d.hallX1 + 0.25, 1.8, 0, 0.72),
