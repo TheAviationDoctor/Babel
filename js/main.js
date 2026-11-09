@@ -301,7 +301,7 @@
     }
     const books = await Babel.Collection.load();
     const book = books.find((b) => b.shelf === ref.id);
-    const set = lib.typeset(BabelCore.Library.cleanEbook(text).text, {});
+    const set = lib.typeset(text, {});
     const n = set.parts.length;
     if (ref.part > n) { toast(`This link leads to part ${ref.part} of a book that has ${n === 1 ? 'only one part' : `only ${n} parts`}.`, 7000); return false; }
     const r = lib.findText(set.parts[ref.part - 1]);

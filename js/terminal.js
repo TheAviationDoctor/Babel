@@ -70,8 +70,8 @@
   }
 
   /*
-   * The Library's own collection of books, shelved in books/ by the download script from
-   * the plain-text files in books/uncompressed/: books/index.js lists them, and
+   * The Library's own collection of books, shelved in books/ by books/shelve.py from the
+   * Markdown and plain-text files in books/uncompressed/: books/index.js lists them, and
    * books/compressed/<id>.js holds each one's text,
    * deflated and in base64. They are scripts because a page opened by double-click may
    * load scripts but not read files; so the collection works there as on the web.
@@ -629,15 +629,14 @@
 
     /**
      * A book of the collection set in pages, as the Library would hold it (kept, since it
-     * does not depend on the seed). Project Gutenberg's licence is left out.
+     * does not depend on the seed).
      */
     _set(entry) {
       const key = entry.key;
       let t = this.typeset.get(key);
       if (!t) {
-        const clean = BabelCore.Library.cleanEbook(entry.text);
         // without a title page: the same text is the same book, whatever its title
-        t = { meta: entry.meta, text: clean.text, set: this.lib.typeset(clean.text, {}), trimmed: clean.trimmed };
+        t = { meta: entry.meta, text: entry.text, set: this.lib.typeset(entry.text, {}) };
         this.typeset.set(key, t);
         // books of the collection can be long: keep only the last few of them set
         const kept = [...this.typeset.keys()].filter((k) => k.startsWith('shelf:'));
@@ -659,7 +658,7 @@
       $('shelf-intro').textContent = 'Opening the shelves…';
       const books = await collection.load();
       if (!books.length) {
-        $('shelf-intro').textContent = 'This Library has no collection of books yet. To give it one, put plain-text files (.txt) in its books/uncompressed folder and run python3 books/shelve.py.';
+        $('shelf-intro').textContent = 'This Library has no collection of books yet. To give it one, put books, as Markdown (.md) or plain-text (.txt) files, in its books/uncompressed folder and run python3 books/shelve.py.';
         $('shelf-list').hidden = true;
         document.querySelector('#panel-books .shelf-tools').hidden = true;
         return;
@@ -742,8 +741,8 @@
 
     findBook(entry) {
       this._ticket = (this._ticket || 0) + 1;
-      const { meta, text, set, trimmed } = this._set(entry);
-      this.book = { entry, meta, text, set, trimmed, found: null };
+      const { meta, text, set } = this._set(entry);
+      this.book = { entry, meta, text, set, found: null };
       this._placeBook();
       this._markCurrent();
       $('book-results').hidden = false;

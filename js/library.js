@@ -1464,38 +1464,6 @@
       return { location: r.location, content: r.content, length: p.symbols.length };
     }
 
-    /**
-     * Prepares a plain-text e-book for setting: removes Project Gutenberg's licence, which
-     * comes before and after the text, and the volunteers' credits that often open it, and
-     * reads the title and author from its header. Returns { text, title, author, trimmed }.
-     */
-    static cleanEbook(raw) {
-      let text = String(raw).replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
-      let title = '', author = '', trimmed = false;
-      const start = /^\*{3}\s*START OF (?:THE |THIS )?PROJECT GUTENBERG[^\n]*$/mi.exec(text) || /^\*END\*THE SMALL PRINT[^\n]*$/mi.exec(text);
-      if (start) {
-        const head = text.slice(0, start.index);
-        const field = (name) => {
-          const m = new RegExp('^' + name + ':[ \\t]*(.+(?:\\n[ \\t]+\\S.*)*)', 'mi').exec(head);
-          return m ? m[1].replace(/\s+/g, ' ').trim() : '';
-        };
-        title = field('Title');
-        author = field('Author');
-        text = text.slice(start.index + start[0].length);
-        trimmed = true;
-      }
-      const ends = [
-        /^\*{3}\s*END OF (?:THE |THIS )?PROJECT GUTENBERG[^\n]*$/mi,
-        /^[ \t]*End of (?:the )?Project Gutenberg(?:'s)?\b[^\n]*$/mi,
-      ].map((re) => re.exec(text)).filter(Boolean);
-      if (ends.length) {
-        text = text.slice(0, Math.min(...ends.map((m) => m.index)));
-        trimmed = true;
-      }
-      if (trimmed) text = text.replace(/^\s*(?:Produced|Prepared|Transcribed|Scanned|Digiti[sz]ed|E-?text prepared|This e-?book was produced)\b[^\n]*(?:\n[ \t]*\S[^\n]*)*/i, '');
-      return { text: text.trim(), title, author, trimmed };
-    }
-
     /** Position of the first occurrence of `query` in `content` (both symbol arrays), or −1. */
     static indexOf(content, query, from) {
       const L = query.length;

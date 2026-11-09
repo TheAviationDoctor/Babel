@@ -43,7 +43,7 @@ Using the default settings from `config.js`:
 
 - Each book holds `2^6 = 64` characters × `2^5 = 32` lines × `2^9 = 512` pages which yields `2^20 = 1,048,576` characters per book. That's about twice the length of a typical English novel, which gives plenty of headroom to capture most published literature.
 
-- The alphabet contains `2^7 = 128` symbols: `26` uppercase and `26` lowercase letters from the modern latin alphabet (A–Z); `27` accented letters and ligatures from French and Spanish, plus the umlauts ä and ö, and five accented capitals; `10` base-10 digits (0–9); `38` punctuation marks and signs; and the standard space. Those symbols were chosen by enumerating and de-duplicating all 697 million characters from Gutenberg.org's top 871 most-read books of all time. The chosen symbols hold 99.9% of the resulting set exactly as printed.
+- The alphabet contains `2^7 = 128` symbols: `26` uppercase and `26` lowercase letters from the modern latin alphabet (A–Z); `27` accented letters and ligatures from French and Spanish, plus the umlauts ä and ö, and five accented capitals; `10` base-10 digits (0–9); `38` punctuation marks and signs; and the standard space. Those symbols were chosen by counting every one of the 697 million characters of 871 of the most-read literary classics: they hold 99.9% of them exactly as printed.
 
 - There are therefore `128^(2^20) = 2^7,340,032 ≈ 6.33 × 10^2,209,569` unique books in the Library. That's one followed by over 2.2 million zeros. If you kept repeating the word 'trillion' once per second, it would take you just over 51 hours to verbalize that number.
 
@@ -150,11 +150,11 @@ Every vestibule has one. There is no menu in the Library, so the Catalogue is al
 
 **Find painting.** Upload a picture (GIF, JPEG or PNG; it is only read by the page, and never leaves the computer) to find the vestibule where it hangs as a painting of the Library (see [Paintings](#paintings)). The picture is cropped to a square, keeping its middle, or, with **Fit it whole**, fitted whole on a mat of lead white; resampled to 1,024 × 1,024 pixels; and each pixel given the nearest of the 128 colours, the difference carried over to the pixels not yet given theirs (Floyd–Steinberg dithering), so that from a little way off the eye mixes the colours back. Last, in each of the first two rows, the one pixel whose change shows least is changed to keep the paintings' rule. The screen shows the painting and where it hangs; you can go there, and stand before it, or copy its location. The same picture always gives the same painting, but browsers do not all read a picture file to exactly the same pixels, so another browser may find it in another vestibule.
 
-**Browse.** Two sub-tabs: **Read book** and **View painting**.
+**Browse.** Two sub-tabs: **Browse books** and **Browse paintings**.
 
-**Read book.** The Catalogue can also find a whole book: any book of the Library's own collection (see [Your books](#your-books)), which it lists with a search box, most read first, by title or by author. It sets the text in pages, the way a book of this Library holds them: from the first page, 64 characters to a line and 32 lines to a page, with words kept whole and each paragraph starting on a new, indented line. The rest of the 512 pages are blank. It then finds the one book of the Library that holds exactly those pages. To read it, go and take it down from its shelf; you can also copy its location or a public link to it (see [Links to books](#links-to-books)). A text longer than one book is set in several parts, one after the other, and each part is found separately.
+**Browse books.** The Catalogue can also find a whole book: any book of the Library's own collection (see [Your books](#your-books)), which it lists with a search box, by title or by author. It sets the text in pages, the way a book of this Library holds them: from the first page, 64 characters to a line and 32 lines to a page, with words kept whole and each paragraph starting on a new, indented line. The rest of the 512 pages are blank. It then finds the one book of the Library that holds exactly those pages. To read it, go and take it down from its shelf; you can also copy its location or a public link to it (see [Links to books](#links-to-books)). A text longer than one book is set in several parts, one after the other, and each part is found separately.
 
-**View painting.** Some famous copyright-free paintings, hung in the Library as **Find image** would hang them with **Fit it whole**, listed with a search box, oldest first, by title or by painter (see [Your paintings](#your-paintings)). Choose one to see it as the Library holds it and where it hangs; you can go there, copy its location, or copy a public link to it (see [Links to paintings of the collection](#links-to-paintings-of-the-collection)).
+**Browse paintings.** Some famous copyright-free paintings, hung in the Library as **Find image** would hang them with **Fit it whole**, listed with a search box, oldest first, by title or by painter (see [Your paintings](#your-paintings)). Choose one to see it as the Library holds it and where it hangs; you can go there, copy its location, or copy a public link to it (see [Links to paintings of the collection](#links-to-paintings-of-the-collection)).
 
 **Jump.** Move any number of hexagons east or west and floors up or down. Paste a full address, as copied from the Map tab, to return to a hexagon you have bookmarked, even after closing the page. An address copied from a Library with another seed is refused, since its books stand elsewhere. Or go somewhere at random. After a jump, the Map tab counts your steps from where you arrived.
 
@@ -204,29 +204,42 @@ The text is compressed as in other links, then encrypted with AES-GCM under a ke
 
 ### Links to books of the collection
 
-A link to a book of the collection (see [Your books](#your-books)) carries no text, only the name of the book's file in `books/compressed/`: `#book=` and 20 characters, such as `https://babel.pellegr.in/#book=3f6bb9d6f78e0293b56a` for *Pride and Prejudice*. A book too long for one volume is set in several parts: `#book=…/3` leads to the third. The Catalogue's **Read book** sub-tab copies these links. They lead to the same book whatever the seed.
+A link to a book of the collection (see [Your books](#your-books)) carries no text, only the name of the book's file in `books/compressed/`: `#book=` and 20 characters, such as `https://babel.pellegr.in/#book=347482c8cdafa33b5217` for Borges's *La Biblioteca de Babel*. A book too long for one volume is set in several parts: `#book=…/3` leads to the third. The Catalogue's **Browse books** sub-tab copies these links. They lead to the same book whatever the seed.
 
 A book that a link or the Catalogue has led you to can be shared again from the reading view: **Copy a link to it** copies the link that leads to it.
 
 ### Links to paintings of the collection
 
-A link to a painting of the collection names it likewise, by the name of its file in `paintings/compressed/`: `#painting=` and 20 characters, such as `https://babel.pellegr.in/#painting=0d8bc30831c03f9182fb` for Bruegel's *The Tower of Babel*. Whoever opens it is set down in its vestibule, before it. The **View painting** sub-tab copies these links. A picture uploaded to **Find image** has no such link, since a link to it would have to carry the whole painting, over half a million characters.
+A link to a painting of the collection names it likewise, by the name of its file in `paintings/compressed/`: `#painting=` and 20 characters, such as `https://babel.pellegr.in/#painting=0d8bc30831c03f9182fb` for Bruegel's *The Tower of Babel*. Whoever opens it is set down in its vestibule, before it. The **Browse paintings** sub-tab copies these links. A picture uploaded to **Find image** has no such link, since a link to it would have to carry the whole painting, over half a million characters.
 
 ## Your books
 
-The Library has a collection of ~1K copyright-free literature classics from the list of most read books of [Project Gutenberg](https://www.gutenberg.org). They are kept in `books/compressed/`. You can access those from the Catalogue's **Browse** tab, under **Read book**, and read them from within the Library.
+The Library has a collection of books, kept in `books/compressed/`. You can find them from the Catalogue's **Browse** tab, under **Browse books**, and read them from within the Library.
 
-The Catalogue loads the list when **Read book** is first opened, and a book's text only when you choose it, so the collection works the same whether the Library is opened by double-click or online.
+The Catalogue loads the list when **Browse books** is first opened, and a book's text only when you choose it, so the collection works the same whether the Library is opened by double-click or online.
 
-The title, author and year come from the file name. If the name does not give an author, they come from the e-book's header, as for the Gutenberg files. Those can be added as they are: the Catalogue leaves out the licence that comes before and after the text, and the volunteers' credits. Leave a blank line between paragraphs. If there are no blank lines, each line is taken as a paragraph, and a file written on a single line is set as one long paragraph.
+Books are Markdown files (`.md`) that open with a front matter, between two lines of three hyphens, which gives the book's `author`, `title`, `year` and language (`lang`, as a code such as `en`, `fr` or `es`, or by name) for the list, and is not part of the book. Each property is its name, a colon right after it, a space and its value:
 
-**Adding books.** Put plain-text files (`.txt`) in `books/uncompressed/`, which is not published, then shelve them with Python 3:
+```
+---
+author: Jorge Luis Borges
+lang: es
+title: La Biblioteca de Babel
+year: 1941
+---
+```
+
+The text after it goes into the Library as it reads in print, since the Library's books have no italics, headings or footnotes: the marks of emphasis are left out (`*word*` becomes word), as are those of headings, quotations, links and code; a footnote's mark becomes its number in brackets (`[^1]` becomes [1]), and so does the start of the note itself; a rule between parts becomes three spaced asterisks. Leave a blank line between paragraphs: lines with no blank line between them are one paragraph, as in Markdown. Whatever the front matter leaves out comes from the file name, written `Author - Title (Year).md`. The front matter is read strictly: a line that is not a property as above, such as `author : Borges` with a space before the colon, is reported, and its book is left off the shelf until it is mended.
+
+Plain-text files (`.txt`) are shelved too, as they are, their title, author and year from the file name. If a plain-text file has no blank lines, each line is taken as a paragraph, and a file written on a single line is set as one long paragraph.
+
+**Adding books.** Put the books in `books/uncompressed/`, which is not published, then shelve them with Python 3:
 
 ```
 python3 books/shelve.py
 ```
 
-It compresses each new or changed book into a script of its own in `books/compressed/`, named after a hash of its text (which is also its `#book=` link), removes the scripts of the books whose `.txt` file is gone, and rewrites the list, `books/index.js`. Books it has shelved before, unchanged since, are not read again, so it takes but a moment. A copy of the repository without `books/uncompressed/` leaves the shelf as it is.
+It compresses each new or changed book into a script of its own in `books/compressed/`, named after a hash of its text (which is also its `#book=` link), removes the scripts of the books whose file is gone, and rewrites the list, `books/index.js`. Books it has shelved before, unchanged since, are not read again, so it takes but a moment. A copy of the repository without `books/uncompressed/` leaves the shelf as it is.
 
 A git hook, `.githooks/pre-commit`, runs the script before every commit and adds what it changed to the commit. Git uses it once told where the Library keeps its hooks, which is done once per copy of the repository, in its folder: `git config core.hooksPath .githooks`. Note that `books/uncompressed/` is not part of the repository, so new books on their own leave nothing to commit: run the script yourself then, and commit what it wrote.
 
@@ -291,7 +304,7 @@ In `index.html`, every file name is followed by `?v=` and a version, such as `js
 | `js/main.js` | Start-up, reading, sleep |
 | `lib/` | three.js r147 and its `Reflector` (MIT licence, see `lib/three.LICENSE`) |
 | `tests/library.test.js` | Tests of the mathematics |
-| `books/index.js`, `books/compressed/` | The collection, as the Catalogue reads it, written by `books/shelve.py` from the `.txt` files in `books/uncompressed/` (which are not published) |
+| `books/index.js`, `books/compressed/` | The collection, as the Catalogue reads it, written by `books/shelve.py` from the `.md` and `.txt` files in `books/uncompressed/` (which are not published) |
 | `books/shelve.py` | Shelves the collection: see [Your books](#your-books) |
 | `paintings/index.js`, `paintings/compressed/` | The collection of paintings, as the Catalogue reads it, written by `paintings/hang.js` from the pictures in `paintings/originals/` (which are not published) |
 | `paintings/hang.js` | Hangs the collection of paintings: see [Your paintings](#your-paintings) |
@@ -299,7 +312,7 @@ In `index.html`, every file name is followed by `?v=` and a version, such as `js
 
 ## Testing
 
-With Node.js installed, run `node tests/library.test.js`. The tests enumerate every shelf of five small libraries and check that each holds a different book and that the inverse map finds every book again. They then check round trips, text search and timing on the Library described by `config.js`, and on Borges's own figures, and finally the Catalogue: preparing texts, setting whole books in pages and splitting long ones into parts, leaving out Project Gutenberg's licence, finding them in books, distances that wrap around the Library, reading back copied addresses, and making and reading links to books, secret ones included. The paintings are checked exhaustively on five small libraries, each painting different, keeping its rule and leading back to its hexagon, every picture that keeps the rule hanging somewhere, and every mirror image a painting too, then on the Library of `config.js`, with pictures made into paintings, cropped or fitted, always the same for the same picture, and mended to keep the rule. They also check positions measured from the seam, random hexagons to wake in, and the sentences of dreams: grammatical, varied, and always the same for the same hexagon.
+With Node.js installed, run `node tests/library.test.js`. The tests enumerate every shelf of five small libraries and check that each holds a different book and that the inverse map finds every book again. They then check round trips, text search and timing on the Library described by `config.js`, and on Borges's own figures, and finally the Catalogue: preparing texts, setting whole books in pages and splitting long ones into parts, finding them in books, distances that wrap around the Library, reading back copied addresses, and making and reading links to books, secret ones included. The paintings are checked exhaustively on five small libraries, each painting different, keeping its rule and leading back to its hexagon, every picture that keeps the rule hanging somewhere, and every mirror image a painting too, then on the Library of `config.js`, with pictures made into paintings, cropped or fitted, always the same for the same picture, and mended to keep the rule. They also check positions measured from the seam, random hexagons to wake in, and the sentences of dreams: grammatical, varied, and always the same for the same hexagon.
 
 ## Credits
 

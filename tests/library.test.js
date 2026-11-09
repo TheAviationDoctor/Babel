@@ -560,21 +560,6 @@ test('a text longer than one book is split into parts', () => {
   }
 });
 
-test("Project Gutenberg's licence is left out of a book", () => {
-  const raw = 'The Project Gutenberg eBook of Moby-Dick\r\n\r\nTitle: Moby-Dick; or The\r\n       Whale\r\nAuthor: Herman Melville\r\n\r\n' +
-    '*** START OF THE PROJECT GUTENBERG EBOOK MOBY-DICK ***\r\n\r\nProduced by Someone\r\nand Others\r\n\r\n\r\nCHAPTER 1.\r\n\r\nThe text.\r\n\r\n' +
-    "End of Project Gutenberg's Moby-Dick\r\n\r\n*** END OF THE PROJECT GUTENBERG EBOOK MOBY-DICK ***\r\nThe licence.\r\n";
-  const e = Library.cleanEbook(raw);
-  assert.strictEqual(e.text, 'CHAPTER 1.\n\nThe text.');
-  assert.strictEqual(e.title, 'Moby-Dick; or The Whale');
-  assert.strictEqual(e.author, 'Herman Melville');
-  assert.strictEqual(e.trimmed, true);
-  const plain = Library.cleanEbook('Title: not a header\nJust a text.');
-  assert.strictEqual(plain.trimmed, false);
-  assert.strictEqual(plain.title, '');
-  assert.strictEqual(plain.text, 'Title: not a header\nJust a text.');
-});
-
 test('positions are measured from the seam, as a fraction of the way round', () => {
   const lib = new Library({});
   const g = new Uint8Array(lib.hexagonDigits), f = new Uint8Array(lib.floorDigits);
