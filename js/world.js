@@ -247,6 +247,10 @@
         if (c.uniforms.map) c.uniforms.map.value = m.uniforms.map.value; // share the texture
         c.uniforms.uLightColors.value = m.uniforms.uLightColors.value.map((x) => x.clone());
         if (c.uniforms.uPath) c.uniforms.uPath.value = m.uniforms.uPath.value;
+        if (c.uniforms.uDoorLamps) {
+          c.uniforms.uDoorLamps.value = m.uniforms.uDoorLamps.value.map((x) => x.clone());
+          c.uniforms.uDoorColors.value = m.uniforms.uDoorColors.value.map((x) => x.clone());
+        }
         return c;
       };
       const look = { mats: {}, hex: [], ves: [], lamps: [] };
@@ -435,10 +439,15 @@
     _applyLook(cell) {
       const me = this._look(cell.dh, cell.df), east = this._look(cell.dh + 1, cell.df);
       cell.looks = { me, east, flickers: me.lamps.some((l) => l.flicker) || east.lamps.some((l) => l.flicker) };
+      // the tiles run on unbroken along a floor, from hexagon to vestibule to hexagon, so their
+      // pattern starts where the floor's does, not where the hexagon's
+      const fk = this.floor(cell.df).key;
       for (const [k, kind] of PATINAS) {
         const un = cell.look.mats[k].uniforms;
         un.uSeed.value.fromArray(me.seed);
+        if (kind === 'tiles') un.uSeed.value.set(fk[0] / 4294967296, fk[1] / 4294967296, 0, me.seed[3]);
         un.uPatina.value.fromArray(me[kind]);
+        un.uPatinaEast.value.fromArray(east[kind]);
       }
       this._applyLamps(cell);
     }
@@ -448,14 +457,22 @@
       const { me, east } = cell.looks, t = this.time;
       const burn = (l) => (l.dark ? 0 : l.gain * (l.flicker ? flicker(t, l.flicker) : 1));
       const here = me.lamps.map(burn), there = east.lamps.map(burn);
+      const tint = (c, l) => c.setRGB(1, 0.78 + 0.045 * l.warmth, 0.52 + 0.07 * l.warmth);
       for (const m of cell.look.hex) {
         const g = m.uniforms.uGain.value, c = m.uniforms.uLightColors.value;
-        for (let i = 0; i < 2; i++) { g[i] = here[i]; c[i].setRGB(1, 0.78 + 0.045 * me.lamps[i].warmth, 0.52 + 0.07 * me.lamps[i].warmth); }
+        for (let i = 0; i < 2; i++) { g[i] = here[i]; tint(c[i], me.lamps[i]); }
       }
       for (const m of cell.look.ves) {
-        const g = m.uniforms.uGain.value;
+        const u = m.uniforms, g = u.uGain.value;
         g[0] = (here[0] + here[1]) / 2;
         g[1] = (there[0] + there[1]) / 2;
+        // the ends of the floor, lit by the lamps beyond the doors as the hexagons' floors are
+        if (u.uDoorLamps) {
+          for (let i = 0; i < 2; i++) {
+            u.uDoorLamps.value[i].w = here[i]; tint(u.uDoorColors.value[i], me.lamps[i]);
+            u.uDoorLamps.value[i + 2].w = there[i]; tint(u.uDoorColors.value[i + 2], east.lamps[i]);
+          }
+        }
       }
       cell.look.lamps.forEach(({ globe, glow }, i) => {
         const v = here[i], w = me.lamps[i].warmth;

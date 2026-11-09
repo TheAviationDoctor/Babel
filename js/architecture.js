@@ -482,12 +482,14 @@
     const well = new Builder(), steps = new Builder();
     const cx = d.wellX, cz = d.wellZ, R = d.wellR, zc = d.hallW / 2;
     const gamma = Math.asin(d.openW / 2 / R); // half-angle of the cap cut by the vestibule wall
-    // round wall, everywhere except where it meets the vestibule
-    well.cylinder(cx, cz, R, -Math.PI / 2 + gamma, (3 * Math.PI) / 2 - gamma, -d.slabT, d.Hf, true, 64);
+    // round wall, everywhere except where it meets the vestibule; from this floor up to the next,
+    // where the next floor's begins (behind the slab of a landing runs the wall of the floor below:
+    // were the two to overlap there, they would flicker as each showed through the other)
+    well.cylinder(cx, cz, R, -Math.PI / 2 + gamma, (3 * Math.PI) / 2 - gamma, 0, d.Hf, true, 64);
     // flat wall above the opening (stair side)
     well.poly([[ox0, d.doorH, zc], [ox1, d.doorH, zc], [ox1, d.Hf, zc], [ox0, d.Hf, zc]], [0, 0, 1]);
-    // central column
-    steps.cylinder(cx, cz, d.colR, 0, 2 * Math.PI, -d.slabT, d.Hf, false, 20);
+    // central column, likewise from floor to floor
+    steps.cylinder(cx, cz, d.colR, 0, 2 * Math.PI, 0, d.Hf, false, 20);
     // landing (part of this floor), with its underside and edges
     const l0 = d.landingTheta - d.landingHalf, l1 = d.landingTheta + d.landingHalf;
     steps.sector(cx, cz, d.colR, R, l0, l1, 0, 1, zc, 18);
@@ -803,7 +805,8 @@
       // PATINA is 1 for plaster, 2 for wood, 3 for floor tiles.
       uniform vec4 uSeed; // where the texture starts (xy), how plaster is turned (z), a seed for the stains (w)
       uniform vec4 uPatina; // by kind: plaster (damp, tide line, stains, soot); wood (shade rgb, grime); tiles (wear, side, ink)
-      uniform vec4 uPath; // the middle of the walkway round the shaft (x), where the hexagon gives onto its vestibule (y)
+      uniform vec4 uPatinaEast; // the same, of the next hexagon east, which a vestibule's floor wears towards
+      uniform vec4 uPath; // the middle of the walkway round the shaft (x), where the hexagon gives onto its vestibule (y) and the vestibule onto the next hexagon (z)
       float hash3(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.yzx + 33.33); return fract((p.x + p.y) * p.z); }
       float vnoise(vec3 p) {
         vec3 i = floor(p), f = fract(p);
@@ -814,6 +817,20 @@
       float fbm(vec3 p) { return 0.55 * vnoise(p) + 0.3 * vnoise(p * 2.07 + 7.1) + 0.15 * vnoise(p * 4.13 + 3.7); }
     #endif
     ${LIGHTING_GLSL}
+    #ifdef DOORS
+      // Near each end of a vestibule, the light is that of the hexagon beyond the door: its two
+      // lamps, as they light the floor inside the hexagon, giving way to the vestibule's own light
+      // further in. So the floor is lit alike on both sides of a doorway, and runs on without a seam.
+      uniform vec4 uDoorLamps[4]; // the lamps of the hexagon at the west end (0, 1) and of the one at the east end (2, 3), with their brightness (w)
+      uniform vec3 uDoorColors[4];
+      uniform vec3 uDoors; // where the vestibule meets its hexagons (x west, y east), and how far in their light reaches (z)
+      vec3 doorLamp(vec4 l, vec3 c, vec3 p, vec3 n) {
+        vec3 L = l.xyz - p;
+        float d2 = max(dot(L, L), 0.01);
+        float wrap = clamp((dot(n, L) * inversesqrt(d2) + 0.25) / 1.25, 0.0, 1.0);
+        return c * (l.w * wrap / (1.0 + d2 * uFalloff));
+      }
+    #endif
     #include <fog_pars_fragment>
     void main() {
       vec3 n = normalize(vN);
@@ -849,15 +866,28 @@
           // the wood's own shade, and grime low down, where feet have kicked it
           base *= uPatina.rgb * (1.0 - uPatina.a * 0.2 * (1.0 - smoothstep(0.0, 0.3, vLocal.y)) * fbm(q * 4.0));
         #elif PATINA == 3
-          // worn where feet go: round the shaft, more on one side than the other, and along the vestibule
-          float circuit = exp(-pow((length(vLocal.xz) - uPath.x) / 0.32, 2.0)) * mix(1.0 - uPatina.y, uPatina.y, smoothstep(-0.5, 0.5, vLocal.z));
-          float hall = exp(-pow(vLocal.z / 0.42, 2.0));
-          float worn = uPatina.x * mix(circuit, hall, smoothstep(uPath.y - 0.3, uPath.y + 0.1, vLocal.x)) * (0.6 + 0.4 * fbm(q * 5.0));
+          // A vestibule's floor wears from its hexagon's way to the next one's; and what marks one
+          // hexagon's floor alone (the grain of its wear, spilt ink) stops short of the doorways. So
+          // the floor runs on unbroken from each hexagon through its vestibules into the next.
+          vec4 pat = mix(uPatina, uPatinaEast, smoothstep(uPath.y, uPath.z, vLocal.x));
+          float ax = abs(vLocal.x), own = smoothstep(0.0, 0.35, min(abs(ax - uPath.y), abs(vLocal.x - uPath.z)));
+          // worn where feet go: round the shaft, more on one side than the other, and out through the doors
+          float circuit = exp(-pow((length(vLocal.xz) - uPath.x) / 0.32, 2.0)) * mix(1.0 - pat.y, pat.y, smoothstep(-0.5, 0.5, vLocal.z));
+          float hall = exp(-pow(vLocal.z / 0.42, 2.0)) * smoothstep(uPath.x, uPath.y, ax);
+          float worn = pat.x * max(circuit, hall) * (0.6 + 0.4 * mix(0.5, fbm(q * 5.0), own));
           base = mix(base, vec3(dot(base, vec3(0.333))) * 1.1, 0.45 * worn); // the glaze worn off: paler, flatter
-          base *= 1.0 - 0.45 * uPatina.z * smoothstep(0.7, 0.76, fbm(q * 2.3 + 11.0)); // spilt ink
+          base *= 1.0 - 0.45 * pat.z * own * smoothstep(0.7, 0.76, fbm(q * 2.3 + 11.0)); // spilt ink
         #endif
       #endif
-      vec3 c = expose(base * lampLight(vLocal, n));
+      vec3 light = lampLight(vLocal, n);
+      #ifdef DOORS
+        float west = 1.0 - smoothstep(uDoors.x, uDoors.x + uDoors.z, vLocal.x);
+        float east = smoothstep(uDoors.y - uDoors.z, uDoors.y, vLocal.x);
+        vec3 lw = vec3(uAmbient) + doorLamp(uDoorLamps[0], uDoorColors[0], vLocal, n) + doorLamp(uDoorLamps[1], uDoorColors[1], vLocal, n);
+        vec3 le = vec3(uAmbient) + doorLamp(uDoorLamps[2], uDoorColors[2], vLocal, n) + doorLamp(uDoorLamps[3], uDoorColors[3], vLocal, n);
+        light = light * (1.0 - west - east) + lw * west + le * east;
+      #endif
+      vec3 c = expose(base * light);
       gl_FragColor = vec4(c + dither(gl_FragCoord.xy) / 255.0, 1.0);
       #include <fog_fragment>
     }
@@ -989,7 +1019,15 @@
       defines.PATINA = { plaster: 1, wood: 2, tiles: 3 }[opts.patina];
       uniforms.uSeed = { value: new THREE.Vector4(0, 0, 0, 0) };
       uniforms.uPatina = { value: opts.patina === 'wood' ? new THREE.Vector4(1, 1, 1, 0) : new THREE.Vector4(0, 0, 0, 0) };
+      uniforms.uPatinaEast = { value: uniforms.uPatina.value.clone() };
       uniforms.uPath = { value: opts.path || new THREE.Vector4(0, 0, 0, 0) };
+    }
+    if (opts.doors) {
+      // the lamps of the hexagons at either end of a vestibule, which light its ends (World._applyLamps says how brightly)
+      defines.DOORS = '';
+      uniforms.uDoorLamps = { value: opts.doors.lamps.map((l) => l.clone()) };
+      uniforms.uDoorColors = { value: opts.doors.lamps.map(() => LAMP.clone()) };
+      uniforms.uDoors = { value: new THREE.Vector3(opts.doors.west, opts.doors.east, opts.doors.reach) };
     }
     return new THREE.ShaderMaterial({ uniforms, defines, vertexShader: ARCH_VERT, fragmentShader: ARCH_FRAG, fog: true, side: opts.side || THREE.FrontSide, vertexColors: !!opts.vertexColors });
   }
@@ -1051,12 +1089,14 @@
         V(d.hallX1 + 0.25, 1.8, 0, 0.72),
         V((d.cellX0 + d.cellX1) / 2, d.cellH - 0.2, (d.cellZ0 + d.cellZ1) / 2, 0.13),
       ],
-      // light from the vestibules of this floor and the floors above and below, spilling into the stairwell
+      // light from the vestibules of this floor and the floors above and below, spilling into the
+      // stairwell, and a little fill halfway up, where it lights the bottom and the top of a floor's
+      // stretch of the stairwell alike, so that each floor's runs on into the next without a seam
       well: [
         V(d.wellX, 1.5, d.hallW / 2 - 0.15, 0.95),
         V(d.wellX, 1.5 + d.Hf, d.hallW / 2 - 0.15, 0.95),
         V(d.wellX, 1.5 - d.Hf, d.hallW / 2 - 0.15, 0.95),
-        V(d.wellX, d.Hf * 0.75, d.wellZ + 0.4, 0.28),
+        V(d.wellX, d.Hf / 2, d.wellZ + 0.4, 0.28),
       ],
     };
   }
@@ -1074,22 +1114,32 @@
     const hex = buildHexagon(d);
     const ves = buildVestibule(d);
     const cell = buildCell(d);
-    const tileScale = [1 / 0.9, 1 / (0.9 * textures.tilesAspect)];
-    // the walkway's middle, round the shaft, and where the hexagon gives onto its vestibule: for the worn path
-    const path = new THREE.Vector4((d.shaftA + d.aIn) / 2, d.a, 0, 0);
+    // About 0.9 m to a repeat of the tiles' pattern (two tiles across), but exactly a whole number
+    // of repeats from one hexagon to the next, so that the pattern runs on unbroken along a floor.
+    const tileRepeat = d.Dx / Math.max(1, Math.round(d.Dx / 0.9));
+    const tileScale = [1 / tileRepeat, 1 / (tileRepeat * textures.tilesAspect)];
+    // the walkway's middle, round the shaft, and where the hexagon gives onto its vestibule and the vestibule onto the next: for the worn path
+    const path = new THREE.Vector4((d.shaftA + d.aIn) / 2, d.a, d.Dx - d.a, 0);
+    // a vestibule's ends, lit by the lamps of the hexagons beyond its doors
+    const doors = {
+      west: d.a, east: d.Dx - d.a, reach: 1.4,
+      lamps: [[0, d.lampZ], [0, -d.lampZ], [d.Dx, d.lampZ], [d.Dx, -d.lampZ]].map(([x, z]) => new THREE.Vector4(x, d.lampY, z, 1)),
+    };
     const screenLit = { colors: [null, null, null, SCREEN] };
+    // up the stairwell, a whole number of repeats of a texture to a floor, so that it runs on from floor to floor
+    const perFloor = (scale) => Math.max(1, Math.round(d.Hf * scale)) / d.Hf;
     const materials = {
       hexWood: archMaterial(textures.wood, [0.9, 2.2], 0xb0845a, L.hexagon, { patina: 'wood' }),
       hexPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.hexagon, { patina: 'plaster' }),
       hexTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.hexagon, { patina: 'tiles', path }),
       vesWood: archMaterial(textures.wood, [0.9, 2.2], 0xb0845a, L.walls, Object.assign({ patina: 'wood' }, screenLit)),
       vesPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.walls, Object.assign({ patina: 'plaster' }, screenLit)),
-      vesTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.vestibule, Object.assign({ patina: 'tiles', path }, screenLit)),
+      vesTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.vestibule, Object.assign({ patina: 'tiles', path, doors }, screenLit)),
       niche: archMaterial(textures.plaster, [0.4, 0.4], 0xffffff, L.niche, { vertexColors: true, colors: [SCREEN], falloff: 1.4, ambient: 0.04 }),
       screen: new THREE.MeshBasicMaterial({ map: textures.screen, fog: true }),
       signs: signMaterial(textures.signs, L.vestibule, { colors: [null, null, null, SCREEN], ambient: 0.08 }),
-      wellPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc4b597, L.well, { side: THREE.DoubleSide, ambient: 0.08 }),
-      wellStone: archMaterial(textures.stone, [0.7, 0.7], 0xdccdb0, L.well, { side: THREE.DoubleSide, ambient: 0.08 }),
+      wellPlaster: archMaterial(textures.plaster, [0.4, perFloor(0.4)], 0xc4b597, L.well, { side: THREE.DoubleSide, ambient: 0.08 }),
+      wellStone: archMaterial(textures.stone, [0.7, perFloor(0.7)], 0xdccdb0, L.well, { side: THREE.DoubleSide, ambient: 0.08 }),
       cellWood: archMaterial(textures.wood, [0.9, 2.2], 0xffffff, L.cell, { vertexColors: true, falloff: 1.1, ambient: 0.05 }),
       doorWood: archMaterial(textures.wood, [0.9, 2.2], 0xb0845a, L.door, { cellMatrix: true }),
       cellSoft: archMaterial(textures.plaster, [0.4, 0.4], 0xffffff, L.cell, { vertexColors: true, falloff: 1.1, ambient: 0.05 }),
