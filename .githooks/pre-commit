@@ -1,7 +1,7 @@
 #!/bin/sh
 # THE LIBRARY OF BABEL — before every commit, puts on the shelf the books of
 # books/uncompressed/ that are new or changed, takes off it those that are gone (see
-# books/shelve.py), hangs likewise the paintings of paintings/originals/ (see
+# books/shelve.js), hangs likewise the paintings of paintings/originals/ (see
 # paintings/hang.js), and adds what changed to the commit. A copy of the repository
 # without the books' texts, or the paintings' pictures, leaves them as they are.
 #
@@ -10,14 +10,14 @@
 #   git config core.hooksPath .githooks
 
 cd "$(git rev-parse --show-toplevel)" || exit 0
-# apps such as GitHub Desktop may not look where Python is usually installed
+# apps such as GitHub Desktop may not look where Node.js is usually installed
 PATH="$PATH:/usr/local/bin:/opt/homebrew/bin:/usr/bin"
 
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "Babel: Python 3 was not found, so the books were not shelved. The commit goes ahead without them." >&2
+if ! command -v node >/dev/null 2>&1; then
+  echo "Babel: Node.js was not found, so the books were not shelved. The commit goes ahead without them." >&2
   exit 0
 fi
-if ! python3 books/shelve.py --quiet; then
+if ! node books/shelve.js --quiet; then
   echo "Babel: shelving the books failed (see above). The commit goes ahead without them." >&2
   exit 0
 fi

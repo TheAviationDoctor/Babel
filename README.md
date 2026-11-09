@@ -233,10 +233,10 @@ The text after it goes into the Library as it reads in print, since the Library'
 
 Plain-text files (`.txt`) are shelved too, as they are, their title, author and year from the file name. If a plain-text file has no blank lines, each line is taken as a paragraph, and a file written on a single line is set as one long paragraph.
 
-**Adding books.** Put the books in `books/uncompressed/`, which is not published, then shelve them with Python 3:
+**Adding books.** Put the books in `books/uncompressed/`, which is not published, then shelve them with Node.js:
 
 ```
-python3 books/shelve.py
+node books/shelve.js
 ```
 
 It compresses each new or changed book into a script of its own in `books/compressed/`, named after a hash of its text (which is also its `#book=` link), removes the scripts of the books whose file is gone, and rewrites the list, `books/index.js`. Books it has shelved before, unchanged since, are not read again, so it takes but a moment. A copy of the repository without `books/uncompressed/` leaves the shelf as it is.
@@ -304,11 +304,11 @@ In `index.html`, every file name is followed by `?v=` and a version, such as `js
 | `js/main.js` | Start-up, reading, sleep |
 | `lib/` | three.js r147 and its `Reflector` (MIT licence, see `lib/three.LICENSE`) |
 | `tests/library.test.js` | Tests of the mathematics |
-| `books/index.js`, `books/compressed/` | The collection, as the Catalogue reads it, written by `books/shelve.py` from the `.md` and `.txt` files in `books/uncompressed/` (which are not published) |
-| `books/shelve.py` | Shelves the collection: see [Your books](#your-books) |
+| `books/index.js`, `books/compressed/` | The collection, as the Catalogue reads it, written by `books/shelve.js` from the `.md` and `.txt` files in `books/uncompressed/` (which are not published) |
+| `books/shelve.js` | Shelves the collection: see [Your books](#your-books) |
 | `paintings/index.js`, `paintings/compressed/` | The collection of paintings, as the Catalogue reads it, written by `paintings/hang.js` from the pictures in `paintings/originals/` (which are not published) |
 | `paintings/hang.js` | Hangs the collection of paintings: see [Your paintings](#your-paintings) |
-| `.githooks/pre-commit` | Runs `books/shelve.py` and `paintings/hang.js` before every commit |
+| `.githooks/pre-commit` | Runs `books/shelve.js` and `paintings/hang.js` before every commit |
 
 ## Testing
 

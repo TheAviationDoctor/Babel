@@ -1,8 +1,8 @@
 .DS_Store
 # Of the books, only what the catalogue reads is published, the list and the shelf, and
-# the script that writes them, books/shelve.py (see "Your books" in README.md).
+# the script that writes them, books/shelve.js (see "Your books" in README.md).
 books/*
-!books/shelve.py
+!books/shelve.js
 !books/index.js
 !books/compressed/
 books/compressed/*.partial

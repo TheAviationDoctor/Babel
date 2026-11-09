@@ -70,7 +70,7 @@
   }
 
   /*
-   * The Library's own collection of books, shelved in books/ by books/shelve.py from the
+   * The Library's own collection of books, shelved in books/ by books/shelve.js from the
    * Markdown and plain-text files in books/uncompressed/: books/index.js lists them, and
    * books/compressed/<id>.js holds each one's text,
    * deflated and in base64. They are scripts because a page opened by double-click may
@@ -658,7 +658,7 @@
       $('shelf-intro').textContent = 'Opening the shelves…';
       const books = await collection.load();
       if (!books.length) {
-        $('shelf-intro').textContent = 'This Library has no collection of books yet. To give it one, put books, as Markdown (.md) or plain-text (.txt) files, in its books/uncompressed folder and run python3 books/shelve.py.';
+        $('shelf-intro').textContent = 'This Library has no collection of books yet. To give it one, put books, as Markdown (.md) or plain-text (.txt) files, in its books/uncompressed folder and run node books/shelve.js.';
         $('shelf-list').hidden = true;
         document.querySelector('#panel-books .shelf-tools').hidden = true;
         return;
@@ -686,7 +686,7 @@
         const by = [book.author, book.year].filter(Boolean).join(', ');
         const line = el('span', 'note');
         if (by) line.appendChild(el('span', 'by', by));
-        line.append([by ? '' : null, book.language && !/^english$/i.test(book.language) ? book.language : null, `${fmt(book.characters)} characters`].filter((x) => x !== null).join(' · '));
+        line.append([by ? '' : null, book.language || null, `${fmt(book.characters)} characters`].filter((x) => x !== null).join(' · '));
         info.appendChild(line);
         const button = el('button', '', 'Locate it');
         button.type = 'button';
