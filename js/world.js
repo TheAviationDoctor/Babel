@@ -436,13 +436,13 @@
       const me = this._look(cell.dh, cell.df), east = this._look(cell.dh + 1, cell.df), west = this._look(cell.dh - 1, cell.df);
       // the next hexagons' lamps light the vestibules either side, and so this hexagon's doorways
       cell.looks = { me, east, west, flickers: [me, east, west].some((k) => k.lamps.some((l) => l.flicker)) };
-      // the tiles run on unbroken along a floor, from hexagon to vestibule to hexagon, so their
-      // pattern starts where the floor's does, not where the hexagon's
+      // the tiles and the skirting boards run on unbroken along a floor, from hexagon to vestibule
+      // to hexagon, so their pattern starts where the floor's does, not where the hexagon's
       const fk = this.floor(cell.df).key;
       for (const [k, kind] of PATINAS) {
         const un = cell.look.mats[k].uniforms;
         un.uSeed.value.fromArray(me.seed);
-        if (kind === 'tiles') un.uSeed.value.set(fk[0] / 4294967296, fk[1] / 4294967296, 0, me.seed[3]);
+        if (kind === 'tiles' || kind === 'wood') un.uSeed.value.set(fk[0] / 4294967296, fk[1] / 4294967296, 0, me.seed[3]);
         un.uSeedEast.value.fromArray(east.seed);
         un.uPatina.value.fromArray(me[kind]);
         un.uPatinaEast.value.fromArray(east[kind]);
