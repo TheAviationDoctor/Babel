@@ -10,6 +10,7 @@ window.BABEL_PAINTINGS = [
 {"file":"John Martin - The Fall of Babylon (1819).jpeg","artist":"John Martin","title":"The Fall of Babylon","year":"1819","id":"43c1a3844f8798436974","width":1024,"height":1024,"colours":128},
 {"file":"John Martin - Belshazzar’s Feast (1820).jpeg","artist":"John Martin","title":"Belshazzar’s Feast","year":"1820","id":"329a98290d5af84add1f","width":1024,"height":1024,"colours":128},
 {"file":"John Martin - Destruction of Pompeii and Herculaneum (1821).jpeg","artist":"John Martin","title":"Destruction of Pompeii and Herculaneum","year":"1821","id":"d997cc26aa4f7057bcaa","width":1024,"height":1024,"colours":128},
+{"file":"John Martin - Destruction of Pompeii and Herculaneum (1821).jpg","artist":"John Martin","title":"Destruction of Pompeii and Herculaneum","year":"1821","id":"d997cc26aa4f7057bcaa","width":1024,"height":1024,"colours":128},
 {"file":"John Martin - The Seventh Plague (1823).jpeg","artist":"John Martin","title":"The Seventh Plague","year":"1823","id":"adcc1229361489cbc17c","width":1024,"height":1024,"colours":128},
 {"file":"Nicolas Poussin - Et in Arcadia Ego (1838).jpg","artist":"Nicolas Poussin","title":"Et in Arcadia Ego","year":"1838","id":"8397d5bd7dea515651da","width":1024,"height":1024,"colours":128},
 {"file":"John Martin - Destruction of Tyre (1840).jpeg","artist":"John Martin","title":"Destruction of Tyre","year":"1840","id":"16da05de11f5fb9e01ef","width":1024,"height":1024,"colours":128},

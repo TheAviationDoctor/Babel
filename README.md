@@ -53,10 +53,10 @@ Using the default settings from `config.js`:
 
 - There are `2^3,670,011 ≈ 2.49 × 10^1,104,783` hexagons per floor and `2^3,670,012 ≈ 4.97 × 10^1,104,783` floors. That's twice as many floors as hexagons per floor, which is as even as it gets: the `2^7,340,023` hexagons are an odd power of 2, and thus cannot be split into two equal powers of 2.
 
-- A floor is 2.61 meters high, and a hexagon (with its vestibule) 8.83 meters long, so despite having twice as many floors as hexagons per floor, the Library is about 1.7 times longer than it is tall. Seen from the side, the Library would look like a rectangle. Of the possible shape arrangements that the number of hexagons allows, this one is the nearest to being a square.
+- A floor is 3.56 meters high, and a hexagon (with its vestibule) 10.04 meters long, so despite having twice as many floors as hexagons per floor, the Library is about 1.4 times longer than it is tall. Seen from the side, the Library would look like a rectangle. Of the possible shape arrangements that the number of hexagons allows, this one is the nearest to being a square.
 
 > [!TIP] 
-> The Library spans `2.3 × 10^1,104,768` light-years from east to west and `1.4 × 10^1,104,768` light-years from top to bottom. The Library could fit our observable universe `2.5 × 10^1,104,757` times from east to west and `1.5 × 10^1,104,757` times from top to bottom. At walking pace, walking the length of one floor would take about `5 × 10^1,104,776` years.
+> The Library spans `2.6 × 10^1,104,768` light-years from east to west and `1.9 × 10^1,104,768` light-years from top to bottom. The Library could fit our observable universe `2.8 × 10^1,104,757` times from east to west and `2.0 × 10^1,104,757` times from top to bottom. At walking pace, walking the length of one floor would take about `5 × 10^1,104,776` years.
 
 ## Is the Library three-dimensional?
 

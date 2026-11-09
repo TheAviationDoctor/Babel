@@ -529,8 +529,11 @@
     // where the next floor's begins (behind the slab of a landing runs the wall of the floor below:
     // were the two to overlap there, they would flicker as each showed through the other)
     well.cylinder(cx, cz, R, -Math.PI / 2 + gamma, (3 * Math.PI) / 2 - gamma, 0, d.Hf, true, 64);
-    // flat wall above the opening (stair side)
-    well.poly([[ox0, d.doorH, zc], [ox1, d.doorH, zc], [ox1, d.Hf, zc], [ox0, d.Hf, zc]], [0, 0, 1]);
+    // flat wall above the opening (stair side). It lies in the same plane as the vestibule's wall
+    // above the opening, which faces the other way, so it is drawn from the stair side only (seen
+    // from both, the two would flicker as each showed through the other).
+    const face = new Builder();
+    face.poly([[ox0, d.doorH, zc], [ox1, d.doorH, zc], [ox1, d.Hf, zc], [ox0, d.Hf, zc]], [0, 0, 1]);
     // central column, likewise from floor to floor
     steps.cylinder(cx, cz, d.colR, 0, 2 * Math.PI, 0, d.Hf, false, 20);
     // landing (part of this floor), with its underside and edges
@@ -562,7 +565,7 @@
 
     return {
       wood: wood.geometry(), plaster: plaster.geometry(), tiles: tiles.geometry(),
-      well: well.geometry(), steps: steps.geometry(),
+      well: well.geometry(), wellFace: face.geometry(), steps: steps.geometry(),
     };
   }
 
@@ -1227,6 +1230,7 @@
       screen: new THREE.MeshBasicMaterial({ map: textures.screen, fog: true }),
       signs: signMaterial(textures.signs, L.vestibule, { colors: [null, null, null, SCREEN], ambient: 0.08 }),
       wellPlaster: archMaterial(textures.plaster, [0.4, perFloor(0.4)], 0xc4b597, L.well, { side: THREE.DoubleSide, ambient: 0.08 }),
+      wellFace: archMaterial(textures.plaster, [0.4, perFloor(0.4)], 0xc4b597, L.well, { ambient: 0.08 }),
       wellStone: archMaterial(textures.stone, [0.7, perFloor(0.7)], 0xdccdb0, L.well, { side: THREE.DoubleSide, ambient: 0.08 }),
       cellWood: archMaterial(textures.wood, [0.9, 2.2], 0xffffff, L.cell, { vertexColors: true, falloff: 1.1, ambient: 0.05 }),
       doorWood: archMaterial(textures.wood, [0.9, 2.2], 0xb0845a, L.door, { cellMatrix: true }),
@@ -1246,7 +1250,7 @@
     const geometries = {
       hexWood: hex.wood, hexPlaster: hex.plaster, hexTiles: hex.tiles,
       vesWood: ves.wood, vesPlaster: ves.plaster, vesTiles: ves.tiles,
-      wellPlaster: ves.well, wellStone: ves.steps,
+      wellPlaster: ves.well, wellFace: ves.wellFace, wellStone: ves.steps,
       lampGlow: buildLampGlow(d),
       lampWash: d.roomH > d.shelfTop + 0.2 ? buildLampWash(d) : null,
       pictureGlow: d.painting ? buildPictureGlow(d) : null,

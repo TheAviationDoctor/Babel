@@ -39,7 +39,7 @@
       this.ch = 0; this.cf = 0;
       this.x = 0; this.y = 0; this.z = 0;
       this.yaw = 0; this.pitch = 0;
-      this.speed = 1.35;
+      this.speed = 1.55; // metres a second, walking (hurrying, 1.9 times as fast)
       this.capsLock = false;
       this.keys = new Set();
       this.sensitivity = 1;
