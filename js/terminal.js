@@ -660,7 +660,7 @@
       if (!books.length) {
         $('shelf-intro').textContent = 'This Library has no collection of books yet. To give it one, put books, as Markdown (.md) or plain-text (.txt) files, in its books/uncompressed folder and run node books/shelve.js.';
         $('shelf-list').hidden = true;
-        document.querySelector('#panel-books .shelf-tools').hidden = true;
+        document.querySelector('#browse-books .shelf-tools').hidden = true;
         return;
       }
       for (const b of books) b.search = fold([b.title, b.author, b.language].join(' '));
@@ -724,7 +724,7 @@
       $('book-how').hidden = false;
       $('book-how').textContent = 'Taking it down from the shelf…';
       $('book-parts').textContent = '';
-      $('book-found-title').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      this._showChoice($('shelf-list'), 'shelf:' + book.file, $('book-results'));
       let text;
       try {
         text = await collection.text(book);
@@ -746,7 +746,18 @@
       this._placeBook();
       this._markCurrent();
       $('book-results').hidden = false;
-      $('book-found-title').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      this._showChoice($('shelf-list'), entry.key, $('book-results'));
+    }
+
+    /**
+     * Keeps the book or painting chosen in a list in view, and where it is below the list: the
+     * list grows shorter to give that room (see css/style.css), so this scrolls the tab only on
+     * a screen too small for both.
+     */
+    _showChoice(list, key, results) {
+      const li = [...list.children].find((x) => x.dataset.key === key);
+      if (li) li.scrollIntoView({ block: 'nearest' });
+      results.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
 
     /** Runs the shelving backwards for every part of the book, its pages after the text blank. */
@@ -893,7 +904,7 @@
       $('painting-found-title').replaceChildren('Where ', el('cite', '', painting.title), ' hangs');
       $('painting-how').hidden = false;
       $('painting-how').textContent = 'Taking it down from the wall…';
-      $('painting-found-title').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      this._showChoice($('gallery-list'), painting.id, $('painting-results'));
       let pixels;
       try {
         pixels = await gallery.pixels(painting, this.lib);
@@ -908,6 +919,7 @@
       drawPainting($('painting-preview'), pixels, this.lib);
       this._placePainting();
       this._markGallery();
+      this._showChoice($('gallery-list'), painting.id, $('painting-results')); // now with the painting, taller
     }
 
     _placePainting() {

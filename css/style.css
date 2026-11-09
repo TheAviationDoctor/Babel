@@ -316,12 +316,13 @@ input[type="text"]:focus, input[type="number"]:focus { outline: none; border-bot
 .books.shelf li { padding: 0.55rem 0; }
 .books.shelf cite { font-size: var(--step-0); }
 .books.shelf { max-height: min(26rem, 52vh); overflow: auto; overscroll-behavior: contain; padding-right: 0.6rem; border-bottom: 1px solid rgba(212, 227, 220, 0.14); }
-/* in the Browse tab, the list of books or paintings takes the room the tab leaves it */
-#panel-books, #panel-books > .subpanel { display: flex; flex-direction: column; }
-#panel-books > *, #panel-books > .subpanel > * { flex: none; }
-#panel-books > .subpanel { flex: 1 1 auto; min-height: 0; gap: 1.4rem; }
-#panel-books > .subpanel[hidden] { display: none; }
-#panel-books > .subpanel > .books.shelf { flex: 1 1 auto; min-height: min(12rem, 40vh); max-height: none; }
+/* in the Browse tab, the list of books or paintings takes the room the tab leaves it, and
+   grows shorter to give room to where the one chosen is, so that its buttons show without scrolling */
+#panel-browse, #panel-browse > .subpanel { display: flex; flex-direction: column; }
+#panel-browse > *, #panel-browse > .subpanel > * { flex: none; }
+#panel-browse > .subpanel { flex: 1 1 auto; min-height: 0; gap: 1.4rem; }
+#panel-browse > .subpanel[hidden] { display: none; }
+#panel-browse > .subpanel > .books.shelf { flex: 1 1 auto; min-height: min(7rem, 20vh); max-height: none; }
 /* a painting found: how it looks in the Library's colours, framed, beside where it hangs */
 .painting-found { display: flex; flex-wrap: wrap; gap: 1rem 1.4rem; align-items: flex-start; }
 .painting-found[hidden] { display: none; }
