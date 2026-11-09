@@ -9,7 +9,7 @@
   const $ = (id) => document.getElementById(id);
   const isTouch = matchMedia('(hover: none) and (pointer: coarse)').matches;
 
-  let raw, lib, assets, world, player, renderer, scene, camera, reflector, sinkReflector, figure, figureLight, figureKey, terminal;
+  let raw, lib, assets, world, player, renderer, scene, camera, reflector, sinkReflector, figure, figureLight, figureKey, terminal, music;
   let mode = 'walking';
   let gaze = null, gazeKey = '';
   let reading = null;
@@ -71,6 +71,14 @@
     player.sensitivity = lib.config.lookSensitivity || 1;
     player.onTap = () => { if (mode === 'walking') interact(); };
     player.doorOpen = (off) => world.isDoorOpen(player.ch + off, player.cf);
+
+    // Each hexagon's music. Browsers let a page make no sound until the reader clicks, taps or
+    // presses a key, so it begins then. Turned off with M, it stays off on the next visit.
+    let musicOn = lib.config.music;
+    try { const kept = localStorage.getItem('babel-music'); if (kept) musicOn = kept === 'on'; } catch (e) { /* as config.js says */ }
+    music = new Babel.Music({ volume: lib.config.volume, on: musicOn });
+    for (const type of ['pointerdown', 'keydown', 'touchend']) window.addEventListener(type, () => music.start(), true);
+    document.addEventListener('visibilitychange', () => music.setVisible(!document.hidden));
 
     // The mirror in the nearest vestibule. Its camera sees layer 1, where the reader's own figure lives.
     const d = assets.dims;
@@ -707,6 +715,13 @@
 
     window.addEventListener('keydown', (e) => {
       const inField = e.target && (e.target.tagName === 'INPUT');
+      // M turns the music off and on, anywhere but in a field of text
+      if (e.code === 'KeyM' && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable))) {
+        const on = music.setOn(!music.on);
+        try { localStorage.setItem('babel-music', on ? 'on' : 'off'); } catch (err) { /* not remembered */ }
+        toast(on ? 'Music on. Press M to turn it off.' : 'Music off. Press M to turn it back on.', 2500);
+        return;
+      }
       if (mode === 'walking') {
         if (e.code === 'KeyE') interact();
       } else if (mode === 'reading') {
@@ -731,7 +746,8 @@
       // (a link that could not be followed has said why: that stays on screen instead)
       if (!went && !/^#(text|book|secret|painting)=/.test(location.hash)) {
         toast((isTouch ? 'Drag on the right to look around, hold and slide on the left to walk, and tap a book to read it.'
-          : 'Walk with W A S D, and press E to take down a book.') + ' The catalogue in each vestibule tells you where you are.', 9000);
+          : 'Walk with W A S D, and press E to take down a book.') + ' The catalogue in each vestibule tells you where you are.'
+          + (isTouch || !music.on ? '' : ' M turns the music off.'), 9000);
       }
     });
   }
@@ -787,6 +803,13 @@
     player.update(dt);
     world.update(player.ch, player.cf);
     world.tick(dt);
+    // the music of the hexagons the reader is among, each as near as they are
+    if (music.ctx && music.ctx.state === 'running') {
+      music.update(Babel.Music.hearing(player.x, player.y, player.ch, player.cf, assets.dims).map((s) => {
+        const fp = world.fingerprint(s.dh, s.df);
+        return { key: fp.join(','), fp, weight: s.weight };
+      }));
+    }
     const lit = lightOnReader();
     figureLight.intensity = 0.8 * lit;
     figureKey.intensity = 0.9 * lit;

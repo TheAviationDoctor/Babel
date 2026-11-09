@@ -72,4 +72,11 @@ window.BABEL_CONFIG = {
     quoteDuration: 10, // how long each sentence stays, in seconds, from 1 to 600
     quoteInterval: 5, // how long until the next one, in seconds, from 0 to 600
   },
+
+  // What the reader hears: soft music that each hexagon makes of its own, and that changes from
+  // one hexagon to the next as the reader walks. M turns it off and on.
+  sound: {
+    music: true, // false for silence, until M is pressed
+    volume: 0.5, // from 0 to 1
+  },
 };

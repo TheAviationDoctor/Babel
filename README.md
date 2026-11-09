@@ -27,6 +27,7 @@ No installation required: everything is self-contained HTML/JS/CSS. Just visit t
 | Put a book back | `Esc` or `E` |
 | Let go of the mouse | `Esc` (click to take it back) |
 | Wake from a dream | click or `Esc` |
+| Turn the music off or on | `M` |
 
 On a phone or tablet, drag on the right of the screen to look, hold and slide on the left to walk, and tap to interact with objects. Tap again to wake from a dream.
 
@@ -103,6 +104,8 @@ Everything about the Library's size lives in `config.js`, which is read once whe
 | `view.fieldOfView` | 72 | How wide the view is, in degrees, from 30 to 120. |
 | `dreams.quoteDuration` | 10 | How long each sentence of a dream stays, in seconds, once it has faded in, from 1 to 600. See [Dreams](#dreams). |
 | `dreams.quoteInterval` | 5 | How long after a sentence has faded out the next one begins to fade in, in seconds, from 0 to 600. |
+| `sound.music` | `true` | Whether the hexagons play their music. `false` for silence, until `M` is pressed. See [Music](#music). |
+| `sound.volume` | 0.5 | How loud the music is, from 0 to 1. |
 
 A book may hold no more than `2^24 = 16,777,216` characters and a hexagon no more `2^16 = 65,536` books. The rooms are built to fit: the number of books per shelf sets the width of each hexagon, and the number of shelves the height of its bookcases, under a ceiling at least 3.2 metres high. If a value is invalid or a setting's name is misspelt, the page says which one and why.
 
@@ -259,6 +262,12 @@ The visuals and text inside a dream are deterministically seeded from the addres
 
 The sentences are grammatical but not necessarily sensible. A small English grammar (verbs agreeing with their subjects, *a* and *an*, plurals, tenses, relative clauses) builds them from some 450 single words drawn from the lexical fields of Algernon Blackwood, Jorge Luis Borges, Italo Calvino, Ted Chiang, Julio Cortázar, Brian Evenson, Thomas Ligotti, H. P. Lovecraft, Arthur Machen, Guy de Maupassant, China Miéville, Edgar Allan Poe, Clark Ashton Smith and Jeff VanderMeer. No phrase, name or invented place of theirs is used. No copyrighted materials are used.
 
+## Music
+
+Each hexagon plays its own soft music, made as it plays: nothing is downloaded. Like the hexagon's patina and its lamps, the music comes from a hash of its address, so it is the same on every visit. Each hexagon has its own key and mode (Lydian, Ionian, Mixolydian, Dorian or Aeolian). Over a quiet bass, a pad of four voices holds an open chord and drifts every half-minute or so to another chord of the mode. Now and then a soft bell sounds from the same scale, alone or in a short figure, and every so often two high, glassy tones swell and fade. Beneath it all is the faint breath of air in the shaft, and everything rings in a long reverb.
+
+Walk from one hexagon to the next and the music of the one fades into the music of the other along the vestibule between them; climb the stairs and it fades into the next floor's. Browsers only let a page make sound once you have clicked, tapped or pressed a key, so the music begins then. `M` turns it off and on, and the Library remembers your choice. `sound.music` and `sound.volume` in `config.js` set whether it plays at first and how loud.
+
 ## Files
 
 In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-27.1`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
@@ -278,6 +287,7 @@ In `index.html`, every file name is followed by `?v=` and a version, such as `js
 | `js/textures.js` | Wood, plaster, stone, floor tiles and leather spines, painted at start-up |
 | `js/quotes.js` | The sentences of dreams: a small English grammar and its vocabulary |
 | `js/dream.js` | The moving picture of dreams, drawn by one shader |
+| `js/music.js` | The music of the hexagons, made as it plays |
 | `js/main.js` | Start-up, reading, sleep |
 | `lib/` | three.js r147 and its `Reflector` (MIT licence, see `lib/three.LICENSE`) |
 | `tests/library.test.js` | Tests of the mathematics |
