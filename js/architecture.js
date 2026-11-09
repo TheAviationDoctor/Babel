@@ -8,8 +8,8 @@
  * endless row of hexagons; the spiral stair in every vestibule joins the floors.
  *
  * Every hexagon is identical, so lighting is computed in the shaders from the
- * fragment's position within its cell: the two lamps of each hexagon light it the
- * same way everywhere in the Library.
+ * fragment's position within its cell: the lamps over the bookcases of each hexagon
+ * light it the same way everywhere in the Library.
  */
 (function () {
   'use strict';
@@ -68,10 +68,11 @@
     d.signDepth = 0.018;
     d.signY = d.doorH + d.lintelH / 2;
 
-    // lamps: two per hexagon, placed across the floor's east–west axis, above the walkway
-    const mid = (d.shaftA + d.aIn) / 2;
-    d.lampZ = mid / (SQ3 / 2);
-    d.lampY = Math.min(d.roomH - 0.3, 2.5); // hung low from a high ceiling
+    // lamps: one on the wall above each bookcase, like the picture lamp in the vestibule, shining
+    // down on the books: the height of its underside, how far it stands out from the wall, half its length
+    d.lampY = Math.min(d.shelfTop + 0.15, d.roomH - 0.12);
+    d.lampOut = 0.3;
+    d.lampHalfW = Math.min(0.4, d.shelfLen / 2 - 0.2);
 
     // closets, mirror, stairwell (all within the vestibule)
     d.closetW = 0.8;
@@ -341,6 +342,14 @@
         wood.reset();
       } else if (wallIndex >= 0) {
         buildShelfUnit(wood, m, d);
+        // the lamp above the bookcase: a bar on two arms from the wall (its glowing underside is the World's, lit or not)
+        {
+          const y = d.lampY, z = d.aIn - d.lampOut, lw = d.lampHalfW;
+          wood.setMatrix(m);
+          wood.box(-lw - 0.01, y, z - 0.025, lw + 0.01, y + 0.045, z + 0.025, 'xXyYzZ');
+          for (const ax of [-lw * 0.6, lw * 0.6]) wood.box(ax - 0.008, y + 0.015, z + 0.025, ax + 0.008, y + 0.03, d.aIn, 'xXyYz');
+          wood.reset();
+        }
         if (above) {
           // plaster from the top of the bookcase to the ceiling, and a moulding where they meet
           plaster.setMatrix(m);
@@ -392,27 +401,37 @@
     wood.reset();
   }
 
-  /** Lamps: two spheres hung from the ceiling, with their cords. */
-  /** A lamp: a globe on its rod from the ceiling, at the origin's height of a lamp (placed by the World, twice in each hexagon). */
-  function buildLamp(d) {
-    const b = new Builder();
-    {
-      const cx = 0, cz = 0, cy = d.lampY, r = 0.1;
-      const rings = 8, segs = 14;
-      for (let i = 0; i < rings; i++) {
-        const t0 = (Math.PI * i) / rings, t1 = (Math.PI * (i + 1)) / rings;
-        for (let k = 0; k < segs; k++) {
-          const p0 = (2 * Math.PI * k) / segs, p1 = (2 * Math.PI * (k + 1)) / segs;
-          const pt = (t, p) => [Math.sin(t) * Math.cos(p), Math.cos(t), Math.sin(t) * Math.sin(p)];
-          const a = pt(t0, p0), bb = pt(t1, p0), c = pt(t1, p1), e = pt(t0, p1);
-          const P = (u) => [cx + r * u[0], cy + r * u[1], cz + r * u[2]];
-          b.triSmooth(P(a), P(c), P(bb), a, c, bb);
-          b.triSmooth(P(a), P(e), P(c), a, e, c);
-        }
-      }
-      b.box(cx - 0.006, cy + r, cz - 0.006, cx + 0.006, d.roomH, cz + 0.006, 'xXzZ');
-    }
+  /**
+   * The glowing underside of a lamp above a bookcase, in the frame of the wall it hangs on (x
+   * along the wall, z towards it): the World turns one to each bookcase, so each can be lit apart.
+   */
+  function buildLampGlow(d) {
+    const b = new Builder(), y = d.lampY, z = d.aIn - d.lampOut, lw = d.lampHalfW;
+    b.box(-lw, y - 0.002, z - 0.016, lw, y, z + 0.016, 'y');
     return b.geometry();
+  }
+
+  /**
+   * The wash of light on the wall round a lamp above a bookcase, in the same frame as its glowing
+   * underside: from the top of the bookcase (below which the cornice would hide it) up the plaster.
+   */
+  function buildLampWash(d) {
+    const lw = d.lampHalfW, yc = d.lampY + 0.02, z = d.aIn - 0.002;
+    const yA = yc - lw, yB = yc + lw; // the texture's extent: the bar across its middle
+    const y0 = Math.max(yA, d.shelfTop + 0.03), y1 = Math.min(yB, d.roomH - 0.08), v0 = (y0 - yA) / (yB - yA), v1 = (y1 - yA) / (yB - yA);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute([-2 * lw, y0, z, 2 * lw, y0, z, 2 * lw, y1, z, -2 * lw, y1, z], 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute([0, v0, 1, v0, 1, v1, 0, v1], 2));
+    g.setIndex([0, 2, 1, 0, 3, 2]);
+    return g;
+  }
+
+  /** Where the light of each lamp above a bookcase comes from, in cell coordinates: a little in front of and below it, where it shines. */
+  function lampLights(d) {
+    return d.shelvedSides.map((j) => {
+      const f = (j * Math.PI) / 3, r = d.aIn - d.lampOut - 0.15;
+      return new THREE.Vector3(r * Math.cos(f), d.lampY - 0.05, r * Math.sin(f));
+    });
   }
 
   /** The glowing underside of the picture lamp in the vestibule. */
@@ -769,6 +788,7 @@
     uniform vec4 uLights[4];
     uniform vec3 uLightColors[4];
     uniform float uGain[4]; // per light, for lights that can be dimmed or shut off
+    uniform float uDown[4]; // per light: 1 for a lamp that shines down from under its shade, 0 for one that shines all round
     uniform float uAmbient;
     uniform float uFalloff;
     uniform float uExposure;
@@ -779,7 +799,9 @@
         float d2 = max(dot(L, L), 0.01);
         float ndl = dot(n, L) * inversesqrt(d2);
         float wrap = clamp((ndl + 0.25) / 1.25, 0.0, 1.0);
-        sum += uLightColors[i] * (uLights[i].w * uGain[i] * wrap / (1.0 + d2 * uFalloff));
+        // under its shade, a lamp lights what is below it; what is above, only a little
+        float down = mix(1.0, 0.3 + 0.7 * smoothstep(-0.15, 0.35, L.y * inversesqrt(d2)), uDown[i]);
+        sum += uLightColors[i] * (uLights[i].w * uGain[i] * wrap * down / (1.0 + d2 * uFalloff));
       }
       return sum;
     }
@@ -1055,6 +1077,7 @@
       uLights: { value: lights },
       uLightColors: { value: [0, 1, 2, 3].map((i) => (opts.colors && opts.colors[i]) || LAMP.clone()) },
       uGain: { value: [1, 1, 1, 1] },
+      uDown: { value: opts.down || [0, 0, 0, 0] },
       uAmbient: { value: opts.ambient !== undefined ? opts.ambient : 0.05 },
       uFalloff: { value: opts.falloff !== undefined ? opts.falloff : 0.55 },
       uExposure: { value: opts.exposure !== undefined ? opts.exposure : 1.35 },
@@ -1103,9 +1126,9 @@
     return new THREE.ShaderMaterial({ uniforms, vertexShader: SIGN_VERT, fragmentShader: PAINT_FRAG, fog: true });
   }
 
-  function bookMaterial(map, lights, variants) {
+  function bookMaterial(map, lights, variants, opts) {
     const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog]);
-    Object.assign(uniforms, lightingUniforms(lights, {}), { map: { value: map }, uVariants: { value: variants } });
+    Object.assign(uniforms, lightingUniforms(lights, opts || {}), { map: { value: map }, uVariants: { value: variants } });
     return new THREE.ShaderMaterial({ uniforms, vertexShader: BOOK_VERT, fragmentShader: BOOK_FRAG, fog: true });
   }
 
@@ -1113,8 +1136,11 @@
   function lightSets(d) {
     const V = (x, y, z, w) => new THREE.Vector4(x, y, z, w);
     return {
-      // the two lamps, bright enough for a tall room
-      hexagon: [V(0, d.lampY, d.lampZ, 1.4), V(0, d.lampY, -d.lampZ, 1.4), V(0, d.lampY, 0, 0), V(0, 0, 0, 0)],
+      // the lamps above the bookcases (as many as there are bookcases)
+      hexagon: [0, 1, 2, 3].map((i) => {
+        const p = lampLights(d)[i];
+        return p ? V(p.x, p.y, p.z, 0.8) : V(0, 0, 0, 0);
+      }),
       vestibule: [
         V(d.hallX0 - 0.25, 1.8, 0, 0.72),
         V(d.hallX1 + 0.25, 1.8, 0, 0.72),
@@ -1188,10 +1214,12 @@
     const woodScale = [Math.max(1, Math.round(d.Dx * 0.9)) / d.Dx, 2.2];
     // up the stairwell, a whole number of repeats of a texture to a floor, so that it runs on from floor to floor
     const perFloor = (scale) => Math.max(1, Math.round(d.Hf * scale)) / d.Hf;
+    // the lamps above the bookcases shine down
+    const shaded = [1, 1, 1, 1];
     const materials = {
-      hexWood: archMaterial(textures.wood, woodScale, 0xb0845a, L.hexagon, { patina: 'wood', path, doors: doors(L.walls, d.aIn) }),
-      hexPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.hexagon, { patina: 'plaster', path, doors: doors(L.walls, d.aIn) }),
-      hexTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.hexagon, { patina: 'tiles', path, doors: doors(L.vestibule, d.aIn - 0.3) }),
+      hexWood: archMaterial(textures.wood, woodScale, 0xb0845a, L.hexagon, { patina: 'wood', path, doors: doors(L.walls, d.aIn), down: shaded }),
+      hexPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.hexagon, { patina: 'plaster', path, doors: doors(L.walls, d.aIn), down: shaded }),
+      hexTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.hexagon, { patina: 'tiles', path, doors: doors(L.vestibule, d.aIn - 0.3), down: shaded }),
       vesWood: archMaterial(textures.wood, woodScale, 0xb0845a, L.walls, Object.assign({ patina: 'wood', path }, screenLit)),
       vesPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.walls, Object.assign({ patina: 'plaster', path }, screenLit)),
       vesTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.vestibule, Object.assign({ patina: 'tiles', path }, screenLit)),
@@ -1205,16 +1233,22 @@
       cellSoft: archMaterial(textures.plaster, [0.4, 0.4], 0xffffff, L.cell, { vertexColors: true, falloff: 1.1, ambient: 0.05 }),
       shade: new THREE.MeshBasicMaterial({ color: 0xf5c987, side: THREE.DoubleSide, fog: true }),
       bulb: new THREE.MeshBasicMaterial({ color: 0xfff2d8, fog: true }),
-      books: bookMaterial(textures.spines, L.hexagon, Babel.Textures.SPINE_VARIANTS),
+      books: bookMaterial(textures.spines, L.hexagon, Babel.Textures.SPINE_VARIANTS, { down: shaded }),
       lamp: new THREE.MeshBasicMaterial({ color: 0xffe9c4, fog: true }),
       mirrorDark: new THREE.MeshBasicMaterial({ color: 0x1c1a17, fog: true }),
       glow: new THREE.SpriteMaterial({ map: textures.glow, color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending, fog: true }),
+      // drawn over the wall it lies on, not into it
+      lampWash: new THREE.MeshBasicMaterial({
+        map: textures.wash, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: true,
+        side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4,
+      }),
     };
     const geometries = {
       hexWood: hex.wood, hexPlaster: hex.plaster, hexTiles: hex.tiles,
       vesWood: ves.wood, vesPlaster: ves.plaster, vesTiles: ves.tiles,
       wellPlaster: ves.well, wellStone: ves.steps,
-      lamp: buildLamp(d),
+      lampGlow: buildLampGlow(d),
+      lampWash: d.roomH > d.shelfTop + 0.2 ? buildLampWash(d) : null,
       pictureGlow: d.painting ? buildPictureGlow(d) : null,
       book: buildBook(d),
       mirror: new THREE.PlaneGeometry(d.mirrorW, d.mirrorH),

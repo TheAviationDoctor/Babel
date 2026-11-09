@@ -302,17 +302,54 @@
   }
 
   /** Soft radial glow for the lamps. */
+  /**
+   * A texture written texel by texel. Glows are written so rather than painted with a canvas
+   * gradient: a browser may dither a gradient, and where a glow is faint, the dithered texels
+   * come back from the canvas in stray colours, which speckle the glow.
+   */
+  function dataTexture(data, w, h) {
+    const t = new THREE.DataTexture(data, w, h);
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    t.magFilter = THREE.LinearFilter;
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.generateMipmaps = true;
+    t.needsUpdate = true;
+    return t;
+  }
+
+  /** A soft round glow, warm white at its heart, for the halo round a lamp. */
   function glow() {
-    const s = 128, c = canvas(s, s), g = c.getContext('2d');
-    const grd = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-    grd.addColorStop(0, 'rgba(255,224,170,1)');
-    grd.addColorStop(0.16, 'rgba(255,200,130,0.62)');
-    grd.addColorStop(0.4, 'rgba(255,172,96,0.2)');
-    grd.addColorStop(0.75, 'rgba(255,160,80,0.05)');
-    grd.addColorStop(1, 'rgba(255,150,70,0)');
-    g.fillStyle = grd;
-    g.fillRect(0, 0, s, s);
-    return toTexture(c, false);
+    const s = 128, data = new Uint8Array(s * s * 4);
+    // distance from the middle (0 to 1): red, green, blue, opacity
+    const stops = [[0, 255, 224, 170, 1], [0.16, 255, 200, 130, 0.62], [0.4, 255, 172, 96, 0.2], [0.75, 255, 160, 80, 0.05], [1, 255, 150, 70, 0]];
+    for (let j = 0; j < s; j++) {
+      for (let i = 0; i < s; i++) {
+        const r = Math.hypot(i + 0.5 - s / 2, j + 0.5 - s / 2) / (s / 2);
+        let k = 0;
+        while (k < stops.length - 2 && r > stops[k + 1][0]) k++;
+        const A = stops[k], B = stops[k + 1], t = Math.min(1, Math.max(0, (r - A[0]) / (B[0] - A[0])));
+        for (let c = 0; c < 4; c++) data[(j * s + i) * 4 + c] = Math.round((A[c + 1] + (B[c + 1] - A[c + 1]) * t) * (c === 3 ? 255 : 1));
+      }
+    }
+    return dataTexture(data, s, s);
+  }
+
+  /**
+   * The light a lamp above a bookcase throws on the wall round it: as bright all along its bar
+   * (the middle half of the texture's width), and fading away from it.
+   */
+  function wash() {
+    const w = 256, h = 128, data = new Uint8Array(w * h * 4);
+    for (let j = 0; j < h; j++) {
+      for (let i = 0; i < w; i++) {
+        // in half-lengths of the bar: the texture is 4 across and 2 high, the bar from −1 to 1 across its middle
+        const x = ((i + 0.5) / w - 0.5) * 4, y = ((j + 0.5) / h - 0.5) * 2;
+        const a = Math.pow(Math.max(0, 1 - Math.hypot(Math.max(0, Math.abs(x) - 1), y)), 2.4);
+        const o = (j * w + i) * 4;
+        data[o] = 255; data[o + 1] = 200; data[o + 2] = 140; data[o + 3] = Math.round(255 * a);
+      }
+    }
+    return dataTexture(data, w, h);
   }
 
   Babel.Textures = {
@@ -329,6 +366,7 @@
         screen: screen(),
         signs: signs(),
         glow: glow(),
+        wash: wash(),
       };
     },
   };

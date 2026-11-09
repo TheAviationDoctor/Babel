@@ -255,15 +255,20 @@
         group.add(new THREE.Mesh(G[k], mat));
         if (ages) { look.mats[k] = mat; (k.startsWith('hex') ? look.hex : look.ves).push(mat); }
       }
-      // the two lamps of the hexagon, the first towards +z as its light is
-      for (const s of [1, -1]) {
-        const globe = new THREE.Mesh(G.lamp, M.lamp.clone());
-        globe.position.z = s * d.lampZ;
-        const glow = new THREE.Sprite(M.glow.clone());
-        glow.position.set(0, d.lampY, s * d.lampZ);
-        glow.scale.set(1.5, 1.5, 1.5);
-        group.add(globe, glow);
-        look.lamps.push({ globe, glow });
+      // the lamps above the bookcases, in the order of their lights: each one's glowing underside
+      // and the light it throws on the wall round it, both turned to its wall
+      for (const j of d.shelvedSides) {
+        const turn = Math.PI / 2 - (j * Math.PI) / 3;
+        const under = new THREE.Mesh(G.lampGlow, M.lamp.clone());
+        under.rotation.y = turn;
+        group.add(under);
+        let wash = null;
+        if (G.lampWash) {
+          wash = new THREE.Mesh(G.lampWash, M.lampWash.clone());
+          wash.rotation.y = turn;
+          group.add(wash);
+        }
+        look.lamps.push({ under, wash });
       }
       if (G.pictureGlow) group.add(new THREE.Mesh(G.pictureGlow, M.lamp));
       const mirror = new THREE.Mesh(G.mirror, M.mirrorDark);
@@ -409,26 +414,32 @@
     /* ---------------- each hexagon's own look ---------------- */
 
     /**
-     * How time and use have marked a hexagon, and how its two lamps burn: drawn from its
-     * fingerprint, so the same on every visit. Cosmetic, like the spines: it says nothing of
-     * the books. Most lamps burn a little warmer or cooler, brighter or dimmer than others;
-     * about one hexagon in forty has a lamp that flickers, and one in two hundred a lamp gone out.
+     * How time and use have marked a hexagon, and how the lamps above its bookcases burn: drawn
+     * from its fingerprint, so the same on every visit. Cosmetic, like the spines: it says nothing
+     * of the books. Most lamps burn a little warmer or cooler, brighter or dimmer than others;
+     * about one hexagon in thirty has a lamp that flickers, and one in a hundred and fifty a lamp gone out.
      */
     _look(dh, df) {
       const fp = this.fingerprint(dh, df), U = BabelCore.util;
       const rng = U.sfc32(fp[0] ^ 0x51ed270b, fp[1], 0x2545f491, 0x9e3779b9), u = () => U.unit(rng);
-      const lamps = [0, 1].map(() => ({ gain: 0.84 + 0.26 * u(), warmth: 2 * u() - 1, flicker: 0, dark: false }));
-      const fault = u(), which = u() < 0.5 ? 0 : 1;
-      if (fault < 1 / 200) { lamps[which].dark = true; lamps[which].gain = 0; }
-      else if (fault < 1 / 200 + 1 / 40) lamps[which].flicker = 1 + 97 * u();
+      const n = this.d.shelvedSides.length;
+      const lamp = () => ({ gain: 0.84 + 0.26 * u(), warmth: 2 * u() - 1, flicker: 0, dark: false });
+      const lamps = [lamp(), lamp()];
+      const fault = u(), which = Math.min(n - 1, Math.floor(u() * n));
       const shade = 0.86 + 0.26 * u(), red = 2 * u() - 1;
-      return {
+      const look = {
         seed: [u(), u(), u() * TAU, 40 * u()], // where the textures start, how plaster turns, the stains
         plaster: [Math.pow(u(), 1.5), 0.22 + 0.6 * u(), Math.pow(u(), 2), u()], // damp, its tide line, stains, soot
         wood: [shade * (1 + 0.05 * red), shade, shade * (1 - 0.07 * red), u()], // shade, grime
         tiles: [0.35 + 0.65 * u(), u(), Math.pow(u(), 3), 0], // wear, which side of the shaft more, ink
         lamps,
       };
+      // (the lamps after the first two are drawn last, so that the rest of the look is as it was with two)
+      while (lamps.length < n) lamps.push(lamp());
+      lamps.length = n;
+      if (fault < 1 / 150) { lamps[which].dark = true; lamps[which].gain = 0; }
+      else if (fault < 1 / 150 + 1 / 30) lamps[which].flicker = 1 + 97 * u();
+      return look;
     }
 
     /** Gives a cell the look of its hexagon (and its vestibule the light of the next hexagon's lamps too). */
@@ -451,17 +462,17 @@
     }
 
     /**
-     * Lights a hexagon by its own two lamps, and its vestibule by them at its west end and by the
+     * Lights a hexagon by its own lamps, and its vestibule by them at its west end and by the
      * next hexagon's at its east end; the hexagon's doorways turn into the vestibules beyond, lit so.
      */
     _applyLamps(cell) {
       const { me, east, west } = cell.looks, t = this.time;
       const burn = (l) => (l.dark ? 0 : l.gain * (l.flicker ? flicker(t, l.flicker) : 1));
-      const mean = (k) => (burn(k.lamps[0]) + burn(k.lamps[1])) / 2;
-      const here = me.lamps.map(burn), mHere = (here[0] + here[1]) / 2, mEast = mean(east), mWest = mean(west);
+      const mean = (k) => k.lamps.reduce((s, l) => s + burn(l), 0) / k.lamps.length;
+      const here = me.lamps.map(burn), mHere = here.reduce((s, v) => s + v, 0) / here.length, mEast = mean(east), mWest = mean(west);
       for (const m of cell.look.hex) {
         const u = m.uniforms, g = u.uGain.value, c = u.uLightColors.value;
-        for (let i = 0; i < 2; i++) { g[i] = here[i]; c[i].setRGB(1, 0.78 + 0.045 * me.lamps[i].warmth, 0.52 + 0.07 * me.lamps[i].warmth); }
+        here.forEach((v, i) => { g[i] = v; c[i].setRGB(1, 0.78 + 0.045 * me.lamps[i].warmth, 0.52 + 0.07 * me.lamps[i].warmth); });
         if (u.uVesGains) u.uVesGains.value.set(mHere, mEast, mWest, mHere);
       }
       for (const m of cell.look.ves) {
@@ -469,11 +480,13 @@
         g[0] = mHere;
         g[1] = mEast;
       }
-      cell.look.lamps.forEach(({ globe, glow }, i) => {
+      cell.look.lamps.forEach(({ under, wash }, i) => {
         const v = here[i], w = me.lamps[i].warmth;
-        globe.material.color.setRGB(1, 0.914 + 0.03 * w, 0.77 + 0.06 * w).multiplyScalar(0.16 + 0.84 * Math.min(1, v));
-        glow.material.color.setRGB(1, 0.95 + 0.03 * w, 0.88 + 0.06 * w);
-        glow.material.opacity = 0.9 * Math.min(1, v);
+        under.material.color.setRGB(1, 0.914 + 0.03 * w, 0.77 + 0.06 * w).multiplyScalar(0.16 + 0.84 * Math.min(1, v));
+        if (wash) {
+          wash.material.color.setRGB(1, 0.95 + 0.03 * w, 0.88 + 0.06 * w);
+          wash.material.opacity = 0.45 * Math.min(1, v);
+        }
       });
     }
 
