@@ -10,7 +10,13 @@
  *   - a tide line, where water once soaked into part of the book: it marks the same place on
  *     every page it reached, fading towards the last ones;
  *   - the grey of thumbs, at the corner where the pages are turned;
- *   - a corner folded down, here and there.
+ *   - a corner folded down, here and there;
+ *   - in about one book in four, the pencil of a reader who went through it before: beside
+ *     some of the real words chance has written in it (see js/words.js), and only there, an
+ *     asterisk, an exclamation mark, a question mark, a tick, a line down the margin or an
+ *     arrow; or the word underlined, or circled. Every reader has their habits, one to three
+ *     of these, and their own hand; they marked some words of four letters, most of five,
+ *     and every longer one.
  *
  * Every leaf is drawn on a canvas behind its page's text, at the page's size on the screen.
  * Positions are measured from the spine, so what soaks through the book, or wears it at the
@@ -93,7 +99,7 @@
         seed: Math.floor(u() * 4294967296) | 0,
       });
     }
-    return {
+    const L = {
       key, age, paper, stains,
       seed: Math.floor(u() * 4294967296) | 0,
       ink: rgba(ink, inkAlpha),
@@ -110,6 +116,126 @@
       dogEars: chance(0.5) ? 0 : 0.004 + 0.04 * Math.pow(u(), 2), // the chance of a page's corner folded down
       tears: chance(0.8) ? 0 : 0.01 + 0.05 * u(), // the chance of a page torn at the edge
     };
+    // a reader who once went through the book with a pencil, marking words they found in it
+    L.reader = null;
+    if (chance(0.25)) {
+      const kinds = PENCIL.slice(), habits = [];
+      for (let n = 1 + Math.floor(u() * 3); n > 0; n--) habits.push(kinds.splice(Math.floor(u() * kinds.length), 1)[0]);
+      L.reader = {
+        seed: Math.floor(u() * 4294967296) | 0,
+        habits,
+        rate: [0.12 + 0.2 * u(), 0.5 + 0.5 * u()], // the chance of marking a word of four letters, and of five; longer ones, always
+        tone: 0.62 + 0.3 * u(), // how hard the pencil was pressed
+        width: 0.06 + 0.04 * u(), // and how sharp it was, in ems
+        outer: u() < 0.8, // most write in the outer margin, some by the spine
+      };
+    }
+    return L;
+  }
+
+  // what a reader may mark a word with: in the margin beside its line, or the word itself
+  const PENCIL = ['asterisk', 'exclaim', 'query', 'tick', 'sideline', 'arrow', 'underline', 'circle'];
+  const GRAPHITE = [58, 58, 66];
+
+  /**
+   * The pencil of the book's reader, on page o.page: beside some of the words on it
+   * (o.words: { at, line, col, length }), where o.text says the lines are ({ left, top: the
+   * page's margins; line: the height of a line; ch: the width of a character }, in CSS pixels).
+   */
+  function pencil(ctx, L, o, right, W) {
+    const R = L.reader, t = o.text, em = o.em, U = BabelCore.util;
+    const margined = new Set(); // lines with a mark in the margin already
+    for (const w of o.words) {
+      const u = random(R.seed ^ U.fmix32((w.at + 0x2545f491) >>> 0), R.seed, w.at | 0, 0x70656e63);
+      if (u() >= (w.length >= 6 ? 1 : w.length === 5 ? R.rate[1] : R.rate[0])) continue;
+      let kind = R.habits[Math.floor(u() * R.habits.length)];
+      const inText = kind === 'underline' || kind === 'circle';
+      if (!inText && margined.has(w.line)) kind = 'underline';
+      else if (!inText) margined.add(w.line);
+
+      // a pencil line: a firm pass, then a lighter one a little beside it
+      const line = (pts, width = R.width * em) => {
+        for (let pass = 0; pass < 2; pass++) {
+          ctx.beginPath();
+          pts.forEach(([x, y], i) => {
+            const jx = (u() - 0.5) * 0.05 * em, jy = (u() - 0.5) * 0.05 * em;
+            if (i) ctx.lineTo(x + jx, y + jy); else ctx.moveTo(x + jx, y + jy);
+          });
+          ctx.strokeStyle = rgba(GRAPHITE, R.tone * (pass ? 0.4 : 0.8));
+          ctx.lineWidth = width * (pass ? 0.55 : 1);
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.stroke();
+        }
+      };
+      const dot = (x, y) => {
+        ctx.beginPath();
+        ctx.arc(x, y, R.width * em * 0.85, 0, Math.PI * 2);
+        ctx.fillStyle = rgba(GRAPHITE, R.tone * 0.85);
+        ctx.fill();
+      };
+      const curve = (p0, p1, p2, p3, n = 12) => {
+        const pts = [];
+        for (let i = 0; i <= n; i++) {
+          const s = i / n, a = (1 - s) ** 3, b = 3 * (1 - s) ** 2 * s, c = 3 * (1 - s) * s * s, e = s ** 3;
+          pts.push([a * p0[0] + b * p1[0] + c * p2[0] + e * p3[0], a * p0[1] + b * p1[1] + c * p2[1] + e * p3[1]]);
+        }
+        return pts;
+      };
+
+      const top = t.top + w.line * t.line, cy = top + t.line * 0.5;
+      const x0 = t.left + w.col * t.ch, x1 = x0 + w.length * t.ch;
+      const outer = u() < (R.outer ? 0.9 : 0.15);
+      const mx = outer === right ? W - t.left * 0.5 : t.left * 0.5; // the middle of the margin beside the line
+      const s = (0.72 + 0.28 * u()) * em, tilt = (u() - 0.5) * 0.4;
+      const at = (dx, dy) => [mx + dx * Math.cos(tilt) - dy * Math.sin(tilt), cy + dx * Math.sin(tilt) + dy * Math.cos(tilt)];
+      const many = w.length >= 6 ? 2 : 1; // a long word, twice the mark
+
+      if (kind === 'asterisk') {
+        for (const a of [Math.PI / 2, Math.PI / 6, (5 * Math.PI) / 6]) {
+          const c = Math.cos(a) * s * 0.5, sn = Math.sin(a) * s * 0.5;
+          line([at(-c, -sn), at(c, sn)]);
+        }
+      } else if (kind === 'exclaim') {
+        for (let i = 0; i < many; i++) {
+          const dx = (i - (many - 1) / 2) * 0.34 * s;
+          line([at(dx + 0.04 * s, -0.58 * s), at(dx, 0.16 * s)], R.width * em * 1.1);
+          dot(...at(dx - 0.01 * s, 0.42 * s));
+        }
+      } else if (kind === 'query') {
+        line([...curve(at(-0.26 * s, -0.28 * s), at(-0.26 * s, -0.66 * s), at(0.3 * s, -0.66 * s), at(0.28 * s, -0.3 * s)),
+          ...curve(at(0.28 * s, -0.3 * s), at(0.26 * s, -0.08 * s), at(0, -0.12 * s), at(0, 0.16 * s), 6).slice(1)]);
+        dot(...at(0, 0.42 * s));
+      } else if (kind === 'tick') {
+        line([at(-0.34 * s, 0), at(-0.08 * s, 0.3 * s), at(0.4 * s, -0.48 * s)]);
+      } else if (kind === 'sideline') {
+        for (let i = 0; i < many; i++) {
+          const x = mx + (i - (many - 1) / 2) * 0.2 * em + (u() - 0.5) * 0.1 * em;
+          line([[x, top - 0.1 * t.line], [x + (u() - 0.5) * 0.12 * em, top + 0.5 * t.line], [x + (u() - 0.5) * 0.12 * em, top + 1.1 * t.line]]);
+        }
+      } else if (kind === 'arrow') {
+        const edge = mx < W / 2 ? t.left : W - t.left, dir = Math.sign(edge - mx); // towards the text
+        const tip = [edge - dir * 0.3 * em, cy], tail = [edge - dir * 2 * em, cy + (u() - 0.5) * 0.6 * em];
+        line(curve(tail, [tail[0] + dir * 0.6 * em, tail[1] - 0.25 * em], [tip[0] - dir * 0.6 * em, tip[1]], tip, 8));
+        for (const k of [-1, 1]) line([[tip[0] - dir * 0.38 * em, tip[1] + k * 0.24 * em], tip]);
+      } else if (kind === 'underline') {
+        for (let i = 0; i < many; i++) {
+          const y = top + t.line * (0.95 + 0.14 * i), pts = [], n = 6;
+          const a = x0 - (0.05 + 0.15 * u()) * em, b = x1 + (0.05 + 0.25 * u()) * em, slope = (u() - 0.5) * 0.25 * em;
+          for (let k = 0; k <= n; k++) pts.push([a + ((b - a) * k) / n, y + slope * (k / n - 0.5) + Math.sin(k * 1.3 + u() * 6) * 0.04 * em]);
+          line(pts);
+        }
+      } else if (kind === 'circle') {
+        const cx = (x0 + x1) / 2, rx = (x1 - x0) / 2 + (0.35 + 0.15 * u()) * em, ry = t.line * (0.6 + 0.1 * u());
+        const a0 = u() * Math.PI * 2, sweep = Math.PI * 2 + 0.3 + 0.3 * u(), lean = (u() - 0.5) * 0.12, pts = [];
+        for (let k = 0; k <= 28; k++) {
+          const a = a0 + (sweep * k) / 28, grow = 1 + 0.06 * (k / 28); // the end overshooting the start
+          const px = Math.cos(a) * rx * grow, py = Math.sin(a) * ry * grow;
+          pts.push([cx + px * Math.cos(lean) - py * Math.sin(lean), cy + px * Math.sin(lean) + py * Math.cos(lean)]);
+        }
+        line(pts);
+      }
+    }
   }
 
   // fine grain, the same for every leaf (a tile drawn once)
@@ -403,6 +529,9 @@
       ctx.lineWidth = 0.7;
       ctx.stroke();
     }
+
+    // what a reader once pencilled, beside the words they found
+    if (L.reader && o.words && o.words.length && o.text) pencil(ctx, L, o, right, W);
 
     // the very edge, darker where it has been handled
     path(outline);

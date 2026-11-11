@@ -12,6 +12,7 @@ A Web-based walkable simulation of Jorge Luis Borges's *[Library of Babel](https
 - Read from an index of ~1K literature classics (all copyright-free)
 - A painting in every vestibule, each one different, and every possible painting somewhere
 - Find the vestibule where any picture hangs, and view famous copyright-free paintings
+- Traces of other librarians: figures glimpsed across the shaft, above and below, and pencil marks in the margins
 
 ## Getting started
 
@@ -142,6 +143,14 @@ Because the map can be inverted, any text can be located: `findText` in `js/libr
 **Paper.** A book opens at two facing pages, odd pages on the right as in print, so that page 1 faces the inside of the front cover; on a narrow screen, at one page at a time. It lies open on its own leather, the colour of its spine on the shelf, and the leaves already read, or still to read, show at its fore-edges. Like the spines, its paper says nothing about what the pages contain: it comes from the book's place in the Library, so it is the same on every visit. Each book has its own paper, from nearly white to deep yellow, and its own ink, a little faded on old paper. Its edges are browned by light and air (the head most of all, where the dust of the shelf settles), frayed, worn round at the corners, and here and there chipped or torn. There are clouds in the paper, and in many books foxing, small rust-brown spots in clusters; the grey of thumbs at the corner where the pages are turned; now and then a corner folded down. In some books, water once soaked in: its tide line marks the same place on every page it reached, fainter towards the last.
 
 **Words.** Chance writes real words now and then, and in a book drawn by chance **Find words** (or `F`) makes them glow on the page, the longer the brighter and the warmer, from lamplight to crimson. A word is one of some 34,000 common English words of four to eight letters, written within a line in any mix of capitals, so that `tReE` is the word *tree*; where two overlap, the longer is kept. The line under the book names the words on the pages open, and the page of the next one. They are rare, and the longer the rarer: with the default alphabet, a book holds some 130 words of four letters, about one every other spread; one of five letters turns up once in some sixty spreads, one of six about once in a dozen books, and one of seven once in hundreds. A book that the Catalogue or a link leads to holds a text laid in it, full of words by design, so the reader does not look for words there. The finder stays on or off from one book, and one visit, to the next.
+
+**Other librarians.** The reader never meets anyone, yet is not alone. Now and then, while they are in a hexagon, another librarian in a habit like theirs appears across the shaft, pale and a little translucent, seen only through the shaft. Perhaps they are only images of librarians of other times, with no part in the present; and perhaps, to some reader yet to come, the reader is one of them.
+
+Every three or four minutes spent in the hexagons, on average, one stands at the railing of a floor above, looking down into the shaft: most often on the next floor, now and then two or three floors up. Looked at for a few seconds, it slowly raises its hood towards the reader. As often, another stands at a bookcase of a floor below, the next or the one after, with its back to the shaft, browsing: its hood wanders along the books, and now and then it moves along to others. It never looks up, and it is seen only by leaning over the railing and looking down.
+
+Neither comes where the reader is already looking. Looked at for long, either fades. Look away, and it is gone. Neither is there when the reader gets there: they leave as soon as the reader leaves the hexagon, for the stairs or another hexagon, or opens a book. Unseen for a minute and a half, they go too.
+
+Others have read the books before. About one book in four has had a reader who marked in pencil some of the real words chance wrote in it (see **Words** above): every word of six letters or more, most of those of five, a few of those of four. That is some thirty marks in a book, about one every eight spreads, and nowhere but beside a word. Each reader had one to three habits of their own, out of eight: an asterisk or an exclamation mark in the margin (doubled for a long word), a question mark, a tick, a line down the margin, an arrow at the line, the word underlined, or the word circled. The pencil is a faint grey, each reader's a little darker or lighter, and its marks show whether **Find words** is on or off. Like the paper, they come from the book's place in the Library, so they are the same on every visit. A book in which the Catalogue or a link has laid a text has no pencil marks.
 
 ## The Catalogue
 
@@ -300,13 +309,14 @@ In `index.html`, every file name is followed by `?v=` and a version, such as `js
 | `js/paintings.js` | Draws the paintings of the vestibules near the reader, a step at a time |
 | `js/world.js` | Streams the hexagons around the reader and dresses their books |
 | `js/figure.js` | The reader as the mirrors show them: a monk in a hooded habit, the face lost in the hood's shadow |
+| `js/ghost.js` | Other librarians, glimpsed now and then across the shaft, on the floors above and below |
 | `js/player.js` | Walking, the spiral stair, and picking a book, door, lamp, bed or Catalogue by gaze |
 | `js/terminal.js` | The Catalogue's screen: the current position, finding texts and books, and going to hexagons |
 | `js/textures.js` | Wood, plaster, stone, floor tiles and leather spines, painted at start-up |
 | `js/quotes.js` | The sentences of dreams: a small English grammar and its vocabulary |
 | `js/dream.js` | The moving picture of dreams, drawn by one shader |
 | `js/music.js` | The music of the hexagons, made as it plays |
-| `js/paper.js` | The paper of the books, each aged in its own way |
+| `js/paper.js` | The paper of the books, each aged in its own way, and the pencil marks of earlier readers |
 | `js/words.js`, `words/english.js` | Find words: the words chance has written in a book, and the English words it looks for (from SCOWL; see `words/SCOWL-Copyright.txt`) |
 | `js/main.js` | Start-up, reading, sleep |
 | `lib/` | three.js r147 and its `Reflector` (MIT licence, see `lib/three.LICENSE`) |

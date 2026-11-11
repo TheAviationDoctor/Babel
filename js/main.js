@@ -9,7 +9,7 @@
   const $ = (id) => document.getElementById(id);
   const isTouch = matchMedia('(hover: none) and (pointer: coarse)').matches;
 
-  let raw, lib, assets, world, player, renderer, scene, camera, reflector, sinkReflector, figure, figureLight, figureKey, terminal, music;
+  let raw, lib, assets, world, player, renderer, scene, camera, reflector, sinkReflector, figure, figureLight, figureKey, terminal, music, ghost;
   let mode = 'walking';
   let gaze = null, gazeKey = '';
   let reading = null;
@@ -121,6 +121,8 @@
     figureKey.layers.set(1);
     scene.add(figureKey);
     sizeMirror();
+    // another librarian, now and then, glimpsed on a floor above across the shaft
+    ghost = new Babel.Ghost(scene, assets.dims);
 
     terminal = new Babel.Terminal({
       lib: () => lib, world, player, dims: assets.dims,
@@ -489,7 +491,7 @@
 
   function renderPage() {
     const P = lib.config.pagesPerBook, c = lib.config;
-    if (finding() && !reading.words) lookForWords();
+    if ((finding() || annotated()) && !reading.words) lookForWords(); // the words, to glow or to have been marked
     sizePage();
     reading.page = Math.max(0, Math.min(P - 1, reading.page));
     const view = pagesInView();
@@ -518,7 +520,7 @@
     const before = reading.page / Math.max(1, P - 1);
     for (const { leaf, p, side } of leaves) {
       Babel.Paper.draw(leaf.querySelector('canvas'), reading.paper, {
-        page: p, side, width: leaf.offsetWidth, height: leaf.offsetHeight, scale, em: reading.size,
+        page: p, side, width: leaf.offsetWidth, height: leaf.offsetHeight, scale, em: reading.size, ...pencilled(leaf, p),
       });
       const share = side === 'left' ? before : 1 - before;
       const layers = Math.round(share * 0.42 * reading.size), out = side === 'left' ? -1 : 1;
@@ -567,6 +569,25 @@
   /** Whether the reader is looking for words in this book: only in books drawn by chance. */
   function finding() { return findingWords && reading && !reading.written; }
 
+  /** Whether someone went through this book before with a pencil, marking the words they found (js/paper.js). */
+  function annotated() { return !!(reading && reading.paper.reader && !reading.written); }
+
+  /** For the paper of page p (on `leaf`): the words on it that a reader may have marked, and where its lines are. */
+  function pencilled(leaf, p) {
+    const c = lib.config;
+    if (!annotated() || !reading.words || p < 0 || p >= c.pagesPerBook) return {};
+    const base = p * c.charactersPerPage, pre = leaf.querySelector('pre'), cs = getComputedStyle(pre);
+    const left = parseFloat(cs.paddingLeft), right = parseFloat(cs.paddingRight);
+    const text = {
+      left, top: parseFloat(cs.paddingTop), line: parseFloat(cs.lineHeight) || reading.size * 1.3,
+      ch: (pre.clientWidth - left - right) / c.charactersPerLine,
+    };
+    const words = reading.words.filter((w) => w.at >= base && w.at < base + c.charactersPerPage).map((w) => ({
+      at: w.at, length: w.length, line: Math.floor((w.at - base) / c.charactersPerLine), col: (w.at - base) % c.charactersPerLine,
+    }));
+    return { words, text };
+  }
+
   /** Finds the words of the book open, reading the list of words first if need be. */
   function lookForWords() {
     const r = reading;
@@ -576,7 +597,7 @@
       r.words = BabelWords.inBook(lib, r.content);
       renderPage();
     }, (err) => {
-      if (reading === r) $('book-keys').textContent = `The words could not be looked for: ${err.message}.`;
+      if (reading === r && finding()) $('book-keys').textContent = `The words could not be looked for: ${err.message}.`;
     });
   }
 
@@ -973,6 +994,7 @@
     sinkReflector.visible = cellShown && Math.abs(player.y) < 1 && Math.abs(player.x - sx) < 3 && player.z < 0;
     sinkReflector.position.set(sx, d.sinkMirror.y0 + d.sinkMirror.h / 2, d.cellZ0 - 0.014);
     Babel.Figure.pose(figure, player, dt);
+    ghost.update(dt, player, camera, mode === 'walking' && !sleep);
 
     // asleep, the dream is drawn instead of the Library, and the Library while it fades
     const picture = sleep ? updateSleep(now / 1000) : null;
@@ -1073,6 +1095,7 @@
     openBook, openBookAt, startWalking, setMode, goToCell, goToAddress, fallAsleep, wakeUp, hexagonSeed,
     get lastJourney() { return lastJourney; },
     get terminal() { return terminal; },
+    get ghost() { return ghost; }, get camera() { return camera; },
   };
   Babel.boot = boot;
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
