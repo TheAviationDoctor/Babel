@@ -169,6 +169,38 @@ input[type="text"]:focus, input[type="number"]:focus { outline: none; border-bot
   transform: scale(var(--glyph-fit, 1));
 }
 .page .folio { display: block; text-align: center; opacity: 0.72; margin-top: 1.1em; }
+/* "Find words": the words chance has written glow on the page, the longer the brighter and the
+   warmer, from lamplight to crimson (js/words.js) */
+.page mark.word { color: inherit; background: none; border-radius: 0.15em; animation: word-in 0.9s ease-out both; }
+.page mark.w4 {
+  color: #6b3c0c; background: rgba(255, 190, 90, 0.3);
+  text-shadow: 0 0 0.3em rgba(255, 176, 60, 0.95);
+  box-shadow: 0 0 0.5em 0.1em rgba(255, 184, 76, 0.45);
+}
+.page mark.w5 {
+  color: #7a2e05; background: rgba(255, 160, 60, 0.42);
+  text-shadow: 0 0 0.25em rgba(255, 148, 36, 1), 0 0 0.7em rgba(255, 160, 50, 0.8);
+  box-shadow: 0 0 0.8em 0.2em rgba(255, 156, 52, 0.55);
+}
+.page mark.w6 {
+  color: #841a06; background: rgba(255, 122, 46, 0.46);
+  text-shadow: 0 0 0.2em rgba(255, 108, 28, 1), 0 0 0.6em rgba(255, 118, 38, 1), 0 0 1.4em rgba(255, 138, 58, 0.8);
+  box-shadow: 0 0 1.2em 0.3em rgba(255, 118, 46, 0.6);
+}
+.page mark.w7 {
+  color: #8c0b2a; background: rgba(255, 78, 92, 0.44);
+  text-shadow: 0 0 0.2em rgba(255, 70, 90, 1), 0 0 0.7em rgba(255, 80, 100, 1), 0 0 1.8em rgba(255, 100, 110, 0.9);
+  box-shadow: 0 0 1.6em 0.45em rgba(255, 72, 92, 0.6);
+  animation: word-in 0.9s ease-out both, word-pulse 2.8s ease-in-out 0.9s infinite;
+}
+@keyframes word-in { from { background-color: transparent; box-shadow: none; text-shadow: none; } }
+@keyframes word-pulse { 50% { filter: brightness(1.2) saturate(1.2); } }
+@media (prefers-reduced-motion: reduce) { .page mark.word { animation: none; } }
+#find-words[aria-pressed="true"] { color: var(--lamp); border-color: var(--lamp); box-shadow: 0 0 0.8em rgba(227, 169, 90, 0.3); }
+.book-keys button.inline {
+  font: inherit; color: var(--lamp); background: none; border: 0; padding: 0; border-radius: 0;
+  text-decoration: underline; text-underline-offset: 0.18em;
+}
 .book-nav { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.6rem; }
 .book-nav > button:first-child, #next-page { font-size: var(--step-2); line-height: 1; padding: 0.15em 0.65em 0.25em; }
 .page-form { display: flex; align-items: baseline; gap: 0.5rem; font-variant-numeric: tabular-nums; }

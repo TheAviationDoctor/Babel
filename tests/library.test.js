@@ -670,6 +670,37 @@ test('the sentences of dreams are grammatical and always the same for a hexagon'
   assert.ok(seen.size > N * 0.99, `only ${seen.size} different sentences in ${N}`);
 });
 
+test('the words chance has written are found, and only in books drawn by chance', () => {
+  const Words = require('../js/words.js');
+  const data = { window: {} };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'words', 'english.js'), 'utf8'), data);
+  Words.use(data.window.BABEL_WORDS);
+  const c = lib.config, start = lib.wakingLocation(0);
+  const book = lib.bookAt({ hexagon: start.hexagon, floor: start.floor, slot: 3 });
+  assert.strictEqual(Words.written(lib, book), false);
+  const found = Words.inBook(lib, book);
+  assert.ok(found.length > 40 && found.length < 400, `${found.length} words in a book drawn by chance`);
+  for (const w of found) {
+    assert.ok(w.length >= Words.SHORTEST && w.word.length === w.length);
+    assert.strictEqual(lib.toText(book, w.at, w.at + w.length).toLowerCase(), w.word);
+    assert.strictEqual(Math.floor(w.at / c.charactersPerLine), Math.floor((w.at + w.length - 1) / c.charactersPerLine), 'within a line');
+  }
+  // words planted in a line: any capitals; the longer of two that overlap; not across a line's end
+  const copy = book.slice(), line = 5 * c.charactersPerLine, dot = lib.glyphs.indexOf('.');
+  copy.fill(dot, line, line + 2 * c.charactersPerLine);
+  const plant = (at, text) => [...text].forEach((ch, i) => { copy[at + i] = lib.glyphs.indexOf(ch); });
+  plant(line + 2, 'TrEe');
+  plant(line + 10, 'quartz');
+  plant(line + 20, 'LANTERN');
+  plant(line + c.charactersPerLine - 2, 'la');
+  plant(line + c.charactersPerLine, 'mp');
+  const there = Words.inBook(lib, copy).filter((w) => w.at >= line && w.at < line + 2 * c.charactersPerLine);
+  assert.deepStrictEqual(there.map((w) => [w.at - line, w.word]), [[2, 'tree'], [10, 'quartz'], [20, 'lantern']]);
+  // a book that a text was laid in is written, not drawn by chance
+  const laid = lib.findText(lib.layText('In the beginning was the word.').symbols).location;
+  assert.strictEqual(Words.written(lib, lib.bookAt(laid)), true);
+});
+
 // Links to books are made and read asynchronously (compression streams).
 (async () => {
   async function testAsync(name, fn) {

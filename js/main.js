@@ -13,6 +13,9 @@
   let mode = 'walking';
   let gaze = null, gazeKey = '';
   let reading = null;
+  // whether the reader looks for words in the pages of random books ("Find words"), remembered
+  let findingWords = false;
+  try { findingWords = localStorage.getItem('babel-words') === 'on'; } catch (e) { /* not remembered */ }
   let lastJourney = null; // how far the last jump through the catalogue went
 
   function showError(message, hint) {
@@ -438,6 +441,8 @@
       title: lib.spineTitle(fp, o.slot),
       link: o.link || null,
       paper: Babel.Paper.look(fp, o.slot, c.pagesPerBook), // how the years have marked its leaves
+      written: BabelWords.written(lib, content), // a text laid in it by the Catalogue or a link: its words are meant
+      words: null, // the words chance has written in it, once looked for
     };
     // its leather, as on the shelf, and its ink
     const spread = $('spread');
@@ -451,7 +456,8 @@
     $('page-count').textContent = `of ${fmt(c.pagesPerBook)}`;
     $('page-input').max = c.pagesPerBook;
     $('close-book').textContent = reading.returnTo === 'terminal' ? 'Back to the catalogue' : 'Put the book back';
-    $('book-keys').textContent = reading.returnTo === 'terminal' ? 'Arrow keys turn pages. Esc returns to the catalogue.' : 'Arrow keys turn pages. Esc puts the book back.';
+    reading.keys = `Arrow keys turn pages${reading.written ? '' : ', F finds words'}. ` +
+      (reading.returnTo === 'terminal' ? 'Esc returns to the catalogue.' : 'Esc puts the book back.');
     setMode('reading');
     renderPage();
     $('spread').focus({ preventScroll: true });
@@ -483,6 +489,7 @@
 
   function renderPage() {
     const P = lib.config.pagesPerBook, c = lib.config;
+    if (finding() && !reading.words) lookForWords();
     sizePage();
     reading.page = Math.max(0, Math.min(P - 1, reading.page));
     const view = pagesInView();
@@ -491,17 +498,13 @@
     const leaves = view.map((p, i) => {
       const leaf = $('leaf-' + sides[i]);
       leaf.hidden = p === null;
-      if (p === null) return null;
       const pre = leaf.querySelector('pre');
+      if (p === null) { pre.textContent = ''; return null; }
       const text = p >= 0 && p < P;
       pre.textContent = '';
       pre.classList.toggle('blank', !text);
-      // the inside of a cover is a leaf without words, the size of the others
-      const lines = text ? lib.pageLines(reading.content, p) : new Array(c.linesPerPage).fill(' '.repeat(c.charactersPerLine));
-      lines.forEach((line, n) => {
-        appendText(pre, line);
-        if (n < lines.length - 1) pre.appendChild(document.createTextNode('\n'));
-      });
+      if (text) setPage(pre, p);
+      else pre.textContent = new Array(c.linesPerPage).fill(' '.repeat(c.charactersPerLine)).join('\n'); // the inside of a cover, the size of a page
       const folio = document.createElement('span');
       folio.className = 'folio';
       folio.textContent = text ? String(p + 1) : ' ';
@@ -525,6 +528,7 @@
       }
       leaf.style.boxShadow = shadows.join(', ');
     }
+    showWords();
     $('page-input').value = reading.page + 1;
     const two = reading.shown.length > 1;
     $('copy-page').textContent = two ? 'Copy pages' : 'Copy page';
@@ -536,6 +540,76 @@
       $('prev-page').disabled = reading.page === 0;
       $('next-page').disabled = reading.page === P - 1;
     }
+  }
+
+  /** Sets page p's text in pre, the words chance has written in it glowing if the reader is looking for them. */
+  function setPage(pre, p) {
+    const c = lib.config, content = reading.content, base = p * c.charactersPerPage;
+    const words = finding() && reading.words ? reading.words.filter((w) => w.at >= base && w.at < base + c.charactersPerPage) : [];
+    let k = 0;
+    for (let n = 0; n < c.linesPerPage; n++) {
+      const start = base + n * c.charactersPerLine, end = start + c.charactersPerLine;
+      let at = start;
+      while (k < words.length && words[k].at < end) {
+        const w = words[k++];
+        if (w.at > at) appendText(pre, lib.toText(content, at, w.at));
+        const mark = document.createElement('mark');
+        mark.className = `word w${Math.min(7, w.length)}`; // the longer, the brighter
+        appendText(mark, lib.toText(content, w.at, w.at + w.length));
+        pre.appendChild(mark);
+        at = w.at + w.length;
+      }
+      if (at < end) appendText(pre, lib.toText(content, at, end));
+      if (n < c.linesPerPage - 1) pre.appendChild(document.createTextNode('\n'));
+    }
+  }
+
+  /** Whether the reader is looking for words in this book: only in books drawn by chance. */
+  function finding() { return findingWords && reading && !reading.written; }
+
+  /** Finds the words of the book open, reading the list of words first if need be. */
+  function lookForWords() {
+    const r = reading;
+    if (BabelWords.ready()) { r.words = BabelWords.inBook(lib, r.content); return; }
+    BabelWords.load().then(() => {
+      if (reading !== r) return;
+      r.words = BabelWords.inBook(lib, r.content);
+      renderPage();
+    }, (err) => {
+      if (reading === r) $('book-keys').textContent = `The words could not be looked for: ${err.message}.`;
+    });
+  }
+
+  /** Turns "Find words" on or off, and remembers it. */
+  function toggleWords() {
+    if (!reading || reading.written) return;
+    findingWords = !findingWords;
+    try { localStorage.setItem('babel-words', findingWords ? 'on' : 'off'); } catch (e) { /* not remembered */ }
+    renderPage();
+  }
+
+  /** The finder's button, and, in the line under the book, the words on the pages in view and where the next one is. */
+  function showWords() {
+    const button = $('find-words'), line = $('book-keys');
+    button.hidden = reading.written;
+    button.setAttribute('aria-pressed', String(finding()));
+    if (!finding()) { line.textContent = reading.keys; return; }
+    if (!reading.words) { line.textContent = 'Opening the dictionary…'; return; }
+    const per = lib.config.charactersPerPage, shown = reading.shown;
+    const from = shown[0] * per, to = (shown[shown.length - 1] + 1) * per;
+    const here = reading.words.filter((w) => w.at >= from && w.at < to);
+    const next = reading.words.find((w) => w.at >= to);
+    const these = shown.length > 1 ? 'these pages' : 'this page';
+    line.textContent = here.length ? `On ${these}: ${here.map((w) => w.word).join(', ')}. ` : `No words on ${these}. `;
+    if (next) {
+      const page = Math.floor(next.at / per);
+      const go = document.createElement('button');
+      go.type = 'button';
+      go.className = 'inline';
+      go.textContent = `page ${page + 1}`;
+      go.addEventListener('click', () => { reading.page = page; renderPage(); $('spread').focus({ preventScroll: true }); });
+      line.append(here.length ? 'The next is on ' : 'The next word is on ', go, '.');
+    } else line.append(here.length ? 'None after them in this book.' : 'Nor after them, in this book.');
   }
 
   // Symbols that must be set in a column box of their own: control pictures ('ctl'), and
@@ -761,6 +835,7 @@
         shown.length > 1 ? `Copied pages ${shown[0] + 1} and ${shown[1] + 1}.` : `Copied page ${shown[0] + 1}.`);
     });
     $('close-book').addEventListener('click', closeBook);
+    $('find-words').addEventListener('click', toggleWords);
     $('copy-book-link').addEventListener('click', () => {
       const base = linkBase();
       if (!base) { toast('To copy links from a copy of the Library on this computer, set "website" in config.js to the address where the Library is published.', 7000); return; }
@@ -801,6 +876,7 @@
         else if (e.code === 'Home') { reading.page = 0; renderPage(); e.preventDefault(); }
         else if (e.code === 'End') { reading.page = lib.config.pagesPerBook - 1; renderPage(); e.preventDefault(); }
         else if (e.code === 'Escape' || e.code === 'KeyE') { closeBook(); e.preventDefault(); }
+        else if (e.code === 'KeyF' && !e.metaKey && !e.ctrlKey && !e.altKey) { toggleWords(); e.preventDefault(); }
       } else if (mode === 'terminal') {
         if (e.code === 'Escape') { e.preventDefault(); terminal.close(); }
       } else if (mode === 'sleeping') {

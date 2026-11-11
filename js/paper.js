@@ -129,8 +129,6 @@
     return (grain = c);
   }
 
-  let field = null; // the canvas of the soft marks, drawn small and stretched over the leaf
-
   /**
    * Draws one leaf on `canvas`. options: { page (0-based; -1 and `pages` are the endpapers, the
    * insides of the covers), side ('left' or 'right': which page of an open book it is; the spine
@@ -147,9 +145,10 @@
     ctx.clearRect(0, 0, cw, ch);
     const page = o.page;
     const right = o.side === 'right'; // a right-hand page: the spine on its left
-    // Everything is drawn from the spine outwards: a left-hand page is the mirror image.
-    const frame = () => ctx.setTransform(right ? dpr : -dpr, 0, 0, dpr, right ? 0 : cw, 0);
-    frame();
+    // Everything is measured from the spine outwards, and X() takes it across the leaf: on a
+    // left-hand page, mirrored.
+    const X = (g) => (right ? g : W - g);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const U = BabelCore.util;
     const u = random(L.key[0] ^ U.fmix32((page + 0x51ed270b) >>> 0), L.key[1], (L.key[2] + page) | 0, L.key[3] ^ 0x6c656166);
     const margin = o.margin || { top: 2.1, side: 2.6, bottom: 2.4 };
@@ -208,19 +207,18 @@
     outline.push([0, H]);
     const path = (points) => {
       ctx.beginPath();
-      points.forEach(([g, y], i) => (i ? ctx.lineTo(g, y) : ctx.moveTo(g, y)));
+      points.forEach(([g, y], i) => (i ? ctx.lineTo(X(g), y) : ctx.moveTo(X(g), y)));
       ctx.closePath();
     };
     const roundRect = (inset) => {
-      const r = Math.max(0, radius - inset);
-      ctx.beginPath();
-      ctx.moveTo(0, inset);
-      ctx.lineTo(W - inset - r, inset);
-      ctx.arc(W - inset - r, inset + r, r, -Math.PI / 2, 0);
-      ctx.lineTo(W - inset, H - inset - r);
-      ctx.arc(W - inset - r, H - inset - r, r, 0, Math.PI / 2);
-      ctx.lineTo(0, H - inset);
-      ctx.closePath();
+      const r = Math.max(0, radius - inset), points = [[0, inset]];
+      const corner = (cx, cy, a0) => {
+        for (let i = 0; i <= 8; i++) { const a = a0 + (i / 8) * (Math.PI / 2); points.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]); }
+      };
+      corner(W - inset - r, inset + r, -Math.PI / 2);
+      corner(W - inset - r, H - inset - r, 0);
+      points.push([0, H - inset]);
+      path(points);
     };
 
     // ---- a corner folded down: over a line across the corner, the corner lies on the page, back up
@@ -265,10 +263,15 @@
     ctx.fillStyle = rgba(base, 1);
     ctx.fillRect(0, 0, W, H);
 
-    // the soft marks, small, and stretched over the leaf: clouds, tanned edges, tide lines
+    // the soft marks, small, and stretched over the leaf: clouds, tanned edges, tide lines. They
+    // are drawn on a canvas of their own, a new one for every leaf, never filled again: Safari
+    // copies one canvas onto another a moment after it is asked to, and when one canvas served
+    // both leaves, refilled at once for the right-hand page, the left-hand page now and then got
+    // it half refilled, a band of it pale blue.
     const fw = Math.max(48, Math.min(224, Math.round((W * dpr) / 5))), fh = Math.max(48, Math.round((fw * H) / W));
-    if (!field) field = document.createElement('canvas');
-    if (field.width !== fw || field.height !== fh) { field.width = fw; field.height = fh; }
+    const field = document.createElement('canvas');
+    field.width = fw;
+    field.height = fh;
     const fctx = field.getContext('2d');
     const img = fctx.createImageData(fw, fh), data = img.data;
     const asp = H / W, seed = (L.seed ^ U.fmix32((page + 0x7f4a7c15) >>> 0)) | 0; // each leaf its own clouds
@@ -284,7 +287,7 @@
     for (let j = 0; j < fh; j++) {
       const Y = ((j + 0.5) / fh) * asp; // down from the head, in widths
       for (let i = 0; i < fw; i++) {
-        const g = (i + 0.5) / fw; // from the spine, in widths
+        const x = (i + 0.5) / fw, g = right ? x : 1 - x; // from the spine, in widths
         let r = 0, gg = 0, b = 0, a = 0;
         const add = (c, w) => { r += c[0] * w; gg += c[1] * w; b += c[2] * w; a += w; };
         // clouds in the paper
@@ -319,7 +322,7 @@
     ctx.drawImage(field, 0, 0, W, H);
 
     // the gutter, where the leaf curves down into the spine
-    const gut = ctx.createLinearGradient(0, 0, 0.16 * W, 0);
+    const gut = ctx.createLinearGradient(X(0), 0, X(0.16 * W), 0);
     gut.addColorStop(0, 'rgba(48, 30, 14, 0.42)');
     gut.addColorStop(0.18, 'rgba(48, 30, 14, 0.16)');
     gut.addColorStop(0.5, 'rgba(48, 30, 14, 0.04)');
@@ -344,12 +347,12 @@
         } else { gx = W * u(); y = H * u(); }
         const big = u() < 0.12;
         const rad = (big ? 0.3 + 0.5 * u() : 0.07 + 0.22 * Math.pow(u(), 2)) * em, k = big ? 0.15 + 0.2 * u() : 0.35 + 0.5 * u();
-        const sp = ctx.createRadialGradient(gx, y, 0, gx, y, rad);
+        const sp = ctx.createRadialGradient(X(gx), y, 0, X(gx), y, rad);
         sp.addColorStop(0, rgba(RUST, k));
         sp.addColorStop(0.45, rgba(RUST, k * 0.55));
         sp.addColorStop(1, rgba(RUST, 0));
         ctx.fillStyle = sp;
-        ctx.fillRect(gx - rad, y - rad, 2 * rad, 2 * rad);
+        ctx.fillRect(X(gx) - rad, y - rad, 2 * rad, 2 * rad);
       }
     }
 
@@ -358,8 +361,8 @@
       const k = L.thumb * (0.6 + 0.8 * u());
       const cx = W * (0.93 + 0.04 * u()), cy = H * (0.93 + 0.04 * u()), rx = (0.1 + 0.05 * u()) * W;
       ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(-(0.5 + 0.4 * u()));
+      ctx.translate(X(cx), cy);
+      ctx.rotate((right ? -1 : 1) * (0.5 + 0.4 * u()));
       ctx.scale(1, 0.6);
       const th = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
       th.addColorStop(0, rgba(DUST, k));
@@ -377,7 +380,6 @@
     ctx.fillStyle = ctx.createPattern(grainTile(), 'repeat');
     ctx.fillRect(0, 0, cw, ch);
     ctx.restore();
-    frame();
 
     // a tear, in from the edge
     if (tear) {
@@ -393,7 +395,7 @@
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.beginPath();
-      pts.forEach(([g, y], i) => (i ? ctx.lineTo(g, y) : ctx.moveTo(g, y)));
+      pts.forEach(([g, y], i) => (i ? ctx.lineTo(X(g), y) : ctx.moveTo(X(g), y)));
       ctx.strokeStyle = rgba([255, 250, 236], 0.45);
       ctx.lineWidth = 1.6;
       ctx.stroke();
@@ -420,7 +422,7 @@
       path([A, B, tip]);
       // the back of the leaf's corner, tanned towards its edges as the corner of the leaf is
       const tanned = (t) => base.map((v, k) => mix(v, TAN[k], L.edge * t));
-      const sh = ctx.createLinearGradient((A[0] + B[0]) / 2, (A[1] + B[1]) / 2, tip[0], tip[1]);
+      const sh = ctx.createLinearGradient(X((A[0] + B[0]) / 2), (A[1] + B[1]) / 2, X(tip[0]), tip[1]);
       sh.addColorStop(0, rgba(tanned(0.25).map((v) => v * 0.9), 1));
       sh.addColorStop(0.3, rgba(tanned(0.3), 1));
       sh.addColorStop(1, rgba(tanned(0.85), 1));

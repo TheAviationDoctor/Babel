@@ -24,6 +24,7 @@ No installation required: everything is self-contained HTML/JS/CSS. Just visit t
 | Hurry | hold `Shift` or turn on `Caps Lock` |
 | Interact with objects | `E` or click |
 | Turn book pages | `←` `→`, `Page Up` `Page Down`, `Home` `End` |
+| Find words in a book | `F` |
 | Put a book back | `Esc` or `E` |
 | Let go of the mouse | `Esc` (click to take it back) |
 | Wake from a dream | click or `Esc` |
@@ -139,6 +140,8 @@ Because the map can be inverted, any text can be located: `findText` in `js/libr
 **Patina.** The hexagons are built alike, as in the story, but no two have aged alike. From the same hash, each has its own wear and its own lamps, the same on every visit: the texture of its plaster starts in a different place and turns a different way; its wood is a little darker or lighter, and grimy low down where feet have kicked it; damp has risen up its walls to a tide line of its own, and water has left stains on them and soot on its ceiling; its floor is worn paler where feet go, round the shaft (more on one side than the other) and along the vestibule, and here and there stained with spilt ink. The lamps above its bookcases burn a little warmer or cooler, brighter or dimmer than others. In about one hexagon in thirty, a lamp flickers, and in one in a hundred and fifty, a lamp has gone out.
 
 **Paper.** A book opens at two facing pages, odd pages on the right as in print, so that page 1 faces the inside of the front cover; on a narrow screen, at one page at a time. It lies open on its own leather, the colour of its spine on the shelf, and the leaves already read, or still to read, show at its fore-edges. Like the spines, its paper says nothing about what the pages contain: it comes from the book's place in the Library, so it is the same on every visit. Each book has its own paper, from nearly white to deep yellow, and its own ink, a little faded on old paper. Its edges are browned by light and air (the head most of all, where the dust of the shelf settles), frayed, worn round at the corners, and here and there chipped or torn. There are clouds in the paper, and in many books foxing, small rust-brown spots in clusters; the grey of thumbs at the corner where the pages are turned; now and then a corner folded down. In some books, water once soaked in: its tide line marks the same place on every page it reached, fainter towards the last.
+
+**Words.** Chance writes real words now and then, and in a book drawn by chance **Find words** (or `F`) makes them glow on the page, the longer the brighter and the warmer, from lamplight to crimson. A word is one of some 34,000 common English words of four to eight letters, written within a line in any mix of capitals, so that `tReE` is the word *tree*; where two overlap, the longer is kept. The line under the book names the words on the pages open, and the page of the next one. They are rare, and the longer the rarer: with the default alphabet, a book holds some 130 words of four letters, about one every other spread; one of five letters turns up once in some sixty spreads, one of six about once in a dozen books, and one of seven once in hundreds. A book that the Catalogue or a link leads to holds a text laid in it, full of words by design, so the reader does not look for words there. The finder stays on or off from one book, and one visit, to the next.
 
 ## The Catalogue
 
@@ -304,6 +307,7 @@ In `index.html`, every file name is followed by `?v=` and a version, such as `js
 | `js/dream.js` | The moving picture of dreams, drawn by one shader |
 | `js/music.js` | The music of the hexagons, made as it plays |
 | `js/paper.js` | The paper of the books, each aged in its own way |
+| `js/words.js`, `words/english.js` | Find words: the words chance has written in a book, and the English words it looks for (from SCOWL; see `words/SCOWL-Copyright.txt`) |
 | `js/main.js` | Start-up, reading, sleep |
 | `lib/` | three.js r147 and its `Reflector` (MIT licence, see `lib/three.LICENSE`) |
 | `tests/library.test.js` | Tests of the mathematics |
@@ -319,4 +323,4 @@ With Node.js installed, run `node tests/library.test.js`. The tests enumerate ev
 
 ## Credits
 
-Borge's story itself is not reproduced here for translation copyright reasons. 3D rendering uses [three.js](https://threejs.org). Typefaces are Libre Bodoni and Courier Prime, from Google Fonts, under the SIL Open Font License.
+Borge's story itself is not reproduced here for translation copyright reasons. 3D rendering uses [three.js](https://threejs.org). Typefaces are Libre Bodoni and Courier Prime, from Google Fonts, under the SIL Open Font License. The words that **Find words** looks for come from [SCOWL](http://wordlist.aspell.net/) (Spell Checker Oriented Word Lists), copyright 2000-2016 by Kevin Atkinson, used under its permissive licence (see `words/SCOWL-Copyright.txt`).
