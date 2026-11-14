@@ -24,6 +24,7 @@ No installation required: everything is self-contained HTML/JS/CSS. Just visit t
 | Walk | `W` `A` `S` `D` or arrow keys |
 | Hurry | hold `Shift` or turn on `Caps Lock` |
 | Crouch | tap `C` to crouch, and again to stand; or hold it to crouch only while it is held. Crouched, the lower shelves are at eye level, and one walks slowly. |
+| Jump | `Space` (high enough to clear a shaft's low railing; in the air, `W` `A` `S` `D` steer a little) |
 | Interact with objects | `E` or click |
 | Turn book pages | `←` `→`, `Page Up` `Page Down`, `Home` `End` |
 | Find words in a book | `F` |
@@ -32,7 +33,7 @@ No installation required: everything is self-contained HTML/JS/CSS. Just visit t
 | Wake from a dream | click or `Esc` |
 | Turn the music off or on | `M` |
 
-On a phone or tablet, drag on the right of the screen to look, hold and slide on the left to walk, and tap to interact with objects. Tap again to wake from a dream.
+On a phone or tablet, drag on the right of the screen to look, hold and slide on the left to walk, and tap to interact with objects. Double-tap on the right to jump, while looking at nothing to interact with (so a running jump is a double tap while the other thumb walks). Tap again to wake from a dream.
 
 ## Is the Library infinite?
 
@@ -147,6 +148,8 @@ Because the map can be inverted, any text can be located: `findText` in `js/libr
 **Paper.** A book opens at two facing pages, odd pages on the right as in print, so that page 1 faces the inside of the front cover; on a narrow screen, at one page at a time. It lies open on its own leather, the colour of its spine on the shelf, and the leaves already read, or still to read, show at its fore-edges. Like the spines, its paper says nothing about what the pages contain: it comes from the book's place in the Library, so it is the same on every visit. Each book has its own paper, from nearly white to deep yellow, and its own ink, a little faded on old paper. Its edges are browned by light and air (the head most of all, where the dust of the shelf settles), frayed, worn round at the corners, and here and there chipped or torn. There are clouds in the paper, and in many books foxing, small rust-brown spots in clusters; the grey of thumbs at the corner where the pages are turned; now and then a corner folded down. In some books, water once soaked in: its tide line marks the same place on every page it reached, fainter towards the last.
 
 **Words.** Chance writes real words now and then, and in a book drawn by chance **Find words** (or `F`) makes them glow on the page, the longer the brighter and the warmer, from lamplight to crimson. A word is one of some 34,000 common English words of four to eight letters, written within a line in any mix of capitals, so that `tReE` is the word *tree*; where two overlap, the longer is kept. The line under the book names the words on the pages open, and the page of the next one. They are rare, and the longer the rarer: with the default alphabet, a book holds some 130 words of four letters, about one every other spread; one of five letters turns up once in some sixty spreads, one of six about once in a dozen books, and one of seven once in hundreds. A book that the Catalogue or a link leads to holds a text laid in it, full of words by design, so the reader does not look for words there. The finder stays on or off from one book, and one visit, to the next.
+
+**Jumping and falling.** The space bar jumps, a little over half a metre, under any ceiling low enough to stop the head (a doorway's, or a cell's). It clears the low railing round a shaft, and over it the reader falls. In the air they keep the way they were going, and can steer a little, slowly. A shaft is nearly three metres across: a running jump reaches its far side one floor down, and anyone falling against its edge, or steering to it, catches the railing of the next floor they pass and slips over it onto that floor, the knees giving a little on landing, more the further they fell. Falling straight down, one falls on, and on, as the narrator foresees in the story: the floors go by in silence, until one steers to an edge. The stair can be walked off too, over its outer edge, wherever its treads are above the railing and there is room under the floor above to step off: the reader drops to the floor round the shaft.
 
 **Other librarians.** The reader never meets anyone, yet is not alone. Now and then, while they are in a hexagon, another librarian in a habit like theirs appears across the shaft, pale and a little translucent, seen only through the shaft. Perhaps they are only images of librarians of other times, with no part in the present; and perhaps, to some reader yet to come, the reader is one of them.
 
@@ -314,7 +317,7 @@ In `index.html`, every file name is followed by `?v=` and its version, a hash of
 | `js/world.js` | Streams the hexagons around the reader and dresses their books |
 | `js/figure.js` | The reader as the cell's mirror shows them: a monk in a hooded habit, the face lost in the hood's shadow |
 | `js/ghost.js` | Other librarians, glimpsed now and then across the shaft, on the floors above and below |
-| `js/player.js` | Walking, the spiral stair, and picking a book, door, lamp, bed or Catalogue by gaze |
+| `js/player.js` | Walking, the spiral stair, jumping and falling, and picking a book, door, lamp, bed or Catalogue by gaze |
 | `js/terminal.js` | The Catalogue's screen: the current position, finding texts and books, and going to hexagons |
 | `js/textures.js` | Wood, plaster, stone, floor tiles and leather spines, painted at start-up |
 | `js/quotes.js` | The sentences of dreams: a small English grammar and its vocabulary |

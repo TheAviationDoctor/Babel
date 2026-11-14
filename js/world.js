@@ -73,6 +73,7 @@
       this._bookLayout = this._layoutBooks();
       this.hover = null;
       // how far the Library is drawn: through how many doors on the reader's floor, and up and down the shaft of their hexagon
+      this.hurried = false; // the reader is falling fast: only their own shaft is dressed at once (see main.js)
       this.busy = false; // frames are not easy on this machine: less time for work spread over them (see main.js)
       this.view = { depth: 2, farFloors: 4 }; // (from behind the railing, no more floors can be seen down or up the shaft)
       this.doors = new Map(); // "dh,df" → { target: 0 or 1, t: 0…1 } for doors that have been touched
@@ -793,7 +794,7 @@
         const key = s + ',' + df;
         let cell = this.cells.get(key);
         if (!cell) {
-          const seen = (df === pf && n <= 1) || (s === home && Math.abs(df - pf) <= 1);
+          const seen = this.hurried ? s === home && Math.abs(df - pf) <= 1 : (df === pf && n <= 1) || (s === home && Math.abs(df - pf) <= 1);
           if (!seen && dressed > 0 && performance.now() - start > budget) { this.pending = true; continue; }
           dressed++;
           cell = this._acquire();

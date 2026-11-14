@@ -74,7 +74,8 @@
     world = new Babel.World(scene, assets, lib);
     player = new Babel.Player(assets.dims, camera, renderer.domElement);
     player.sensitivity = lib.config.lookSensitivity || 1;
-    player.onTap = () => { if (mode === 'walking') interact(); };
+    // a tap uses what the reader looks at; with nothing to use, it is left to the reader (whose double tap jumps)
+    player.onTap = () => { if (mode !== 'walking' || !gaze) return false; interact(); return true; };
     player.doorOpen = (site) => world.isDoorOpen(site, player.cf);
     player.kindOf = (site) => world.kind(site);
     player.whereOf = (site) => world.site(site);
@@ -1061,6 +1062,9 @@
     const behind = !picture && (mode === 'reading' || mode === 'terminal' || mode === 'secret');
     if (!picture) {
       player.update(dt);
+      // falling fast down a shaft, floors go by too fast to see more than the shaft itself: only
+      // it is dressed at once, the rest as there is time
+      world.hurried = !!(player.air && player.air.vy < -5);
       if (world.update(player.site, player.cf, player.ch)) backdrop = Math.max(backdrop, 1);
       if (world.tick(dt, behind)) backdrop = Math.max(backdrop, 1);
       if (!behind) followReader(dt);
@@ -1079,6 +1083,8 @@
 
   function hearMusic() {
     if (!music.ctx || music.ctx.state !== 'running') return;
+    // falling fast, the music of the floors rushing by is not heard: it fades, and comes back on landing
+    if (player.air && player.air.vy < -6) { music.update([]); return; }
     music.update(Babel.Music.hearing(player.hearing(), player.y, player.cf, assets.dims).map((s) => {
       const fp = world.fingerprint(s.dh, s.df);
       return { key: fp.join(','), fp, weight: s.weight };
