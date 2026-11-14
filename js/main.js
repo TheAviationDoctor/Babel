@@ -552,6 +552,7 @@
     const before = reading.page / Math.max(1, P - 1);
     const measured = leaves.map(({ leaf, p }) => ({ width: leaf.offsetWidth, height: leaf.offsetHeight, ...pencilled(leaf, p) }));
     for (const [i, { leaf, p, side }] of leaves.entries()) {
+      if (!measured[i].width || !measured[i].height) continue; // (not laid out: nothing to draw on)
       Babel.Paper.draw(leaf.querySelector('canvas'), reading.paper, { page: p, side, scale, em: reading.size, ...measured[i] });
       const share = side === 'left' ? before : 1 - before;
       const layers = Math.round(share * 0.42 * reading.size), out = side === 'left' ? -1 : 1;
@@ -626,7 +627,7 @@
     BabelWords.load().then(() => {
       if (reading !== r) return;
       r.words = BabelWords.inBook(lib, r.content);
-      renderPage();
+      if (mode === 'reading') renderPage(); // (unless the book was put back meanwhile)
     }, (err) => {
       if (reading === r && finding()) $('book-keys').textContent = `The words could not be looked for: ${err.message}.`;
     });

@@ -1260,6 +1260,9 @@
       uniform vec4 uPatina; // by kind: plaster (damp, tide line, stains, soot); wood (shade rgb, grime); tiles (wear, side, ink)
       uniform vec4 uSeedEast, uPatinaEast; // the same, of the hexagon at a vestibule's far end, which it turns into towards that end
       uniform vec4 uPath; // the middle of the walkway round the shaft (x), where the hexagon gives onto its vestibule (y) and the vestibule onto the next hexagon (z)
+      #if PATINA == 1
+        uniform float uCrimson; // 1 for the plaster of a crimson hexagon, else 0
+      #endif
       float hash3(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.yzx + 33.33); return fract((p.x + p.y) * p.z); }
       float vnoise(vec3 p) {
         vec3 i = floor(p), f = fract(p);
@@ -1346,6 +1349,8 @@
           float toEast = smoothstep(uPath.z - 1.0, uPath.z, vLocal.x);
           if (toEast > 0.0) base = mix(base, plasterAt(uvAt(vLocal - vec3(uPath.y + uPath.z, 0.0, 0.0), n), uSeedEast), toEast);
           base *= uTint;
+          // a crimson hexagon's limewash, coloured with a deep red earth, its texture showing through
+          if (uCrimson > 0.0) base = mix(base, dot(base, vec3(0.3, 0.59, 0.11)) * vec3(0.95, 0.16, 0.2), uCrimson);
         #elif PATINA == 3
           // the floor's tiles, laid across the whole floor: the same pattern wherever a hexagon,
           // vestibule, passage or hub is, and however it is turned
@@ -1571,6 +1576,7 @@
       uniforms.uSeedEast = { value: new THREE.Vector4(0, 0, 0, 0) };
       uniforms.uPatinaEast = { value: uniforms.uPatina.value.clone() };
       uniforms.uPath = { value: opts.path || new THREE.Vector4(0, 0, 0, 0) };
+      if (opts.patina === 'plaster') uniforms.uCrimson = { value: 0 };
       if (opts.patina === 'tiles') uniforms.uTileFrame = { value: new THREE.Vector4(1, 0, 0, 0) };
     }
     if (opts.doors) {

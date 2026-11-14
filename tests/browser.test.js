@@ -197,6 +197,34 @@ test('stops at the railing round a shaft, and walks in across the landing', asyn
   assert(r.books.y === 0 && r.books.cf === 0 && r.books.r > 1.6, 'walked into the shaft of a hexagon of books');
 });
 
+test('one hexagon of books in 64 is crimson, its own walls only, and no stair hexagon is', async (page) => {
+  const r = await page.evaluate(() => {
+    const { W } = T;
+    let books = 0, crimson = 0, stairs = 0, first = null;
+    for (let q = -40; q < 40; q++) for (let rr = -40; rr < 40; rr++) {
+      const s = q + rr * 1048576;
+      for (const df of [0, 1, 2]) {
+        const red = W._look(s, df).crimson;
+        if (W.isHub(s)) { if (red) stairs++; continue; }
+        books++; if (red) { crimson++; if (first === null && df === 0) first = s; }
+      }
+    }
+    const out = { books, crimson, stairs };
+    if (first !== null) {
+      T.quiet(first, 0);
+      const cell = W.cell(first, 0), m = cell.look.mats;
+      out.walls = m.hexPlaster.uniforms.uCrimson.value; out.vestibule = m.vesPlaster.uniforms.uCrimson.value; out.passage = m.pasPlaster.uniforms.uCrimson.value;
+      T.quiet(); out.plainAfter = W.cell(0, 0).look.mats.hexPlaster.uniforms.uCrimson.value === (W._look(0, 0).crimson ? 1 : 0);
+    }
+    return out;
+  });
+  const expected = r.books / 64, sd = Math.sqrt(expected);
+  assert(Math.abs(r.crimson - expected) < 4 * sd, `${r.crimson} crimson hexagons of ${r.books}, not about one in 64`);
+  assert.strictEqual(r.stairs, 0, 'a stair hexagon is crimson');
+  assert.deepStrictEqual([r.walls, r.vestibule, r.passage], [1, 0, 0], `the crimson is not on the hexagon's own walls only: ${JSON.stringify(r)}`);
+  assert(r.plainAfter, 'a hexagon dressed again after a crimson one kept its crimson');
+});
+
 /* ---------------- jumping and falling ---------------- */
 
 test('jumps over half a metre, and lands where it left; a low ceiling stops the head', async (page) => {
@@ -463,6 +491,29 @@ test('follows a link to a painting of the collection, and its plate names it', a
   await page.evaluate(() => { history.replaceState(null, '', location.pathname); T.D.startWalking(); });
 });
 
+test('a book put back before its words are found does not try to draw them', async (page) => {
+  const r = await page.evaluate(async () => {
+    const { D, W } = T, lib = D.lib;
+    // a book a reader once pencilled, whose words are looked for as it opens; the dictionary not yet read
+    let slot = -1;
+    T.quiet();
+    const fp = W.fingerprint(0, 0);
+    for (let s = 0; s < lib.S && slot < 0; s++) if (Babel.Paper.look(fp, s, lib.config.pagesPerBook).reader) slot = s;
+    if (slot < 0) return { none: true };
+    await BabelWords.load(); // (read now, so that it is found at once, just after the book is put back)
+    const was = BabelWords.ready;
+    BabelWords.ready = () => false; // (as on a first visit: the words are looked for once the list is read)
+    D.startWalking();
+    D.openBookAt({ location: W.location(0, 0, slot), slot, returnTo: 'walking' });
+    D.startWalking(); // put back at once
+    BabelWords.ready = was;
+    await T.sleep(500);
+    return { mode: D.mode, slot };
+  });
+  assert(!r.none, 'no book with pencil marks in the hexagon');
+  assert.strictEqual(r.mode, 'walking');
+});
+
 /* ---------------- dreams ---------------- */
 
 test('lies down, dreams, and wakes', async (page) => {
@@ -556,7 +607,7 @@ test('lets go of spare hexagons after a while, and draws again where they were',
   const browser = await chromium.launch(opts);
   const page = await browser.newPage({ viewport: { width: 800, height: 500 } });
   const errors = [];
-  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('pageerror', (e) => errors.push(String(e.stack || e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('dialog', (d) => d.dismiss());
   await page.goto(PAGE);

@@ -630,6 +630,7 @@
      * from its fingerprint, so the same on every visit. Cosmetic, like the spines: it says nothing
      * of the books. Most lamps burn a little warmer or cooler, brighter or dimmer than others;
      * about one hexagon in thirty has a lamp that flickers, and one in a hundred and fifty a lamp gone out.
+     * One hexagon of books in 64 is a crimson hexagon: its plaster is crimson.
      */
     _look(dh, df) {
       const fp = this.fingerprint(dh, df), U = BabelCore.util;
@@ -645,6 +646,8 @@
         wood: [shade * (1 + 0.05 * red), shade, shade * (1 - 0.07 * red), u()], // shade, grime
         tiles: [0.35 + 0.65 * u(), u(), Math.pow(u(), 3), 0], // wear, which side of the shaft more, ink
         lamps,
+        // (from a hash of its own, so that the rest of the look is as it was without it)
+        crimson: !hub && (U.fmix32((fp[0] ^ U.fmix32(fp[1] ^ 0x63726d73)) >>> 0) & 63) === 0,
       };
       // (the lamps after the first two are drawn last, so that the rest of the look is as it was with two)
       while (lamps.length < n) lamps.push(lamp());
@@ -672,6 +675,7 @@
         un.uSeedEast.value.fromArray(far.seed);
         un.uPatina.value.fromArray(me[kind]);
         un.uPatinaEast.value.fromArray(far[kind]);
+        if (un.uCrimson) un.uCrimson.value = k === 'hexPlaster' && me.crimson ? 1 : 0; // (the hexagon's own walls, not its vestibule's or passage's)
       }
       this._applyLamps(cell);
     }
