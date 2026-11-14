@@ -141,7 +141,7 @@
     // the hub's doorways: there the floor runs on into the shaft, as the landing of the stair, a
     // sixth of the shaft, from which the stair goes up one way and down the other. A flight of the
     // stair turns five sixths of the way round, from one floor's landing to the next one's, directly
-    // above it; a handrail runs along its outer edge.
+    // above it.
     d.stairA = d.shaftA - 0.01; // the stair fills the shaft, out to (just short of) its edge
     d.colR = 0.14; // its column's
     d.hubLamps = [0, 2, 4]; // the sides of a hub with a lamp above the door
@@ -150,7 +150,6 @@
     d.landingHalf = Math.PI / 6; // half the landing's angle: a sixth of the shaft
     d.stairStart = d.landingTheta + d.landingHalf; // the stair rises counter-clockwise from here
     d.stairSweep = 2 * Math.PI - 2 * d.landingHalf;
-    d.stairRailH = 0.9; // the handrail, above the line of the treads
     d.steps = Math.max(8, Math.round(d.Hf / 0.18));
     d.riser = d.Hf / d.steps;
 
@@ -533,7 +532,7 @@
       const ra = d.shaftA + 0.035, rhalf = ra / SQ3;
       wood.setMatrix(m);
       wood.box(-rhalf, d.railH - 0.05, ra - 0.035, rhalf, d.railH, ra + 0.035, 'xXyYzZ');
-      wood.box(-rhalf, 0, ra - 0.03, rhalf, 0.07, ra + 0.03, 'xXYz'); // kerb
+      wood.box(-rhalf, 0, ra - 0.03, rhalf, 0.07, ra + 0.03, 'xXYzZ'); // the kerb the posts stand on
       const posts = Math.max(3, Math.round((2 * rhalf) / 0.24));
       for (let p = 0; p < posts; p++) {
         const x = -rhalf + (2 * rhalf * (p + 0.5)) / posts;
@@ -582,7 +581,7 @@
       const a = [d.colR * Math.cos(th), d.colR * Math.sin(th)];
       plaster.poly([[a[0], d.roomH, a[1]], [v[0], d.roomH, v[1]], [v[0], d.Hf, v[1]], [a[0], d.Hf, a[1]]], n);
     }
-    // (along the side the stair rises from the landing by, the stair and its handrail are the railing)
+    // (along the side the stair rises from the landing by, the stair's outer string, rising from the floor, stands in for the railing)
     shaftEdges(d, wood, plaster, d.landingSide, [(d.landingSide + 1) % 6]);
 
     // the six sides, each with its door; above the doors, the line of the bookcases' cornice, as in the other hexagons
@@ -769,12 +768,11 @@
 
   /**
    * The spiral stair, about the hub's middle, from this floor's landing to the next one's: its
-   * column, treads (which fill the hexagonal shaft as its landing does) and outer string, in
-   * walnut, and its handrail round the treads' outer edge, on a balustrade, with a newel post at
-   * either end, in the bookcases' wood.
+   * column, its treads, which fill the hexagonal shaft as its landing does, and its outer string,
+   * all in walnut. It has no handrail: one cannot fall far from it, only back to the floor.
    */
   function buildStair(d) {
-    const walnut = new Builder(), wood = new Builder();
+    const walnut = new Builder();
     const A = d.stairA, treads = d.steps - 1, dth = d.stairSweep / treads;
     // the distance from the middle to a hexagon of apothem ap, at angle th; and the angles in
     // (a0, a1) where the hexagon's corners are, with a0 and a1 themselves
@@ -845,31 +843,7 @@
       end(firstSide, 0, nose(firstSide) - 0.4, -1);
     }
 
-    // the handrail along the treads' outer edge, round the hexagon, rising with the line of their noses
-    const rA = A - 0.045, w = 0.028, h = 0.05;
-    const railY = (u) => d.stairRailH + (u / d.stairSweep) * d.Hf; // its top, u radians along the flight
-    const ts = [];
-    for (let i = 0; i < 72; i++) for (const t of cuts(d.stairStart + (d.stairSweep * i) / 72, d.stairStart + (d.stairSweep * (i + 1)) / 72)) if (!ts.length || t - ts[ts.length - 1] > 1e-9) ts.push(t);
-    for (let i = 0; i + 1 < ts.length; i++) {
-      const t0 = ts[i], t1 = ts[i + 1], y0 = railY(t0 - d.stairStart), y1 = railY(t1 - d.stairStart);
-      const p = (ap, t, y) => at(hexR(ap, t), t, y);
-      const tm = Math.round(((t0 + t1) / 2) / (Math.PI / 3)) * (Math.PI / 3), n = [Math.cos(tm), 0, Math.sin(tm)];
-      wood.poly([p(rA - w, t0, y0), p(rA + w, t0, y0), p(rA + w, t1, y1), p(rA - w, t1, y1)], [0, 1, 0]);
-      wood.poly([p(rA - w, t0, y0 - h), p(rA + w, t0, y0 - h), p(rA + w, t1, y1 - h), p(rA - w, t1, y1 - h)], [0, -1, 0]);
-      wood.poly([p(rA + w, t0, y0 - h), p(rA + w, t1, y1 - h), p(rA + w, t1, y1), p(rA + w, t0, y0)], n);
-      wood.poly([p(rA - w, t0, y0 - h), p(rA - w, t1, y1 - h), p(rA - w, t1, y1), p(rA - w, t0, y0)], [-n[0], 0, -n[2]]);
-    }
-    // a baluster on every tread, under the rail
-    for (let k = 0; k < treads; k++) {
-      const u = (k + 0.5) * dth, th = d.stairStart + u, [x, , z] = at(hexR(rA, th), th, 0);
-      wood.box(x - 0.013, (k + 1) * d.riser, z - 0.013, x + 0.013, railY(u) - h, z + 0.013, 'xXzZ');
-    }
-    // the newel posts: at the foot of the flight, on this landing, and at its head, on the next
-    for (const [u, y0] of [[0, 0], [d.stairSweep, d.Hf]]) {
-      const th = d.stairStart + u, [x, , z] = at(hexR(rA, th), th, 0);
-      wood.box(x - 0.035, y0, z - 0.035, x + 0.035, y0 + d.stairRailH + 0.06, z + 0.035, 'xXYzZ');
-    }
-    return { walnut: walnut.geometry(), wood: wood.geometry() };
+    return { walnut: walnut.geometry() };
   }
 
   /** The leaf of the cell's door, in the frame of its hinge (x along the door, z across it). */
@@ -1745,10 +1719,9 @@
       screen: new THREE.MeshBasicMaterial({ map: textures.screen, fog: true }),
       signs: signMaterial(textures.signs, L.vestibule, { colors: [null, null, null, SCREEN], ambient: 0.08, down: VES_DOWN }),
       pasSigns: signMaterial(textures.signs, L.passage, { ambient: 0.08, down: PAS_DOWN }),
-      // the spiral stair, of dark walnut, a piece of joinery like the bookcases (its handrail is of
-      // their lighter wood), lit by the lamps of the hubs it passes, floor after floor
+      // the spiral stair, of dark walnut, a piece of joinery like the bookcases, lit by the lamps of
+      // the hubs it passes, floor after floor
       stairWalnut: archMaterial(textures.wood, woodScale, 0x7a5236, L.hub, { side: THREE.DoubleSide, down: shaded, falloff: 0.38, ambient: 0.16, period: d.Hf }),
-      stairRail: archMaterial(textures.wood, [0.9, 2.2], 0xb0845a, L.hub, { down: shaded, falloff: 0.38, ambient: 0.16, period: d.Hf }),
       cellWood: archMaterial(textures.wood, [0.9, 2.2], 0xffffff, L.cell, { vertexColors: true, falloff: 1.1, ambient: 0.05 }),
       doorWood: archMaterial(textures.wood, [0.9, 2.2], 0xb0845a, L.door, { cellMatrix: true }),
       cellSoft: archMaterial(textures.plaster, [0.4, 0.4], 0xffffff, L.cell, { vertexColors: true, falloff: 1.1, ambient: 0.05 }),
@@ -1771,7 +1744,7 @@
       vesWood: ves.wood, vesPlaster: ves.plaster, vesTiles: ves.tiles,
       pasWood: pas.wood, pasPlaster: pas.plaster, pasTiles: pas.tiles,
       hubWood: hub.wood, hubPlaster: hub.plaster, hubTiles: hub.tiles, hubGlow: hub.glow,
-      stairWalnut: stair.walnut, stairRail: stair.wood,
+      stairWalnut: stair.walnut,
       lampGlow: buildLampGlow(d),
       plates: buildPlates(d, plateAtlas),
       paintingPlate: d.painting ? buildPaintingPlate(d) : null,

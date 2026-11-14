@@ -430,7 +430,7 @@
       const d = this.d, r = this.radius;
       const dx = hx, dz = z; // (about the hub's middle)
       const dist = Math.hypot(dx, dz);
-      if (dist < d.colR + r || hexDist(dx, dz) > d.stairA - 0.08 - r) return null; // between the column and the handrail
+      if (dist < d.colR + r || hexDist(dx, dz) > d.stairA - r) return null; // between the column and the treads' outer ends
       const th = Math.atan2(dz, dx);
       let u = (th - d.stairStart) % TAU;
       if (u < 0) u += TAU;

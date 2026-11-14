@@ -477,7 +477,6 @@
       group.add(new THREE.Mesh(G.hubGlow, M.lamp));
       // the spiral stair, up the shaft from this floor's landing to the next one's
       group.add(new THREE.Mesh(G.stairWalnut, M.stairWalnut));
-      group.add(new THREE.Mesh(G.stairRail, M.stairRail));
       return { group, mats, site: 0, df: 0 };
     }
 
