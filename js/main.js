@@ -58,7 +58,8 @@
     } catch (e) {
       return showError('This browser could not start WebGL, which the Library needs to draw itself. Try a recent version of Chrome, Edge, Firefox or Safari.');
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+    quality.ladder = qualityLadder();
+    renderer.setPixelRatio(quality.ladder[0].pr);
     renderer.setSize(window.innerWidth, window.innerHeight, false);
 
     scene = new THREE.Scene();
@@ -85,7 +86,10 @@
     try { const kept = localStorage.getItem('babel-music'); if (kept) musicOn = kept === 'on'; } catch (e) { /* as config.js says */ }
     music = new Babel.Music({ volume: lib.config.volume, on: musicOn });
     for (const type of ['pointerdown', 'keydown', 'touchend']) window.addEventListener(type, () => music.start(), true);
-    document.addEventListener('visibilitychange', () => music.setVisible(!document.hidden));
+    document.addEventListener('visibilitychange', () => {
+      music.setVisible(!document.hidden);
+      if (!document.hidden) last = performance.now(); // the time away is not a frame
+    });
 
     // The small mirror above the sink of the nearest cell. Its camera sees layer 1, where the reader's own figure lives.
     const d = assets.dims;
@@ -157,6 +161,7 @@
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     sizeMirror();
+    backdrop = 2;
     if (mode === 'reading') renderPage();
   }
 
@@ -393,6 +398,7 @@
     $('secret').hidden = next !== 'secret';
     $('sleep').hidden = next !== 'sleeping';
     player.enabled = next === 'walking';
+    backdrop = 2; // the Library, drawn once more as it now stands behind (or no longer behind) something
     if ((next === 'terminal' || next === 'reading' || next === 'sleeping' || next === 'secret') && document.pointerLockElement) document.exitPointerLock();
     if (next !== 'walking') { world.clearHover(); gaze = null; gazeKey = ''; $('gaze').hidden = true; }
     updateLookHint();
@@ -941,22 +947,52 @@
 
   /* ---------------- frame ---------------- */
 
-  // Lowers the resolution if frames are slow on this machine.
-  const quality = { sum: 0, n: 0, level: 0 };
+  /*
+   * How finely the Library is drawn, adapted to this machine. The settings tried, from the
+   * finest down, each coarser than the last in one way: the screen's pixels (up to 1.75 to a
+   * CSS pixel), then fewer floors seen up and down the shaft, then fewer pixels than the screen
+   * has. Each 120 walking frames, their median interval decides: slow (under some 42 frames a
+   * second), one step down; easy for a while, one step back up, on trial. A step up that proves
+   * too much is undone, and the next try waits twice as long. Pauses and long one-off jobs (a
+   * book opened, a hexagon reached through the catalogue) are left out: they are not how the
+   * Library draws, and the median pays little heed to the odd slow frame that is left.
+   */
+  const quality = { ladder: [], level: 0, samples: [], easy: 0, wait: 15, trial: false };
+  function qualityLadder() {
+    const top = Math.min(window.devicePixelRatio || 1, 1.75), ladder = [];
+    for (let pr = top; pr > 1.01; pr -= 0.375) ladder.push({ pr, far: 4 });
+    const one = Math.min(1, top);
+    ladder.push({ pr: one, far: 4 }, { pr: one, far: 3 }, { pr: one, far: 2 });
+    for (const pr of [0.85, 0.7]) if (pr < one) ladder.push({ pr, far: 2 });
+    return ladder;
+  }
+  function setQuality(level) {
+    quality.level = level;
+    const q = quality.ladder[level];
+    if (renderer.getPixelRatio() !== q.pr) { renderer.setPixelRatio(q.pr); onResize(); }
+    if (world.view.farFloors !== q.far) { world.view.farFloors = q.far; world.center = null; }
+  }
   function adaptQuality(rawDt) {
-    if (mode !== 'walking' || document.hidden) return;
-    quality.sum += rawDt; quality.n++;
-    if (quality.n < 120) return;
-    const avg = quality.sum / quality.n;
-    quality.sum = 0; quality.n = 0;
-    if (avg > 0.024 && quality.level < 3) {
-      quality.level++;
-      const pr = renderer.getPixelRatio();
-      if (pr > 1) renderer.setPixelRatio(Math.max(1, pr - 0.375));
-      else world.view.farFloors = Math.max(2, world.view.farFloors - 1);
-      onResize();
-      world.center = null;
-    }
+    if (mode !== 'walking' || sleep || document.hidden) { quality.samples.length = 0; return; }
+    if (rawDt > 0.25) return; // a pause, or a long job
+    const S = quality.samples;
+    S.push(rawDt);
+    if (S.length < 120) return;
+    S.sort((a, b) => a - b);
+    const median = S[S.length >> 1], q = quality;
+    S.length = 0;
+    if (median > 0.024) {
+      // too slow: a step down (and, if that was a step up on trial, the next try waits longer)
+      if (q.trial) q.wait = Math.min(240, q.wait * 2);
+      q.trial = false;
+      q.easy = 0;
+      if (q.level < q.ladder.length - 1) setQuality(q.level + 1);
+    } else if (median < 0.0185) {
+      // easy: the step up on trial has held; after long enough, try the next
+      q.trial = false;
+      q.easy += 120 * median;
+      if (q.level > 0 && q.easy > q.wait) { q.easy = 0; q.trial = true; setQuality(q.level - 1); }
+    } else q.easy = 0;
   }
 
   /** How well lit the reader is (1 in the hexagons), for their reflection in the mirrors. */
@@ -978,16 +1014,41 @@
     const dt = Math.min(0.05, rawDt);
     last = now;
     adaptQuality(rawDt);
-    player.update(dt);
-    world.update(player.site, player.cf, player.ch);
-    world.tick(dt);
-    // the music of the hexagons the reader is among, each as near as they are
-    if (music.ctx && music.ctx.state === 'running') {
-      music.update(Babel.Music.hearing(player.hearing(), player.y, player.cf, assets.dims).map((s) => {
-        const fp = world.fingerprint(s.dh, s.df);
-        return { key: fp.join(','), fp, weight: s.weight };
-      }));
+    frameCount++;
+    // asleep, the dream is drawn instead of the Library, and the Library while it fades
+    const picture = sleep ? updateSleep(now / 1000) : null;
+    // behind a book, the catalogue or a secret's password, the Library is only seen, and still:
+    // its lamps need not flicker nor its ghosts walk, and it is drawn again only when something
+    // in it changes (a door swinging, a painting finished, a hexagon dressed)
+    const behind = !picture && (mode === 'reading' || mode === 'terminal' || mode === 'secret');
+    if (!picture) {
+      player.update(dt);
+      if (world.update(player.site, player.cf, player.ch)) backdrop = Math.max(backdrop, 1);
+      if (world.tick(dt, behind)) backdrop = Math.max(backdrop, 1);
+      if (!behind) followReader(dt);
     }
+    // the music of the hexagons the reader is among, each as near as they are (planned 1.5 s
+    // ahead, so a reader who is not moving need be listened for only now and then)
+    if (!(picture || behind) || frameCount % 15 === 0) hearMusic();
+
+    if (picture) dream.render(renderer, picture.t, picture.n, picture.mix);
+    else if (!behind) renderer.render(scene, camera);
+    else if (backdrop > 0) { backdrop--; renderer.render(scene, camera); }
+    requestAnimationFrame(frame);
+  }
+  let frameCount = 0;
+  let backdrop = 0; // how many more times to draw the Library behind a book or the catalogue, though nothing in it moves
+
+  function hearMusic() {
+    if (!music.ctx || music.ctx.state !== 'running') return;
+    music.update(Babel.Music.hearing(player.hearing(), player.y, player.cf, assets.dims).map((s) => {
+      const fp = world.fingerprint(s.dh, s.df);
+      return { key: fp.join(','), fp, weight: s.weight };
+    }));
+  }
+
+  /** What follows the reader about the Library: the light on them, what they look at, their reflection, and the ghosts. */
+  function followReader(dt) {
     const lit = lightOnReader();
     figureLight.intensity = 0.8 * lit;
     figureKey.intensity = 0.9 * lit;
@@ -1017,16 +1078,7 @@
     placeIn(sinkReflector, sinkCell.frame, d.sinkMirror.x - 0.014, d.sinkMirror.y0 + d.sinkMirror.h / 2, d.sinkMirror.z, -Math.PI / 2);
     Babel.Figure.pose(figure, player, dt);
     ghost.update(dt, player, camera, mode === 'walking' && !sleep);
-
-    // asleep, the dream is drawn instead of the Library, and the Library while it fades
-    const picture = sleep ? updateSleep(now / 1000) : null;
-    // behind the catalogue or a book, the Library only needs drawing now and then
-    frameCount++;
-    if (picture) dream.render(renderer, picture.t, picture.n, picture.mix);
-    else if (mode === 'walking' || sleep || frameCount % 4 === 0) renderer.render(scene, camera);
-    requestAnimationFrame(frame);
   }
-  let frameCount = 0;
 
   function updateGaze() {
     const book = player.pick(lib);
@@ -1116,7 +1168,7 @@
     get renderer() { return renderer; }, get mode() { return mode; }, get sleep() { return sleep; }, journey, here,
     get reading() { return reading; },
     openBook, openBookAt, startWalking, setMode, goToCell, goToAddress, fallAsleep, wakeUp, hexagonSeed,
-    get lastJourney() { return lastJourney; },
+    get lastJourney() { return lastJourney; }, quality, adaptQuality,
     get terminal() { return terminal; },
     get ghost() { return ghost; }, get camera() { return camera; },
   };

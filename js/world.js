@@ -143,13 +143,19 @@
       return s ? s.t * s.t : 1; // a filament dims quickly, then glows out
     }
 
-    /** Swings doors, dims lamps towards their targets, and goes on making the nearest paintings. */
-    tick(dt) {
+    /**
+     * Swings doors, dims lamps towards their targets, and goes on making the nearest paintings.
+     * `still`: the Library is only seen behind something else, so its lamps need not flicker.
+     * Returns whether anything that can be seen has changed.
+     */
+    tick(dt, still) {
       this.time += dt;
-      for (const cell of this.cells.values()) if (cell.looks && cell.looks.flickers) this._applyLamps(cell);
-      if (this.paintings && this.paintings.step(6)) this._showPaintings();
+      let moved = false;
+      if (!still) for (const cell of this.cells.values()) if (cell.looks && cell.looks.flickers) { this._applyLamps(cell); moved = true; }
+      if (this.paintings && this.paintings.step(6)) { this._showPaintings(); moved = true; }
       for (const [key, s] of this.doors) {
         if (s.t === s.target) continue;
+        moved = true;
         s.t = s.target ? Math.min(1, s.t + dt / 0.75) : Math.max(0, s.t - dt / 0.75);
         const cell = this.cells.get(key);
         if (cell) { this._applyDoor(cell); this._applyLight(cell); }
@@ -157,11 +163,13 @@
       }
       for (const [key, s] of this.lamps) {
         if (s.t === s.target) continue;
+        moved = true;
         s.t = s.target ? Math.min(1, s.t + dt / 0.12) : Math.max(0, s.t - dt / 0.4);
         const cell = this.cells.get(key);
         if (cell) this._applyLight(cell);
         if (s.t === 1 && s.target === 1) this.lamps.delete(key);
       }
+      return moved;
     }
 
     _applyDoor(cell) {
@@ -200,6 +208,7 @@
       const c = this.lib.clusterOf(hexagon);
       // (the waking hexagon is petal `petal` of its cluster: it stands one step from its hub, that way)
       this.anchor = { hexagon, floor, row: c.row, column: c.column, petal: c.petal, at: Babel.Honeycomb.DIRS[c.petal] };
+      this._wantedKey = null; // (which sites are stairs, and so what is drawn, depends on where the anchor is)
       if (this.doors) this.doors.clear();
       if (this.lamps) this.lamps.clear();
       this.mark = null;
@@ -690,16 +699,22 @@
 
     /**
      * Moves the visible window to centre on the reader's site (`home`: their hexagon, if the
-     * site is a hub). New hexagons are dressed a few at a time, nearest first, so that walking
-     * on does not stop to shelve them all at once.
+     * site is a hub). The hexagons seen at once (the reader's own, those through its doors, and
+     * its own up and down one floor) are dressed straight away; the others a few milliseconds'
+     * worth a frame, nearest first, so that neither arriving nor walking on stops to shelve them
+     * all at once. Returns whether anything was done.
      */
     update(ps, pf, home) {
       const d = this.d, H = Babel.Honeycomb;
       if (home === undefined) home = this.isHub(ps) ? this.neighbours(ps)[0] : ps;
       const changed = !this.center || this.center[0] !== ps || this.center[1] !== pf || this.center[2] !== home;
-      if (!changed && !this.pending) return;
+      if (!changed && !this.pending) return false;
       this.center = [ps, pf, home];
-      const wanted = this._wanted(ps, pf, home);
+      // what to draw is worked out once for each place the reader stands, not again every frame
+      // while it is being dressed
+      const wantedKey = [ps, pf, home, this.view.depth, this.view.farFloors].join(',');
+      if (this._wantedKey !== wantedKey) { this._wantedKey = wantedKey; this._wantedList = this._wanted(ps, pf, home); }
+      const wanted = this._wantedList;
       const keep = new Set(wanted.cells.map(([s, f]) => s + ',' + f));
       for (const [key, cell] of this.cells) {
         if (!keep.has(key)) { this._release(cell); this.cells.delete(key); }
@@ -725,15 +740,18 @@
         }
         place(hub.group, s, df);
       }
-      // arriving somewhere, everything is dressed at once; walking, a few hexagons a frame
-      let budget = this.cells.size ? 2 : Infinity;
+      // the others, while there is time left in this frame (a little more on arriving, when
+      // there is nothing yet to walk through), and always at least one
+      const start = performance.now(), budget = this.cells.size ? 3 : 8;
+      let dressed = 0;
       this.pending = false;
       for (const [s, df, n] of wanted.cells) {
         const key = s + ',' + df;
         let cell = this.cells.get(key);
         if (!cell) {
-          if (budget <= 0) { this.pending = true; continue; }
-          budget--;
+          const seen = (df === pf && n <= 1) || (s === home && Math.abs(df - pf) <= 1);
+          if (!seen && dressed > 0 && performance.now() - start > budget) { this.pending = true; continue; }
+          dressed++;
           cell = this._acquire();
           this._dress(cell, s, df);
           this.cells.set(key, cell);
@@ -767,6 +785,7 @@
       }
       this._trimCaches(ps, pf);
       this.clearHover();
+      return true;
     }
 
     /** Names the painting of site s of floor df (as the catalogue knows it), on the plate under it. */
