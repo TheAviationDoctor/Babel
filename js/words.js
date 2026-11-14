@@ -22,7 +22,9 @@
   'use strict';
 
   const SHORTEST = 4;
-  const LIST = 'words/english.js?v=1';
+  // (its version as stamp.js wrote it into index.html, so that a new list is fetched again)
+  const stamped = typeof window !== 'undefined' && window.BABEL_VERSIONS && window.BABEL_VERSIONS['words/english.js'];
+  const LIST = 'words/english.js?v=' + (stamped || '1');
   let words = null; // the words, once read
   let longest = 0;
   let loading = null;

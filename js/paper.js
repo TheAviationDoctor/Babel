@@ -263,12 +263,47 @@
    * side, bottom } (in ems; by default the padding of .page in css/style.css) }.
    */
   function draw(canvas, L, o) {
-    const W = o.width, H = o.height, dpr = o.scale || 1, em = o.em;
-    const cw = Math.max(1, Math.round(W * dpr)), ch = Math.max(1, Math.round(H * dpr));
+    const dpr = o.scale || 1;
+    const cw = Math.max(1, Math.round(o.width * dpr)), ch = Math.max(1, Math.round(o.height * dpr));
     if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+    // the leaf as time has left it, kept: drawn again only for another page, size or book
+    const key = [L.key.join(','), L.seed, o.page, o.side, o.width, o.height, dpr, o.em, JSON.stringify(o.margin || null)].join('|');
+    let leaf = leaves.get(key);
+    if (leaf) leaves.delete(key); // (to be kept again as the one drawn last)
+    else {
+      leaf = paint(L, o, cw, ch);
+      leafBytes += leaf.bytes;
+    }
+    leaves.set(key, leaf);
+    for (const [k, v] of leaves) {
+      if (leafBytes <= LEAF_BYTES || leaves.size <= 2) break; // (always the two leaves in view)
+      leaves.delete(k);
+      leafBytes -= v.bytes;
+      v.canvas.width = v.canvas.height = 0; // (its pixels let go of at once)
+    }
     const ctx = canvas.getContext('2d');
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, cw, ch);
+    ctx.drawImage(leaf.canvas, 0, 0);
+    // then what changes on it: the pencil beside the words found, and over that its edge and folded corner
+    leaf.finish(ctx, o);
+  }
+
+  // The leaves drawn last, by book, page, side and size, up to some 48 MB of their pixels.
+  const leaves = new Map(), LEAF_BYTES = 48 * 1024 * 1024;
+  let leafBytes = 0;
+
+  /**
+   * Paints the leaf of draw()'s options o, at cw × ch device pixels, on a canvas of its own: all
+   * but the pencil, its edge and its folded corner, which finish(ctx, o) adds on another
+   * canvas once this one is drawn on it. Returns { canvas, bytes, finish }.
+   */
+  function paint(L, o, cw, ch) {
+    const W = o.width, H = o.height, dpr = o.scale || 1, em = o.em;
+    const sheet = document.createElement('canvas');
+    sheet.width = cw;
+    sheet.height = ch;
+    let ctx = sheet.getContext('2d');
     const page = o.page;
     const right = o.side === 'right'; // a right-hand page: the spine on its left
     // Everything is measured from the spine outwards, and X() takes it across the leaf: on a
@@ -372,19 +407,22 @@
 
     // ---- the leaf itself
     ctx.save();
-    path(outline);
-    ctx.clip();
-    if (fold) {
-      // everything but the corner beyond the fold line
-      const [A, B] = [fold.A, fold.B], far = 4 * (W + H);
-      const dx = B[0] - A[0], dy = B[1] - A[1], len = Math.hypot(dx, dy), tx = dx / len, ty = dy / len;
-      // the side of the line away from the corner
-      const nx = -ty, ny = tx, side = (fold.C[0] - A[0]) * nx + (fold.C[1] - A[1]) * ny > 0 ? -1 : 1;
-      const P = (x, y) => [x, y];
-      const keep = [P(A[0] - tx * far, A[1] - ty * far), P(A[0] + tx * far, A[1] + ty * far),
-        P(A[0] + tx * far + nx * side * far, A[1] + ty * far + ny * side * far), P(A[0] - tx * far + nx * side * far, A[1] - ty * far + ny * side * far)];
-      path(keep);
+    clipLeaf();
+    function clipLeaf() {
+      path(outline);
       ctx.clip();
+      if (fold) {
+        // everything but the corner beyond the fold line
+        const [A, B] = [fold.A, fold.B], far = 4 * (W + H);
+        const dx = B[0] - A[0], dy = B[1] - A[1], len = Math.hypot(dx, dy), tx = dx / len, ty = dy / len;
+        // the side of the line away from the corner
+        const nx = -ty, ny = tx, side = (fold.C[0] - A[0]) * nx + (fold.C[1] - A[1]) * ny > 0 ? -1 : 1;
+        const P = (x, y) => [x, y];
+        const keep = [P(A[0] - tx * far, A[1] - ty * far), P(A[0] + tx * far, A[1] + ty * far),
+          P(A[0] + tx * far + nx * side * far, A[1] + ty * far + ny * side * far), P(A[0] - tx * far + nx * side * far, A[1] - ty * far + ny * side * far)];
+        path(keep);
+        ctx.clip();
+      }
     }
     ctx.fillStyle = rgba(base, 1);
     ctx.fillRect(0, 0, W, H);
@@ -530,38 +568,48 @@
       ctx.stroke();
     }
 
-    // what a reader once pencilled, beside the words they found
-    if (L.reader && o.words && o.words.length && o.text) pencil(ctx, L, o, right, W);
-
-    // the very edge, darker where it has been handled
-    path(outline);
-    ctx.strokeStyle = rgba(TAN.map((v) => v * 0.8), 0.25 + 0.4 * L.age);
-    ctx.lineWidth = 1.4;
-    ctx.stroke();
     ctx.restore();
+    return { canvas: sheet, bytes: cw * ch * 4, finish };
 
-    // ---- the folded corner, lying on the page
-    if (fold) {
-      const { A, B, tip } = fold;
+    /** On ctx, a canvas the leaf has just been drawn on: the pencil, for o's words, and the leaf's edge and folded corner. */
+    function finish(target, o) {
+      ctx = target;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.save();
-      ctx.shadowColor = 'rgba(20, 12, 4, 0.35)';
-      ctx.shadowBlur = 3 * dpr;
-      ctx.shadowOffsetX = (right ? -1 : 1) * 1 * dpr;
-      ctx.shadowOffsetY = (fold.top ? 1 : -1) * 1 * dpr;
-      path([A, B, tip]);
-      // the back of the leaf's corner, tanned towards its edges as the corner of the leaf is
-      const tanned = (t) => base.map((v, k) => mix(v, TAN[k], L.edge * t));
-      const sh = ctx.createLinearGradient(X((A[0] + B[0]) / 2), (A[1] + B[1]) / 2, X(tip[0]), tip[1]);
-      sh.addColorStop(0, rgba(tanned(0.25).map((v) => v * 0.9), 1));
-      sh.addColorStop(0.3, rgba(tanned(0.3), 1));
-      sh.addColorStop(1, rgba(tanned(0.85), 1));
-      ctx.fillStyle = sh;
-      ctx.fill();
-      ctx.restore();
-      path([A, B, tip]);
-      ctx.strokeStyle = rgba(TAN, 0.35);
-      ctx.lineWidth = 0.7;
+      clipLeaf();
+      // what a reader once pencilled, beside the words they found
+      if (L.reader && o.words && o.words.length && o.text) pencil(ctx, L, o, right, W);
+
+      // the very edge, darker where it has been handled
+      path(outline);
+      ctx.strokeStyle = rgba(TAN.map((v) => v * 0.8), 0.25 + 0.4 * L.age);
+      ctx.lineWidth = 1.4;
       ctx.stroke();
+      ctx.restore();
+
+      // ---- the folded corner, lying on the page
+      if (fold) {
+        const { A, B, tip } = fold;
+        ctx.save();
+        ctx.shadowColor = 'rgba(20, 12, 4, 0.35)';
+        ctx.shadowBlur = 3 * dpr;
+        ctx.shadowOffsetX = (right ? -1 : 1) * 1 * dpr;
+        ctx.shadowOffsetY = (fold.top ? 1 : -1) * 1 * dpr;
+        path([A, B, tip]);
+        // the back of the leaf's corner, tanned towards its edges as the corner of the leaf is
+        const tanned = (t) => base.map((v, k) => mix(v, TAN[k], L.edge * t));
+        const sh = ctx.createLinearGradient(X((A[0] + B[0]) / 2), (A[1] + B[1]) / 2, X(tip[0]), tip[1]);
+        sh.addColorStop(0, rgba(tanned(0.25).map((v) => v * 0.9), 1));
+        sh.addColorStop(0.3, rgba(tanned(0.3), 1));
+        sh.addColorStop(1, rgba(tanned(0.85), 1));
+        ctx.fillStyle = sh;
+        ctx.fill();
+        ctx.restore();
+        path([A, B, tip]);
+        ctx.strokeStyle = rgba(TAN, 0.35);
+        ctx.lineWidth = 0.7;
+        ctx.stroke();
+    }
     }
   }
 

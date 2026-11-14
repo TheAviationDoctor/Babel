@@ -58,8 +58,7 @@
     } catch (e) {
       return showError('This browser could not start WebGL, which the Library needs to draw itself. Try a recent version of Chrome, Edge, Firefox or Safari.');
     }
-    quality.ladder = qualityLadder();
-    renderer.setPixelRatio(quality.ladder[0].pr);
+    renderer.setPixelRatio(qualityLadder()[0].pr);
     renderer.setSize(window.innerWidth, window.innerHeight, false);
 
     scene = new THREE.Scene();
@@ -142,7 +141,13 @@
     bindInterface();
     fitGlyphs();
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitGlyphs).catch(() => {});
-    window.addEventListener('resize', onResize);
+    // (a window being resized says so many times a frame: it is answered once a frame)
+    let resizing = false;
+    window.addEventListener('resize', () => {
+      if (resizing) return;
+      resizing = true;
+      requestAnimationFrame(() => { resizing = false; onResize(); });
+    });
     requestAnimationFrame(frame);
     Babel.started = true;
     void d;
@@ -150,9 +155,10 @@
 
   function sizeMirror() {
     const pr = renderer.getPixelRatio();
-    // half the screen's resolution, and no more than 1,024 pixels on its longer side: the mirror is
-    // small, and its picture need be no sharper than the screen shows it
-    const w = window.innerWidth * pr * 0.5, h = window.innerHeight * pr * 0.5, k = Math.min(1, 1024 / Math.max(w, h));
+    // half the screen's resolution (less on a machine it slows), and no more than 1,024 pixels on
+    // its longer side: the mirror is small, and its picture need be no sharper than the screen shows it
+    const f = MIRROR_SCALE[quality.mirror.level];
+    const w = window.innerWidth * pr * f, h = window.innerHeight * pr * f, k = Math.min(1, 1024 / Math.max(w, h));
     sinkReflector.getRenderTarget().setSize(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)));
   }
 
@@ -534,12 +540,12 @@
       return { leaf, p, side: sides[i] };
     }).filter(Boolean);
     // the leaves' paper, drawn at their size; the pages under them, as many as there are on each side
+    // (both leaves measured before either is drawn on, so that the page is laid out only once)
     const scale = Math.min(3, window.devicePixelRatio || 1);
     const before = reading.page / Math.max(1, P - 1);
-    for (const { leaf, p, side } of leaves) {
-      Babel.Paper.draw(leaf.querySelector('canvas'), reading.paper, {
-        page: p, side, width: leaf.offsetWidth, height: leaf.offsetHeight, scale, em: reading.size, ...pencilled(leaf, p),
-      });
+    const measured = leaves.map(({ leaf, p }) => ({ width: leaf.offsetWidth, height: leaf.offsetHeight, ...pencilled(leaf, p) }));
+    for (const [i, { leaf, p, side }] of leaves.entries()) {
+      Babel.Paper.draw(leaf.querySelector('canvas'), reading.paper, { page: p, side, scale, em: reading.size, ...measured[i] });
       const share = side === 'left' ? before : 1 - before;
       const layers = Math.round(share * 0.42 * reading.size), out = side === 'left' ? -1 : 1;
       const shadows = [];
@@ -810,8 +816,7 @@
     }
     if (z.phase === 'dreaming' && !z.dreaming) {
       z.dreaming = true;
-      // the dream is soft: one pixel of the screen per pixel drawn is plenty
-      if (z.pixelRatio > 1) { renderer.setPixelRatio(1); onResize(); }
+      dreamPixels();
     }
 
     let words = 0, hint = 0, picture = null;
@@ -838,6 +843,12 @@
     $('dream-quote').style.opacity = words.toFixed(3);
     $('sleep-hint').style.opacity = hint.toFixed(3);
     return picture;
+  }
+
+  /** The dream is soft: one pixel drawn to a CSS pixel is plenty, and fewer on a machine it slows. */
+  function dreamPixels() {
+    const pr = Math.min(1, sleep.pixelRatio) * DREAM_SCALE[quality.dream.level];
+    if (renderer.getPixelRatio() !== pr) { renderer.setPixelRatio(pr); onResize(); }
   }
 
   /** Back from the dream to the Library (still under the black, which then lifts). */
@@ -948,51 +959,78 @@
   /* ---------------- frame ---------------- */
 
   /*
-   * How finely the Library is drawn, adapted to this machine. The settings tried, from the
-   * finest down, each coarser than the last in one way: the screen's pixels (up to 1.75 to a
-   * CSS pixel), then fewer floors seen up and down the shaft, then fewer pixels than the screen
-   * has. Each 120 walking frames, their median interval decides: slow (under some 42 frames a
-   * second), one step down; easy for a while, one step back up, on trial. A step up that proves
-   * too much is undone, and the next try waits twice as long. Pauses and long one-off jobs (a
-   * book opened, a hexagon reached through the catalogue) are left out: they are not how the
+   * How finely the Library is drawn, adapted to this machine: each kind of work on its own
+   * settings, from the finest down, and judged on the frames where it is done.
+   *   - the Library (frames walking, the cell's mirror out of sight): the screen's pixels (up to
+   *     1.75 to a CSS pixel), then fewer floors seen up and down the shaft, then fewer pixels
+   *     than the screen has. Frames not easy also halve the time given each frame to making
+   *     paintings and dressing hexagons;
+   *   - the cell's mirror (frames walking while it is seen): its picture, from half the screen's
+   *     pixels across down to a quarter;
+   *   - the dream (frames dreaming): its pixels, from one to a CSS pixel down to half that.
+   * Each 120 such frames, their median interval decides: slow (under some 42 frames a second),
+   * one step down; easy for a while, one step back up, on trial. A step up that proves too much
+   * is undone, and the next try waits twice as long. Pauses and long one-off jobs (a book
+   * opened, a hexagon reached through the catalogue) are left out: they are not how the
    * Library draws, and the median pays little heed to the odd slow frame that is left.
    */
-  const quality = { ladder: [], level: 0, samples: [], easy: 0, wait: 15, trial: false };
+  function adapter(size, apply) {
+    return { size, apply, level: 0, samples: [], median: 0, easy: 0, wait: 15, trial: false };
+  }
+  const quality = {
+    world: adapter(1, () => {}), // its settings are known once the screen is (see qualityLadder)
+    mirror: adapter(3, () => sizeMirror()),
+    dream: adapter(3, () => { if (sleep && sleep.dreaming) dreamPixels(); }),
+    ladder: [],
+  };
+  const MIRROR_SCALE = [0.5, 0.35, 0.25], DREAM_SCALE = [1, 0.75, 0.5];
   function qualityLadder() {
     const top = Math.min(window.devicePixelRatio || 1, 1.75), ladder = [];
     for (let pr = top; pr > 1.01; pr -= 0.375) ladder.push({ pr, far: 4 });
     const one = Math.min(1, top);
     ladder.push({ pr: one, far: 4 }, { pr: one, far: 3 }, { pr: one, far: 2 });
     for (const pr of [0.85, 0.7]) if (pr < one) ladder.push({ pr, far: 2 });
+    quality.ladder = ladder;
+    quality.world.size = ladder.length;
+    quality.world.apply = (level) => {
+      const q = ladder[level];
+      if (renderer.getPixelRatio() !== q.pr) { renderer.setPixelRatio(q.pr); onResize(); }
+      if (world.view.farFloors !== q.far) { world.view.farFloors = q.far; world.center = null; }
+    };
     return ladder;
   }
-  function setQuality(level) {
-    quality.level = level;
-    const q = quality.ladder[level];
-    if (renderer.getPixelRatio() !== q.pr) { renderer.setPixelRatio(q.pr); onResize(); }
-    if (world.view.farFloors !== q.far) { world.view.farFloors = q.far; world.center = null; }
-  }
-  function adaptQuality(rawDt) {
-    if (mode !== 'walking' || sleep || document.hidden) { quality.samples.length = 0; return; }
+  /** Takes one frame's interval into account for adapter q. */
+  function judge(q, rawDt) {
     if (rawDt > 0.25) return; // a pause, or a long job
-    const S = quality.samples;
+    const S = q.samples;
     S.push(rawDt);
     if (S.length < 120) return;
     S.sort((a, b) => a - b);
-    const median = S[S.length >> 1], q = quality;
+    const median = (q.median = S[S.length >> 1]);
     S.length = 0;
     if (median > 0.024) {
       // too slow: a step down (and, if that was a step up on trial, the next try waits longer)
       if (q.trial) q.wait = Math.min(240, q.wait * 2);
       q.trial = false;
       q.easy = 0;
-      if (q.level < q.ladder.length - 1) setQuality(q.level + 1);
+      if (q.level < q.size - 1) q.apply(++q.level);
     } else if (median < 0.0185) {
       // easy: the step up on trial has held; after long enough, try the next
       q.trial = false;
       q.easy += 120 * median;
-      if (q.level > 0 && q.easy > q.wait) { q.easy = 0; q.trial = true; setQuality(q.level - 1); }
+      if (q.level > 0 && q.easy > q.wait) { q.easy = 0; q.trial = true; q.apply(--q.level); }
     } else q.easy = 0;
+  }
+  function adaptQuality(rawDt) {
+    if (document.hidden) return;
+    if (sleep && sleep.dreaming && mode === 'sleeping') judge(quality.dream, rawDt);
+    else if (mode === 'walking' && !sleep) {
+      if (sinkReflector.visible) judge(quality.mirror, rawDt);
+      else {
+        judge(quality.world, rawDt);
+        world.busy = quality.world.median > 0.0185; // frames not easy: less time for the work spread over them
+      }
+    }
   }
 
   /** How well lit the reader is (1 in the hexagons), for their reflection in the mirrors. */

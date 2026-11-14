@@ -301,7 +301,7 @@ Walk from one hexagon to the next and the music of the one fades into the music 
 
 ## Files
 
-In `index.html`, every file name is followed by `?v=` and a version, such as `js/main.js?v=2026-10-27.1`. Change the version (to anything new) whenever any file changes. Browsers, and GitHub Pages, keep copies of files for a few minutes; a new version makes them fetch every file again, so that a new page is never read with an old script.
+In `index.html`, every file name is followed by `?v=` and its version, a hash of its contents, such as `js/main.js?v=3f9c0a1b2d`. Browsers, and GitHub Pages, keep copies of files for a while; a file with a new version is fetched again, and the others are not, so a new page is never read with an old script, and a change brings only the files it touched. The files the page loads later, as it needs them (the lists of the collection's books and paintings, and the dictionary of **Find words**), have their versions in a small script just above the others. `stamp.js` writes them all, and the git hook runs it before every commit; run `node stamp.js` yourself to try a change before committing it, or `node stamp.js --check` to see whether the page is stamped as it should be.
 
 | Path | Contents |
 |---|---|
@@ -329,7 +329,8 @@ In `index.html`, every file name is followed by `?v=` and a version, such as `js
 | `books/shelve.js` | Shelves the collection: see [Your books](#your-books) |
 | `paintings/index.js`, `paintings/compressed/` | The collection of paintings, as the Catalogue reads it, written by `paintings/hang.js` from the pictures in `paintings/originals/` (which are not published) |
 | `paintings/hang.js` | Hangs the collection of paintings: see [Your paintings](#your-paintings) |
-| `.githooks/pre-commit` | Runs `books/shelve.js` and `paintings/hang.js` before every commit |
+| `stamp.js` | Stamps `index.html` with the version of every file it loads |
+| `.githooks/pre-commit` | Runs `books/shelve.js`, `paintings/hang.js` and `stamp.js` before every commit |
 
 ## Testing
 

@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=Libre+Bodoni:ital,wght@0,400;0,500;1,400&display=swap">
-<link rel="stylesheet" href="css/style.css?v=2026-11-14.21">
+<link rel="stylesheet" href="css/style.css?v=258793c3ac">
 </head>
 <body>
 <canvas id="view" aria-label="The Library, seen from the eyes of a librarian"></canvas>
@@ -276,28 +276,30 @@
 </section>
 
 <!--
-  The ?v=… after each file name is the version of the files. Change it (to anything new)
-  whenever any of them changes: browsers and GitHub Pages keep copies of files for a while,
-  and a new page read with an old script would not start.
+  The ?v=… after each file name is that file's version, a hash of its contents, written by
+  stamp.js (which the git hook runs before every commit), as are the versions of the files
+  loaded later, in the script just below: browsers and GitHub Pages keep copies of files for
+  a while, and a new page read with an old script would not start.
 -->
-<script src="lib/three.min.js?v=2026-11-14.21"></script>
-<script src="lib/Reflector.js?v=2026-11-14.21"></script>
-<script src="config.js?v=2026-11-14.21"></script>
-<script src="js/library.js?v=2026-11-14.21"></script>
-<script src="js/textures.js?v=2026-11-14.21"></script>
-<script src="js/architecture.js?v=2026-11-14.21"></script>
-<script src="js/paintings.js?v=2026-11-14.21"></script>
-<script src="js/world.js?v=2026-11-14.21"></script>
-<script src="js/figure.js?v=2026-11-14.21"></script>
-<script src="js/ghost.js?v=2026-11-14.21"></script>
-<script src="js/player.js?v=2026-11-14.21"></script>
-<script src="js/terminal.js?v=2026-11-14.21"></script>
-<script src="js/quotes.js?v=2026-11-14.21"></script>
-<script src="js/dream.js?v=2026-11-14.21"></script>
-<script src="js/music.js?v=2026-11-14.21"></script>
-<script src="js/paper.js?v=2026-11-14.21"></script>
-<script src="js/words.js?v=2026-11-14.21"></script>
-<script src="js/main.js?v=2026-11-14.21"></script>
+<script id="versions">window.BABEL_VERSIONS = {"books/index.js":"02037eac7c","paintings/index.js":"ee2e128575","words/english.js":"d854f767b4"};</script>
+<script src="lib/three.min.js?v=f34446bf87"></script>
+<script src="lib/Reflector.js?v=544a3a7936"></script>
+<script src="config.js?v=788279a36e"></script>
+<script src="js/library.js?v=d0b5a858da"></script>
+<script src="js/textures.js?v=023810856c"></script>
+<script src="js/architecture.js?v=5b23075389"></script>
+<script src="js/paintings.js?v=c59c674e52"></script>
+<script src="js/world.js?v=b58d70b094"></script>
+<script src="js/figure.js?v=eb16a066d2"></script>
+<script src="js/ghost.js?v=7ade326729"></script>
+<script src="js/player.js?v=bb6e9b2aa9"></script>
+<script src="js/terminal.js?v=f012b9b403"></script>
+<script src="js/quotes.js?v=49ff76eb53"></script>
+<script src="js/dream.js?v=39a2fc600d"></script>
+<script src="js/music.js?v=bbf6bf2849"></script>
+<script src="js/paper.js?v=ebea34e200"></script>
+<script src="js/words.js?v=73cf7d66ee"></script>
+<script src="js/main.js?v=2fa567ef75"></script>
 <script>
   // If the Library has not started a few seconds after the page has loaded (a script missing,
   // or not matching the others), say so rather than leave the screen black.

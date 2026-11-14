@@ -2,7 +2,8 @@
 # THE LIBRARY OF BABEL — before every commit, puts on the shelf the books of
 # books/uncompressed/ that are new or changed, takes off it those that are gone (see
 # books/shelve.js), hangs likewise the paintings of paintings/originals/ (see
-# paintings/hang.js), and adds what changed to the commit. A copy of the repository
+# paintings/hang.js), stamps index.html with the version of every file it loads (see
+# stamp.js), and adds what changed to the commit. A copy of the repository
 # without the books' texts, or the paintings' pictures, leaves them as they are.
 #
 # Git runs it once it has been told where the Library keeps its hooks, which is done
@@ -45,5 +46,16 @@ if [ -d paintings/originals ]; then
       echo "Babel: the hung paintings could not be added to the commit. The commit goes ahead without them." >&2
     fi
   fi
+fi
+
+# the version of every file the page loads, after what was shelved and hung: added to the
+# commit unless index.html has other changes not yet added, which are left for you to add
+if git diff --quiet -- index.html; then whole=1; else whole=0; fi
+if ! node stamp.js --quiet; then
+  echo "Babel: stamping index.html with the versions of its files failed (see above). The commit goes ahead without it." >&2
+elif [ "$whole" = 1 ]; then
+  git add -- index.html || echo "Babel: the stamped index.html could not be added to the commit." >&2
+elif ! git diff --quiet -- index.html; then
+  echo "Babel: index.html was stamped with the versions of its files, but it has other changes not added to this commit, so it was left out: add it to the next one." >&2
 fi
 exit 0

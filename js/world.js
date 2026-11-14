@@ -73,6 +73,7 @@
       this._bookLayout = this._layoutBooks();
       this.hover = null;
       // how far the Library is drawn: through how many doors on the reader's floor, and up and down the shaft of their hexagon
+      this.busy = false; // frames are not easy on this machine: less time for work spread over them (see main.js)
       this.view = { depth: 2, farFloors: 4 }; // (from behind the railing, no more floors can be seen down or up the shaft)
       this.doors = new Map(); // "dh,df" → { target: 0 or 1, t: 0…1 } for doors that have been touched
       this.lamps = new Map(); // "dh,df" → { target: 0 or 1, t: 0…1 } for night lamps that have been switched
@@ -152,7 +153,8 @@
       this.time += dt;
       let moved = false;
       if (!still) for (const cell of this.cells.values()) if (cell.looks && cell.looks.flickers) { this._applyLamps(cell); moved = true; }
-      if (this.paintings && this.paintings.step(6)) { this._showPaintings(); moved = true; }
+      if (this.paintings && this.paintings.step(this.busy ? 3 : 6)) { this._showPaintings(); moved = true; }
+      this._trimPools();
       for (const [key, s] of this.doors) {
         if (s.t === s.target) continue;
         moved = true;
@@ -465,7 +467,47 @@
       const books = new THREE.InstancedMesh(geo, booksLit, S);
       books.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       room.add(books);
-      return { group, passage, pasSigns, books, tint, variant, tints: new Float32Array(S * 3), dh: 0, df: 0, kind: 0, door, interior, niche, signs, light, canvas, farCanvas, plate, farPlate, look, looks: null };
+      return { group, passage, pasSigns, books, tint, variant, tints: new Float32Array(S * 3), dh: 0, df: 0, kind: 0, door, interior, niche, signs, light, canvas, farCanvas, plate, farPlate, look, looks: null, owned: this._owned(group) };
+    }
+
+    /** The materials of a cell or hub just made that are its own, not shared with the others. */
+    _owned(group) {
+      if (!this._shared) this._shared = new Set([...Object.values(this.assets.materials), this.paintings && this.paintings.blank]);
+      const owned = new Set();
+      group.traverse((o) => { if (o.material && !this._shared.has(o.material)) owned.add(o.material); });
+      return [...owned];
+    }
+
+    /**
+     * Lets go of a cell or hub for good (one kept spare that has not been needed for a while):
+     * its own materials, and its books' own buffers. The geometry it shares with the others,
+     * the books' shape included, stays.
+     */
+    _dispose(item) {
+      for (const m of item.owned) m.dispose();
+      if (item.books) {
+        const g = item.books.geometry;
+        for (const name of ['position', 'normal', 'uv', 'aPart']) g.deleteAttribute(name);
+        g.setIndex(null);
+        g.dispose(); // (only its own attributes, the tints and variants, are left to go)
+        item.books.dispose(); // and the books' places
+      }
+    }
+
+    /**
+     * Every few seconds, lets go of the cells and hubs kept spare beyond a few, once they have
+     * not been needed for half a minute: the most there have been (round a stair, or before the
+     * Library was drawn less far) need not be kept for good.
+     */
+    _trimPools() {
+      if (this.time - (this._trimmed || 0) < 5) return;
+      this._trimmed = this.time;
+      const trim = (pool, keep) => {
+        // (the pool is taken from at its end, so its oldest are first)
+        while (pool.length > keep && this.time - pool[0].released > 30) this._dispose(pool.shift());
+      };
+      trim(this.pool, 8);
+      trim(this.hubPool, 3);
     }
 
     /** A hub: its walls, floor and lamps, its shaft, and the stair in it. */
@@ -482,7 +524,7 @@
       group.add(new THREE.Mesh(G.hubGlow, M.lamp));
       // the spiral stair, up the shaft from this floor's landing to the next one's
       group.add(new THREE.Mesh(G.stairWalnut, M.stairWalnut));
-      return { group, mats, site: 0, df: 0 };
+      return { group, mats, site: 0, df: 0, owned: this._owned(group) };
     }
 
     /**
@@ -499,6 +541,7 @@
 
     _releaseHub(hub) {
       this.root.remove(hub.group);
+      hub.released = this.time;
       this.hubPool.push(hub);
     }
 
@@ -521,6 +564,7 @@
 
     _release(cell) {
       this.root.remove(cell.group);
+      cell.released = this.time;
       this.pool.push(cell);
     }
 
@@ -742,7 +786,7 @@
       }
       // the others, while there is time left in this frame (a little more on arriving, when
       // there is nothing yet to walk through), and always at least one
-      const start = performance.now(), budget = this.cells.size ? 3 : 8;
+      const start = performance.now(), budget = !this.cells.size ? 8 : this.busy ? 1.5 : 3;
       let dressed = 0;
       this.pending = false;
       for (const [s, df, n] of wanted.cells) {

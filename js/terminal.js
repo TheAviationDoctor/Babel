@@ -80,6 +80,15 @@
    * load scripts but not read files; so the collection works there as on the web.
    */
   /**
+   * The version of a file loaded later, as stamp.js wrote it into index.html; if it did not
+   * (the page edited since), a new one each visit, so that a list is never read out of date.
+   */
+  function later(file) {
+    const v = window.BABEL_VERSIONS && window.BABEL_VERSIONS[file];
+    return v || 't' + Date.now();
+  }
+
+  /**
    * A script that delivers one item of a collection (a book's text, a painting's colour numbers)
    * by calling back with its id: loaded once however many ask for it at the same time, all of
    * them answered by that one load. waiting: id → the function the callback resolves;
@@ -110,7 +119,7 @@
     /** The list of books, or [] if none has been shelved beside this Library. */
     load() {
       if (!this._loading) {
-        this._loading = this._script(`books/index.js?t=${Date.now()}`)
+        this._loading = this._script(`books/index.js?v=${later('books/index.js')}`)
           .then(() => (Array.isArray(window.BABEL_BOOKS) ? window.BABEL_BOOKS : []), () => [])
           .then((books) => { this.books = books; return books; });
       }
@@ -144,7 +153,7 @@
     /** The list of paintings, or [] if none has been hung beside this Library. */
     load() {
       if (!this._loading) {
-        this._loading = loadScript(`paintings/index.js?t=${Date.now()}`)
+        this._loading = loadScript(`paintings/index.js?v=${later('paintings/index.js')}`)
           .then(() => (Array.isArray(window.BABEL_PAINTINGS) ? window.BABEL_PAINTINGS : []), () => [])
           .then((list) => { this.paintings = list; return list; });
       }
@@ -299,7 +308,7 @@
       this.query = null; // { symbols, text }
       this.certain = null; // { location, content }
       this.typeset = new Map(); // key → a book of the collection set in pages
-      this.book = null; // { entry, meta, set, found: [{ location, content }] }
+      this.book = null; // { entry, meta, set, found: [{ location }] }
       this.painting = null; // a painting of the collection: { entry, pixels, place }
       this.image = null; // a picture uploaded: { name, picture, pixels, place }
       this._bind();
@@ -664,13 +673,23 @@
     _set(entry) {
       const key = entry.key;
       let t = this.typeset.get(key);
-      if (!t) {
+      if (t) this.typeset.delete(key); // (to be kept again as the one used last)
+      else {
         // without a title page: the same text is the same book, whatever its title
-        t = { meta: entry.meta, text: entry.text, set: this.lib.typeset(entry.text, {}) };
-        this.typeset.set(key, t);
-        // books of the collection can be long: keep only the last few of them set
-        const kept = [...this.typeset.keys()].filter((k) => k.startsWith('shelf:'));
-        for (const k of kept.slice(0, Math.max(0, kept.length - 6))) this.typeset.delete(k);
+        const set = this.lib.typeset(entry.text, {});
+        const bytes = 2 * entry.text.length +
+          [...new Set(set.parts.map((p) => p.buffer))].reduce((n, b) => n + b.byteLength, 0);
+        t = { meta: entry.meta, text: entry.text, set, bytes };
+      }
+      this.typeset.set(key, t);
+      // books of the collection can be long: keep those used last, up to some 64 MB of them (and
+      // always the one in use)
+      let total = 0;
+      for (const v of this.typeset.values()) total += v.bytes || 0;
+      for (const [k, v] of this.typeset) {
+        if (total <= 64 * 1024 * 1024 || k === key) break;
+        this.typeset.delete(k);
+        total -= v.bytes || 0;
       }
       return t;
     }
@@ -795,7 +814,8 @@
       const b = this.book;
       if (!b) return;
       const lib = this.lib, set = b.set, n = set.parts.length;
-      b.found = set.parts.map((part) => lib.findText(part));
+      // (only where each part stands is kept: the books found are made again when opened)
+      b.found = set.parts.map((part) => ({ location: lib.findText(part).location }));
 
       $('book-found-title').replaceChildren('Where ', el('cite', '', b.meta.title), ' stands');
       $('book-how').textContent = '';
