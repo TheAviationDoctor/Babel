@@ -956,7 +956,7 @@
       quality.level++;
       const pr = renderer.getPixelRatio();
       if (pr > 1) renderer.setPixelRatio(Math.max(1, pr - 0.375));
-      else world.view.farFloors = Math.max(3, world.view.farFloors - 1);
+      else world.view.farFloors = Math.max(2, world.view.farFloors - 1);
       onResize();
       world.center = null;
     }

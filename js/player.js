@@ -273,16 +273,18 @@
       return null;
     }
 
-    /** Ground height in a hub, at (ux, uz) from its middle: its floor round the drum, the drum's doorway, and the stair inside. */
+    /** Ground height in a hub, at (ux, uz) from its middle: its floor round the shaft, the landing, and the stair. */
     _hub(ux, uz, y, onFloor) {
       const d = this.d, r = this.radius;
-      if (onFloor) {
-        // round the drum, or before the flat wall of its doorway
-        if (hexDist(ux, uz) <= d.aIn - r && (Math.hypot(ux, uz) >= d.drumR + r || uz <= d.drumZ - r)) return 0;
-        // the doorway onto the stair's landing
-        if (Math.abs(ux) <= d.openW / 2 - r && uz >= d.drumZ - r - 0.01 && uz <= d.drumZ + 0.5) return 0;
+      if (onFloor && hexDist(ux, uz) <= d.aIn - r) {
+        // round the shaft, behind its railing
+        if (hexDist(ux, uz) >= d.shaftA + 0.07 + r) return 0;
+        // the landing, where the railing is open: a sixth of the shaft, between the column and the floor
+        const c = Math.cos(d.landingTheta), s = Math.sin(d.landingTheta);
+        const pn = ux * c + uz * s, pt = -ux * s + uz * c;
+        if (pn <= d.shaftA + 0.07 + r + 0.02 && Math.abs(pt) <= pn * Math.tan(d.landingHalf) - r / Math.cos(d.landingHalf) && Math.hypot(ux, uz) >= d.colR + r) return 0;
       }
-      return this._stair(ux + d.wellX, uz + d.wellZ, y);
+      return this._stair(ux, uz, y);
     }
 
     /** Whether a reader of this radius fits at (hx, z) in or at the door of a cell. */
@@ -426,10 +428,9 @@
     /** Height on the spiral stair (continuous ramp), choosing the turn nearest to y. */
     _stair(hx, z, y) {
       const d = this.d, r = this.radius;
-      const dx = hx - d.wellX, dz = z - d.wellZ;
+      const dx = hx, dz = z; // (about the hub's middle)
       const dist = Math.hypot(dx, dz);
-      if (dist < d.colR + r || dist > d.wellR - r) return null;
-      if (z < d.hallW / 2 + r) return null;
+      if (dist < d.colR + r || hexDist(dx, dz) > d.stairA - 0.08 - r) return null; // between the column and the handrail
       const th = Math.atan2(dz, dx);
       let u = (th - d.stairStart) % TAU;
       if (u < 0) u += TAU;

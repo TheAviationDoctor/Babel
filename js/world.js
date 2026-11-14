@@ -73,7 +73,7 @@
       this._bookLayout = this._layoutBooks();
       this.hover = null;
       // how far the Library is drawn: through how many doors on the reader's floor, and up and down the shaft of their hexagon
-      this.view = { depth: 2, farFloors: 6 };
+      this.view = { depth: 2, farFloors: 4 }; // (from behind the railing, no more floors can be seen down or up the shaft)
       this.doors = new Map(); // "dh,df" → { target: 0 or 1, t: 0…1 } for doors that have been touched
       this.lamps = new Map(); // "dh,df" → { target: 0 or 1, t: 0…1 } for night lamps that have been switched
       this.time = 0; // for the lamps that flicker
@@ -466,7 +466,7 @@
       return { group, passage, pasSigns, books, tint, variant, tints: new Float32Array(S * 3), dh: 0, df: 0, kind: 0, door, interior, niche, signs, light, canvas, farCanvas, plate, farPlate, look, looks: null };
     }
 
-    /** A hub: its walls, floor and lamps, and the stair in its drum. */
+    /** A hub: its walls, floor and lamps, its shaft, and the stair in it. */
     _createHub() {
       const A = this.assets, G = A.geometries, M = A.materials, d = this.d;
       const group = new THREE.Group(), mats = {};
@@ -478,12 +478,9 @@
         group.add(new THREE.Mesh(G[k], mat));
       }
       group.add(new THREE.Mesh(G.hubGlow, M.lamp));
-      // the stair is built about (wellX, wellZ): set that point on the hub's middle
-      const stair = new THREE.Group();
-      stair.position.set(-d.wellX, 0, -d.wellZ);
-      stair.add(new THREE.Mesh(G.wellPlaster, M.wellPlaster));
-      stair.add(new THREE.Mesh(G.wellStone, M.wellStone));
-      group.add(stair);
+      // the spiral stair, up the shaft from this floor's landing to the next one's
+      group.add(new THREE.Mesh(G.stairWalnut, M.stairWalnut));
+      group.add(new THREE.Mesh(G.stairRail, M.stairRail));
       return { group, mats, site: 0, df: 0 };
     }
 
