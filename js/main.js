@@ -9,7 +9,7 @@
   const $ = (id) => document.getElementById(id);
   const isTouch = matchMedia('(hover: none) and (pointer: coarse)').matches;
 
-  let raw, lib, assets, world, player, renderer, scene, camera, reflector, sinkReflector, figure, figureLight, figureKey, terminal, music, ghost;
+  let raw, lib, assets, world, player, renderer, scene, camera, sinkReflector, figure, figureLight, figureKey, terminal, music, ghost;
   let mode = 'walking';
   let gaze = null, gazeKey = '';
   let reading = null;
@@ -87,24 +87,18 @@
     for (const type of ['pointerdown', 'keydown', 'touchend']) window.addEventListener(type, () => music.start(), true);
     document.addEventListener('visibilitychange', () => music.setVisible(!document.hidden));
 
-    // The mirror in the nearest vestibule. Its camera sees layer 1, where the reader's own figure lives.
+    // The small mirror above the sink of the nearest cell. Its camera sees layer 1, where the reader's own figure lives.
     const d = assets.dims;
-    reflector = new THREE.Reflector(assets.geometries.mirror, {
-      textureWidth: 512, textureHeight: 512, color: 0x8d877b, clipBias: 0.002,
-    });
-    reflector.camera.layers.enableAll();
-    scene.add(reflector);
-    // The small mirror above the sink of the nearest cell.
     sinkReflector = new THREE.Reflector(assets.geometries.sinkMirror, {
       textureWidth: 512, textureHeight: 512, color: 0x8d877b, clipBias: 0.002,
     });
     sinkReflector.camera.layers.enableAll();
-    sinkReflector.rotation.y = Math.PI;
+    sinkReflector.rotation.y = -Math.PI / 2;
     sinkReflector.visible = false;
     scene.add(sinkReflector);
     // A mirror seen in a mirror keeps its last picture rather than rendering again.
     let reflecting = false;
-    for (const r of [reflector, sinkReflector]) {
+    for (const r of [sinkReflector]) {
       const render = r.onBeforeRender;
       r.onBeforeRender = function (a, b, c) {
         if (reflecting) return;
@@ -115,7 +109,7 @@
     figure = Babel.Figure.make();
     figure.traverse((o) => o.layers.set(1));
     scene.add(figure);
-    // the light on the figure: from above, and from the lamps at the ends of the vestibule,
+    // the light on the figure: from above, and from the side,
     // which bring out the folds of the habit (only mirrors draw what these light)
     figureLight = new THREE.HemisphereLight(0xb08a5e, 0x140e09, 0.8);
     figureLight.layers.set(1);
@@ -151,7 +145,6 @@
 
   function sizeMirror() {
     const pr = renderer.getPixelRatio();
-    reflector.getRenderTarget().setSize(Math.round(window.innerWidth * pr * 0.6), Math.round(window.innerHeight * pr * 0.6));
     sinkReflector.getRenderTarget().setSize(Math.round(window.innerWidth * pr * 0.5), Math.round(window.innerHeight * pr * 0.5));
   }
 
@@ -997,8 +990,7 @@
 
     if (mode === 'walking') updateGaze();
 
-    // the nearest mirror on this floor, and the figure it reflects: each vestibule's mirror
-    // stands in the frame of its hexagon's cell
+    // the mirror of the nearest cell, and the figure it reflects
     const d = assets.dims, cells = player.cells();
     const nearest = (x, z) => {
       let best = null, least = Infinity;
@@ -1013,23 +1005,12 @@
       obj.position.set(f.x + x * f.c - z * f.s, y, f.z + x * f.s + z * f.c);
       obj.rotation.y = turn - f.turn;
     };
-    // The mirror that reflects is the nearest one in view; while none is, it reflects nothing.
-    // When it moves to another mirror, its reflection comes up out of the dark glass.
-    const shown = mirrorInView(cells);
-    reflector.visible = !!shown;
-    if (shown) {
-      if (shown.site !== mirrorShown) { mirrorShown = shown.site; mirrorFade = 0; }
-      mirrorFade = Math.min(1, mirrorFade + dt / 0.45);
-      const e = mirrorFade * mirrorFade * (3 - 2 * mirrorFade);
-      reflector.material.uniforms.color.value.copy(MIRROR_DARK).lerp(MIRROR_LIT, e);
-      placeIn(reflector, shown.frame, d.mirrorX, d.mirrorY0 + d.mirrorH / 2, -d.hallW / 2 + 0.043, 0);
-    } else mirrorShown = null;
     // the sink mirror of the nearest cell, while the reader is in it or at its open door
-    const sinkCell = nearest(d.sinkMirror.x, d.cellZ0);
+    const sinkCell = nearest(d.sinkMirror.x, d.sinkMirror.z);
     const [px, pz] = player.inFrame(sinkCell.frame);
     const cellShown = world.doorOpenness(sinkCell.site, player.cf) > 0.05 || pz < d.cellZ0;
     sinkReflector.visible = cellShown && Math.abs(player.y) < 1 && Math.abs(px - d.sinkMirror.x) < 3 && pz < 0;
-    placeIn(sinkReflector, sinkCell.frame, d.sinkMirror.x, d.sinkMirror.y0 + d.sinkMirror.h / 2, d.cellZ0 - 0.014, Math.PI);
+    placeIn(sinkReflector, sinkCell.frame, d.sinkMirror.x - 0.014, d.sinkMirror.y0 + d.sinkMirror.h / 2, d.sinkMirror.z, -Math.PI / 2);
     Babel.Figure.pose(figure, player, dt);
     ghost.update(dt, player, camera, mode === 'walking' && !sleep);
 
@@ -1042,39 +1023,6 @@
     requestAnimationFrame(frame);
   }
   let frameCount = 0;
-
-  const MIRROR_DARK = new THREE.Color(0x1c1a17), MIRROR_LIT = new THREE.Color(0x8d877b);
-  let mirrorShown = null, mirrorFade = 0;
-  const mirrorFrustum = new THREE.Frustum(), mirrorView = new THREE.Matrix4(), mirrorSphere = new THREE.Sphere(new THREE.Vector3(), 0.95);
-
-  /**
-   * Of the vestibules' mirrors around the reader, the nearest that the camera can see: in front of
-   * it, in the field of view, and not hidden by the vestibule's walls (seen from a hexagon or a
-   * hub, through the doorway at that end).
-   */
-  function mirrorInView(cells) {
-    const d = assets.dims, mx = d.mirrorX, mz = -d.hallW / 2, my = d.mirrorY0 + d.mirrorH / 2;
-    camera.updateMatrixWorld();
-    mirrorView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-    mirrorFrustum.setFromProjectionMatrix(mirrorView);
-    let best = null, least = Infinity;
-    for (const c of cells) {
-      const f = c.frame, [hx, hz] = player.inFrame(f);
-      if (hz < mz + 0.05) continue; // behind the wall the mirror hangs on
-      let hidden = false;
-      for (const xe of [d.hallX0, d.hallX1]) {
-        if ((hx - xe) * (mx - xe) >= 0) continue; // this end of the vestibule is not between them
-        const ze = hz + ((xe - hx) / (mx - hx)) * (mz - hz);
-        if (Math.abs(ze) > d.hallW / 2) hidden = true;
-      }
-      if (hidden) continue;
-      mirrorSphere.center.set(f.x + mx * f.c - mz * f.s, my, f.z + mx * f.s + mz * f.c);
-      if (!mirrorFrustum.intersectsSphere(mirrorSphere)) continue;
-      const far = Math.hypot(hx - mx, hz - mz);
-      if (far < least) { least = far; best = c; }
-    }
-    return best;
-  }
 
   function updateGaze() {
     const book = player.pick(lib);

@@ -368,9 +368,6 @@
       }
       // the plates of the bookcases and of their rows
       room.add(new THREE.Mesh(G.plates, M.plates));
-      const mirror = new THREE.Mesh(G.mirror, M.mirrorDark);
-      mirror.position.set(d.mirrorX, d.mirrorY0 + d.mirrorH / 2, -d.hallW / 2 + 0.041);
-      group.add(mirror);
 
       // the door of the cell, turning on its hinge
       // each cell has its own lamp, so its interior and its door have their own materials
@@ -442,8 +439,8 @@
       lampGlow.scale.set(0.7, 0.7, 0.7);
       interior.add(lampGlow);
       const sinkMirror = new THREE.Mesh(G.sinkMirror, M.mirrorDark);
-      sinkMirror.position.set(d.sinkMirror.x, d.sinkMirror.y0 + d.sinkMirror.h / 2, d.cellZ0 - 0.012);
-      sinkMirror.rotation.y = Math.PI;
+      sinkMirror.position.set(d.sinkMirror.x - 0.012, d.sinkMirror.y0 + d.sinkMirror.h / 2, d.sinkMirror.z);
+      sinkMirror.rotation.y = -Math.PI / 2; // on the east wall, facing west
       interior.add(sinkMirror);
       group.add(interior);
 

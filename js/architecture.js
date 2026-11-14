@@ -103,21 +103,21 @@
     d.lampOut = 0.3;
     d.lampHalfW = Math.min(0.5, d.shelfLen / 2 - 0.2);
 
-    // the cell's door and the mirror (in the vestibule)
+    // the cell's door, in the middle of the vestibule's south wall, exactly opposite the
+    // catalogue's niche in the middle of its north wall
     d.closetW = 0.8;
-    // On the vestibule's south wall, the door of the cell and the mirror stand together in its
-    // middle, the door nearer the hexagon; opposite them, on the north wall, the catalogue's niche.
     d.hallMid = (d.hallX0 + d.hallX1) / 2;
-    d.closetX = d.hallMid - 0.735;
+    d.closetX = d.hallMid;
     d.nicheX = d.hallMid;
     d.closetH = Math.min(1.95, d.doorH - 0.05);
     d.hingeX = d.closetX - d.closetW / 2; // the south door is hung on its west side and opens inwards
 
-    // The cell behind the south door: a bed, a small table with a night lamp, a toilet,
-    // and a sink with a mirror. It sits in the wedge between two hexagons, which widens
-    // away from the vestibule, so it never meets a hexagon.
+    // The cell behind the south door, its door in the middle of its north wall: a bed along its
+    // south wall, a small table with a night lamp at the bed's head (west), and a sink with a
+    // mirror above it on its east wall. It sits in the wedge between two hexagons,
+    // which widens away from the vestibule, so it never meets a hexagon.
     d.cellWall = 0.12;
-    d.cellX0 = d.hingeX - 0.07;
+    d.cellX0 = d.closetX - 1.1;
     d.cellX1 = d.cellX0 + 2.2;
     d.cellZ0 = -(d.hallW / 2 + d.cellWall); // inside face of its north wall
     d.cellZ1 = d.cellZ0 - 2.1; // inside face of its south wall
@@ -126,12 +126,12 @@
     d.bed = R(d.cellX0, d.cellX0 + 1.95, d.cellZ1, d.cellZ1 + 0.92, { h: 0.5 });
     d.nightTable = R(d.cellX0, d.cellX0 + 0.36, d.cellZ1 + 0.95, d.cellZ1 + 1.29, { h: 0.62 });
     d.nightLamp = [d.cellX0 + 0.18, d.nightTable.h, (d.nightTable.z0 + d.nightTable.z1) / 2];
-    d.toilet = R(d.cellX1 - 0.66, d.cellX1, d.cellZ0 - 0.53, d.cellZ0 - 0.93, { h: 0.43 });
-    d.sink = R(d.cellX1 - 1.15, d.cellX1 - 0.7, d.cellZ0, d.cellZ0 - 0.38, { h: 0.84 });
-    d.sinkMirror = { x: (d.sink.x0 + d.sink.x1) / 2, w: 0.42, y0: 1.15, h: 0.6 };
+    const sinkZ = d.cellZ0 - 0.73; // the middle of the sink, along the east wall
+    d.sink = R(d.cellX1 - 0.38, d.cellX1, sinkZ - 0.225, sinkZ + 0.225, { h: 0.84 });
+    d.sinkMirror = { x: d.cellX1, z: sinkZ, w: 0.42, y0: 1.15, h: 0.6 }; // on the east wall (x), facing west
     d.doorPivot = [d.hingeX + 0.02, -(d.hallW / 2) - 0.025]; // hinge axis (x, z)
     d.cellDoor = R(d.hingeX - 0.005, d.hingeX + 0.05, d.doorPivot[1] - d.closetW, d.cellZ0); // the door, once open
-    d.cellObstacles = [d.bed, d.nightTable, d.toilet, d.sink];
+    d.cellObstacles = [d.bed, d.nightTable, d.sink];
 
     // The north door gives onto a shallow niche holding the catalogue's touchscreen.
     d.nicheDepth = 0.45;
@@ -153,10 +153,6 @@
     d.stairRailH = 0.9; // the handrail, above the line of the treads
     d.steps = Math.max(8, Math.round(d.Hf / 0.18));
     d.riser = d.Hf / d.steps;
-    d.mirrorX = d.hallMid + 0.735;
-    d.mirrorW = 0.78;
-    d.mirrorH = 1.45;
-    d.mirrorY0 = 0.45;
 
     // Shelved sides of the room, by normal angle (multiples of 60°), in the order the walls are
     // numbered. Sides 0 and 4 are the free ones, 120° apart: side 0 gives onto the vestibule that
@@ -744,14 +740,14 @@
       }
       return { wood: wood.geometry(), plaster: plaster.geometry(), tiles: tiles.geometry() };
     }
-    // south wall (−z): the door of the cell, then the mirror
+    // south wall (−z): the door of the cell
     gridWall(plaster, x0, x1, 0, H, -hw, 1, [[dx0, dx1, 0, dH]], [d.doorH]);
     // the doorway through the thickness of the wall, and its threshold
     plaster.poly([[dx0, 0, -hw], [dx0, 0, cz0], [dx0, dH, cz0], [dx0, dH, -hw]], [1, 0, 0]);
     plaster.poly([[dx1, 0, -hw], [dx1, 0, cz0], [dx1, dH, cz0], [dx1, dH, -hw]], [-1, 0, 0]);
     plaster.poly([[dx0, dH, -hw], [dx1, dH, -hw], [dx1, dH, cz0], [dx0, dH, cz0]], [0, -1, 0]);
     wood.box(dx0, 0, cz0, dx1, 0.012, -hw, 'YzZ');
-    // north wall (+z): the niche of the catalogue, then the painting
+    // north wall (+z): the niche of the catalogue, opposite
     gridWall(plaster, x0, x1, 0, H, hw, -1, [[nx0, nx1, 0, dH]], [d.doorH]);
 
     // skirting boards
@@ -768,14 +764,6 @@
     wood.box(nx0 - 0.06, 0, hw - 0.045, nx0, dH + 0.06, hw, 'xXYz');
     wood.box(nx1, 0, hw - 0.045, nx1 + 0.06, dH + 0.06, hw, 'xXYz');
     wood.box(nx0, dH, hw - 0.045, nx1, dH + 0.06, hw, 'yYz');
-
-    // mirror frame on the south wall, beside the door of the cell
-    const mx0 = d.mirrorX - d.mirrorW / 2, mx1 = d.mirrorX + d.mirrorW / 2, my0 = d.mirrorY0, my1 = d.mirrorY0 + d.mirrorH;
-    const fw = 0.07, fz = -hw + 0.04;
-    wood.box(mx0 - fw, my0 - fw, -hw, mx1 + fw, my0, fz, 'xXyYZ');
-    wood.box(mx0 - fw, my1, -hw, mx1 + fw, my1 + fw, fz, 'xXyYZ');
-    wood.box(mx0 - fw, my0, -hw, mx0, my1, fz, 'xXZ');
-    wood.box(mx1, my0, -hw, mx1 + fw, my1, fz, 'xXZ');
     return { wood: wood.geometry(), plaster: plaster.geometry(), tiles: tiles.geometry() };
   }
 
@@ -921,7 +909,7 @@
     return b.geometry();
   }
 
-  /** The cell: walls, floor, bed, night table and lamp, toilet, sink and its mirror. */
+  /** The cell: walls, floor, bed, night table and lamp, sink and its mirror. */
   function buildCell(d) {
     const wood = new Builder(), soft = new Builder();
     const X0 = d.cellX0, X1 = d.cellX1, Z0 = d.cellZ0, Z1 = d.cellZ1, H = d.cellH;
@@ -989,19 +977,11 @@
     soft.ellipse(L[0], L[2], 0.06, 0.06, L[1], L[1] + 0.02, 'top', 18);
     soft.ellipse(L[0], L[2], 0.008, 0.008, L[1] + 0.02, L[1] + 0.2, 'none', 8);
 
-    // the toilet, its cistern against the east wall
-    const W = d.toilet, wz = (W.z0 + W.z1) / 2, bx = X1 - 0.4;
-    soft.tint(PORCELAIN);
-    soft.box(X1 - 0.19, 0.42, W.z0 + 0.02, X1, 0.8, W.z1 - 0.02, 'xyzZ');
-    soft.box(X1 - 0.205, 0.8, W.z0 + 0.01, X1, 0.83, W.z1 - 0.01, 'xyYzZ');
-    soft.ellipse(bx + 0.03, wz, 0.13, 0.11, 0, 0.3, 'none', 20);
-    soft.ellipse(bx, wz, 0.22, 0.17, 0.3, 0.4, 'bottom', 24);
-    wood.tint(0x8f6a4a);
-    wood.ellipse(bx - 0.005, wz, 0.235, 0.18, 0.4, 0.43, 'top', 24);
-    wood.box(X1 - 0.2, 0.4, wz - 0.12, X1 - 0.17, 0.46, wz + 0.12, 'xXYzZ');
-
-    // the sink, fixed to the north wall, with its mirror above
-    const K = d.sink, kx = (K.x0 + K.x1) / 2, top = K.h, bot = K.h - 0.16, rim = 0.035;
+    // the sink, fixed to the east wall, with its mirror above: built as if against a wall at z = 0
+    // facing −z, then turned onto the east wall
+    soft.setMatrix(new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition(X1, 0, d.sinkMirror.z));
+    wood.setMatrix(soft.m);
+    const K = { x0: -0.225, x1: 0.225, z0: -0.38, z1: 0 }, kx = 0, top = d.sink.h, bot = top - 0.16, rim = 0.035;
     soft.tint(PORCELAIN);
     soft.box(K.x0, bot, K.z0, K.x1, top, K.z1, 'xXyz');
     const ix0 = K.x0 + rim, ix1 = K.x1 - rim, iz0 = K.z0 + rim, iz1 = K.z1 - 0.06, ib = top - 0.12;
@@ -1015,15 +995,17 @@
     soft.poly([[ix0, ib, iz0], [ix0, ib, iz1], [ix0, top, iz1], [ix0, top, iz0]], [1, 0, 0]);
     soft.poly([[ix1, ib, iz0], [ix1, ib, iz1], [ix1, top, iz1], [ix1, top, iz0]], [-1, 0, 0]);
     soft.tint(METAL);
-    soft.ellipse(kx, Z0 - 0.1, 0.02, 0.02, 0, bot, 'none', 10);
-    soft.ellipse(kx, Z0 - 0.035, 0.012, 0.012, top, top + 0.15, 'top', 10);
-    soft.box(kx - 0.012, top + 0.125, Z0 - 0.14, kx + 0.012, top + 0.15, Z0 - 0.035, 'xXyYz');
-    const M = d.sinkMirror, mx0 = M.x - M.w / 2, mx1 = M.x + M.w / 2, my0 = M.y0, my1 = M.y0 + M.h;
+    soft.ellipse(kx, -0.1, 0.02, 0.02, 0, bot, 'none', 10);
+    soft.ellipse(kx, -0.035, 0.012, 0.012, top, top + 0.15, 'top', 10);
+    soft.box(kx - 0.012, top + 0.125, -0.14, kx + 0.012, top + 0.15, -0.035, 'xXyYz');
+    const M = d.sinkMirror, mx0 = -M.w / 2, mx1 = M.w / 2, my0 = M.y0, my1 = M.y0 + M.h;
     wood.tint(0x6e4c32);
-    wood.box(mx0 - 0.04, my0 - 0.04, Z0 - 0.025, mx1 + 0.04, my0, Z0, 'xXyYz');
-    wood.box(mx0 - 0.04, my1, Z0 - 0.025, mx1 + 0.04, my1 + 0.04, Z0, 'xXyYz');
-    wood.box(mx0 - 0.04, my0, Z0 - 0.025, mx0, my1, Z0, 'xXz');
-    wood.box(mx1, my0, Z0 - 0.025, mx1 + 0.04, my1, Z0, 'xXz');
+    wood.box(mx0 - 0.04, my0 - 0.04, -0.025, mx1 + 0.04, my0, 0, 'xXyYz');
+    wood.box(mx0 - 0.04, my1, -0.025, mx1 + 0.04, my1 + 0.04, 0, 'xXyYz');
+    wood.box(mx0 - 0.04, my0, -0.025, mx0, my1, 0, 'xXz');
+    wood.box(mx1, my0, -0.025, mx1 + 0.04, my1, 0, 'xXz');
+    soft.reset();
+    wood.reset();
 
     // the lamp's fabric shade and bulb, which glow
     const shade = new THREE.CylinderGeometry(0.075, 0.125, 0.17, 24, 1, true);
@@ -1796,7 +1778,6 @@
       lampWash: d.roomH > d.shelfTop + 0.2 ? buildLampWash(d) : null,
       pictureGlow: d.painting ? buildPictureGlow(d) : null,
       book: buildBook(d),
-      mirror: new THREE.PlaneGeometry(d.mirrorW, d.mirrorH),
       doorLeaf: buildDoorLeaf(d),
       niche: buildNiche(d),
       screen: new THREE.PlaneGeometry(d.screen.w, d.screen.h),
