@@ -167,6 +167,7 @@
     d.shelvedSides = { 4: [1, 2, 3, 5], 3: [1, 3, 5], 2: [2, 5], 1: [2] }[d.walls];
     d.passageTurn = (4 * Math.PI) / 3; // the direction of the passage (radians from +x towards +z)
     d.eye = 1.6;
+    d.crouchEye = 0.95; // crouched
     return d;
   }
 

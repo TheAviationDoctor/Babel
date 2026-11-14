@@ -23,6 +23,7 @@ No installation required: everything is self-contained HTML/JS/CSS. Just visit t
 | Look | mouse (click once to capture it) |
 | Walk | `W` `A` `S` `D` or arrow keys |
 | Hurry | hold `Shift` or turn on `Caps Lock` |
+| Crouch | tap `C` to crouch, and again to stand; or hold it to crouch only while it is held. Crouched, the lower shelves are at eye level, and one walks slowly. |
 | Interact with objects | `E` or click |
 | Turn book pages | `←` `→`, `Page Up` `Page Down`, `Home` `End` |
 | Find words in a book | `F` |

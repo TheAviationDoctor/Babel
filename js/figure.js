@@ -306,7 +306,8 @@
     u.last = [player.x, player.z];
     const walking = dt > 0 && moved / dt > 0.3 && moved < 1 ? 1 : 0; // (a jump across the Library is no step)
     u.walk += (walking - u.walk) * Math.min(1, dt * 5);
-    figure.position.set(player.x, player.y, player.z);
+    // crouched, the figure sinks with the reader's eyes: the floor hides the habit's hem, as if kneeling
+    figure.position.set(player.x, player.y - (player.d.eye - player.eyeHeight()), player.z);
     figure.rotation.set(0, player.yaw, Math.sin(player.bob * 0.5) * 0.022 * u.walk);
     u.head.rotation.x = Math.max(-0.4, Math.min(0.32, player.pitch * 0.55));
   }

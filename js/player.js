@@ -58,6 +58,10 @@
       this.speed = 1.55; // metres a second, walking (hurrying, 1.9 times as fast)
       this.capsLock = false;
       this.keys = new Set();
+      // Crouching, to see the lower shelves without looking down: whether the reader means to
+      // crouch, and how far down they are (0 standing, 1 crouched), which follows it smoothly.
+      this.crouching = false;
+      this.crouch = 0;
       this.sensitivity = 1;
       this.bob = 0;
       this.enabled = false;
@@ -158,12 +162,28 @@
       // Caps Lock, while on, makes the reader hurry as Shift does. Browsers only say whether it
       // is on as part of a key or mouse event, so every such event is asked.
       const caps = (e) => { if (e.getModifierState) this.capsLock = e.getModifierState('CapsLock'); };
+      // C crouches: a tap crouches or stands up again; held, it crouches only while held (or,
+      // crouched, stands only while held). (Not Control, as many games have it: in a browser,
+      // Control and W, held together to walk crouched, close the tab.)
+      const isCrouch = (e) => e.code === 'KeyC' && !e.ctrlKey && !e.metaKey && !e.altKey;
       window.addEventListener('keydown', (e) => {
         caps(e);
         if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
         this.keys.add(e.code);
+        if (!this.enabled) return;
+        if (isCrouch(e) && !e.repeat) {
+          this._crouchKey = { at: performance.now(), was: this.crouching };
+          this.crouching = !this.crouching;
+        }
       });
-      window.addEventListener('keyup', (e) => { caps(e); this.keys.delete(e.code); });
+      window.addEventListener('keyup', (e) => {
+        caps(e);
+        this.keys.delete(e.code);
+        if (e.code === 'KeyC' && this._crouchKey) {
+          if (performance.now() - this._crouchKey.at > 350) this.crouching = this._crouchKey.was; // held: back as before
+          this._crouchKey = null;
+        }
+      });
       window.addEventListener('blur', () => this.keys.clear());
       for (const type of ['mousemove', 'mousedown', 'wheel']) window.addEventListener(type, caps, { passive: true });
       // Some browsers report one large jump just as the pointer is captured; ignore it.
@@ -384,7 +404,7 @@
       const bookY = d.base + (d.shelves - 1 - shelf) * d.pitch + d.board + d.bookH / 2;
       const dx = bookX - x, dz = bookZ - z;
       this.yaw = Math.atan2(-dx, -dz);
-      this.pitch = Math.atan2(bookY - d.eye, Math.hypot(dx, dz));
+      this.pitch = Math.atan2(bookY - this.eyeHeight(), Math.hypot(dx, dz));
       this._applyCamera(0, 0);
     }
 
@@ -398,7 +418,7 @@
       const t = this.roomTurn() + d.passageTurn, c = Math.cos(t), s = Math.sin(t), hx = p.x, hz = p.z - back;
       this.x = hx * c - hz * s; this.y = 0; this.z = hx * s + hz * c;
       this.yaw = yawOf(t + Math.PI / 2);
-      this.pitch = Math.atan2(p.y - d.eye, back);
+      this.pitch = Math.atan2(p.y - this.eyeHeight(), back);
       this._rebase();
       this._applyCamera(0, 0);
     }
@@ -438,7 +458,8 @@
       }
       let len = Math.hypot(f, s);
       if (len > 1) { f /= len; s /= len; len = 1; }
-      const run = K.has('ShiftLeft') || K.has('ShiftRight') || this.capsLock ? 1.9 : 1;
+      // crouched, the reader shuffles slowly, and cannot hurry
+      const run = this.crouch > 0.5 ? 0.5 : K.has('ShiftLeft') || K.has('ShiftRight') || this.capsLock ? 1.9 : 1;
       const v = this.speed * run;
       // forward is −z rotated by yaw
       const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
@@ -477,10 +498,19 @@
       else if (this.y < -d.Hf / 2) { this.y += d.Hf; this.cf -= 1; }
     }
 
+    /** The height of the reader's eyes above the floor, standing or crouched. */
+    eyeHeight() {
+      const d = this.d, k = this.crouch * this.crouch * (3 - 2 * this.crouch);
+      return d.eye + (d.crouchEye - d.eye) * k;
+    }
+
     _applyCamera(dt, moved) {
+      // crouching down, or standing up, takes about a third of a second
+      const goal = this.crouching ? 1 : 0;
+      if (dt > 0) this.crouch += Math.sign(goal - this.crouch) * Math.min(Math.abs(goal - this.crouch), dt / 0.32);
       this.bob += moved * 5.2;
       const bobY = moved > 0 ? Math.sin(this.bob) * 0.018 : 0;
-      this.camera.position.set(this.x, this.y + this.d.eye + bobY, this.z);
+      this.camera.position.set(this.x, this.y + this.eyeHeight() + bobY, this.z);
       this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
     }
 
