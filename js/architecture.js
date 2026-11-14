@@ -451,6 +451,7 @@
       if (free) {
         freeSide(d, m, wood, plaster, tiles);
       } else if (wallIndex >= 0) {
+        underWall(d, m, tiles, null);
         buildShelfUnit(wood, m, d);
         // the lamp above the bookcase: a bar on two arms from the wall (its glowing underside is the World's, lit or not)
         wallLamp(d, m, wood);
@@ -464,6 +465,7 @@
           wood.reset();
         }
       } else {
+        underWall(d, m, tiles, null);
         plaster.setMatrix(m);
         plaster.poly([[-half, 0, d.aIn], [half, 0, d.aIn], [half, d.roomH, d.aIn], [-half, d.roomH, d.aIn]], [0, 0, -1]);
         plaster.reset();
@@ -483,6 +485,22 @@
     return { wood: wood.geometry(), plaster: plaster.geometry(), tiles: tiles.geometry() };
   }
 
+  /**
+   * The floor under a side, from the room's inner hexagon out to its outer one: in a doorway it is
+   * the threshold, and under a wall or a bookcase it is hidden, but it leaves no gap where they
+   * meet the floor, through which the floor below could be glimpsed. hw: half the width of the
+   * doorway, if the side has one (its floor is divided there, where the vestibule's meets it).
+   */
+  function underWall(d, m, tiles, hw) {
+    const h0 = d.aIn / SQ3, h1 = d.a / SQ3, A = d.aIn, B = d.a;
+    tiles.setMatrix(m);
+    tiles.poly(hw === null
+      ? [[-h0, 0, A], [h0, 0, A], [h1, 0, B], [-h1, 0, B]]
+      // (from a corner, so that its first three points are not in a line: poly winds it by them)
+      : [[-h1, 0, B], [-h0, 0, A], [-hw, 0, A], [hw, 0, A], [h0, 0, A], [h1, 0, B], [hw, 0, B], [-hw, 0, B]], [0, 1, 0]);
+    tiles.reset();
+  }
+
   /** A side with a doorway: the wall round it, the passage through the wall's thickness, the door's frame. */
   function freeSide(d, m, wood, plaster, tiles) {
     const half = d.sIn / 2;
@@ -494,9 +512,7 @@
     plaster.poly([[hw, 0, d.aIn], [hw, 0, d.a], [hw, d.closetH, d.a], [hw, d.doorH, d.a], [hw, d.doorH, d.aIn]], [-1, 0, 0]);
     plaster.poly([[-hw, d.doorH, d.aIn], [hw, d.doorH, d.aIn], [hw, d.doorH, d.a], [-hw, d.doorH, d.a]], [0, -1, 0]);
     plaster.reset();
-    tiles.setMatrix(m);
-    tiles.poly([[-hw, 0, d.aIn], [hw, 0, d.aIn], [hw, 0, d.a], [-hw, 0, d.a]], [0, 1, 0]);
-    tiles.reset();
+    underWall(d, m, tiles, hw);
     // door frame and skirting
     wood.setMatrix(m);
     // the vestibule's skirting boards, run on through the doorway up to its frame
