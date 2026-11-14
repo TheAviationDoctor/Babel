@@ -14,3 +14,5 @@ paintings/*
 !paintings/compressed/
 # Notes kept out of the repository
 PERFORMANCE_REVIEW.md
+# The tools the tests run on (npm install puts them back)
+node_modules/

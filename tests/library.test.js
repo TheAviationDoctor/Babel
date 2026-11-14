@@ -739,14 +739,17 @@ test('the timing of dreams is checked', () => {
   assert.throws(() => new Library({ dreams: { quoteLength: 3 } }), /not a setting/);
 });
 
-test('the music settings are checked', () => {
+test('the sound settings are checked', () => {
   const d = new Library({}).config;
   assert.strictEqual(d.music, true);
+  assert.strictEqual(d.effects, true);
   assert.strictEqual(d.volume, 0.5);
-  const c = new Library({ sound: { music: false, volume: 0 } }).config;
+  const c = new Library({ sound: { music: false, effects: false, volume: 0 } }).config;
   assert.strictEqual(c.music, false);
+  assert.strictEqual(c.effects, false);
   assert.strictEqual(c.volume, 0);
   assert.throws(() => new Library({ sound: { music: 'yes' } }), /music/);
+  assert.throws(() => new Library({ sound: { effects: 'yes' } }), /effects/);
   assert.throws(() => new Library({ sound: { volume: 1.5 } }), /volume/);
   assert.throws(() => new Library({ sound: { loudness: 1 } }), /not a setting/);
 });

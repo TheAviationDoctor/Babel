@@ -83,7 +83,7 @@
     hexagon: { wallsWithShelves: 4, shelvesPerWall: 4, booksPerShelf: 32 },
     view: { lookSensitivity: 1, fieldOfView: 72 },
     dreams: { quoteDuration: 10, quoteInterval: 5 },
-    sound: { music: true, volume: 0.5 },
+    sound: { music: true, effects: true, volume: 0.5 },
   };
 
   /*
@@ -93,7 +93,7 @@
   const SETTINGS = {
     '': { seed: 'seed', book: 'book', alphabet: 'alphabet', hexagon: 'hexagon', website: 'website', view: 'view', dreams: 'dreams', sound: 'sound' },
     view: { lookSensitivity: 'lookSensitivity', fieldOfView: 'fieldOfView' },
-    sound: { music: 'music', volume: 'volume' },
+    sound: { music: 'music', effects: 'effects', volume: 'volume' },
     dreams: { quoteDuration: 'quoteDuration', quoteInterval: 'quoteInterval' },
     book: { pagesPerBook: 'pagesPerBook', linesPerPage: 'linesPerPage', charactersPerLine: 'charactersPerLine' },
     hexagon: { wallsWithShelves: 'wallsWithShelves', shelvesPerWall: 'shelvesPerWall', booksPerShelf: 'booksPerShelf' },
@@ -180,6 +180,7 @@
       quoteDuration: numberBetween(dreams.quoteDuration, label('dreams', 'quoteDuration'), 1, 600),
       quoteInterval: numberBetween(dreams.quoteInterval, label('dreams', 'quoteInterval'), 0, 600),
       music: trueOrFalse(sound.music, label('sound', 'music')),
+      effects: trueOrFalse(sound.effects, label('sound', 'effects')),
       volume: numberBetween(sound.volume, label('sound', 'volume'), 0, 1),
     };
     cfg.charactersPerPage = cfg.linesPerPage * cfg.charactersPerLine;

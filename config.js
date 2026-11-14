@@ -74,9 +74,11 @@ window.BABEL_CONFIG = {
   },
 
   // What the reader hears: soft music that each hexagon makes of its own, and that changes from
-  // one hexagon to the next as the reader walks. M turns it off and on.
+  // one hexagon to the next as the reader walks (M turns it off and on); and the reader's own
+  // footsteps, jumps and landings, and the wind of a fall.
   sound: {
     music: true, // false for silence, until M is pressed
-    volume: 0.5, // from 0 to 1
+    effects: true, // false for no footsteps, jumps, landings or wind
+    volume: 0.5, // from 0 to 1, for both
   },
 };

@@ -1,0 +1,11 @@
+{
+  "name": "babel",
+  "private": true,
+  "description": "A walkable rendering of Jorge Luis Borges's Library of Babel",
+  "scripts": {
+    "test": "node tests/library.test.js && node tests/browser.test.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.65.1"
+  }
+}

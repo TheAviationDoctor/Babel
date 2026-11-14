@@ -1,0 +1,27 @@
+# Runs the Library's tests on GitHub at every push and pull request: the mathematics
+# (tests/library.test.js) and the Library in a browser (tests/browser.test.js), after checking
+# that index.html is stamped with the versions of its files (stamp.js).
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install Playwright
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Check that index.html is stamped
+        run: node stamp.js --check
+      - name: Run the tests
+        run: npm test

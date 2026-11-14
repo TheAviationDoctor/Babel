@@ -56,6 +56,9 @@
 
   // how long it takes to recover from landing (seconds), the hardest landing the longest
   const LANDING = 0.6;
+  // the length of a step (metres): a footstep is heard, and the head bobs, once a step
+  const STRIDE = 0.75;
+  const stepLoudness = (x) => Math.max(0, Math.min(1.5, x)); // (up to 1.5: a hurried stride)
   const smoothstep = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
 
   function hexDist(x, z) {
@@ -84,6 +87,12 @@
       this.air = null;
       this.landing = null;
       this._jumpAt = -1; // when the space bar was last pressed (a jump asked a moment early still counts)
+      // what the reader's body makes heard (main.js sets these): a footstep, on 'stone' or 'wood',
+      // as loud as given; a jump, from a surface; a landing on one, at a speed (metres a second);
+      // each with where it is made (see room)
+      this.onStep = null;
+      this.onJump = null;
+      this.onLand = null;
       this.sensitivity = 1;
       this.bob = 0;
       this.enabled = false;
@@ -579,12 +588,36 @@
 
     /** Leaves the ground, moving at (vx, vz) along it and vy up. */
     _takeOff(vx, vy, vz) {
+      if (vy > 0 && this.onJump) this.onJump(this.surface(), this.room());
       this.air = { vx, vy, vz, t: 0, cap: Math.max(Math.hypot(vx, vz), AIR.drift) };
+    }
+
+    /**
+     * Where the reader is, for how their sounds echo: 'hexagon' (of books), 'stair' (the stair
+     * hexagon), 'cell', or 'hall' (a vestibule or a passage).
+     */
+    room() {
+      const d = this.d;
+      if (this.kind === HUB && hexDist(this.x, this.z) <= d.aIn) return 'stair';
+      for (const c of this.around().cells) {
+        const [hx, hz] = this.inFrame(c.frame);
+        if (hexDist(hx, hz) <= d.aIn) return 'hexagon';
+        if (hx >= d.cellX0 && hx <= d.cellX1 && hz < -d.hallW / 2 && hz >= d.cellZ1) return 'cell';
+      }
+      return 'hall';
+    }
+
+    /** What the reader stands on (or is over): 'wood' on the stair, else 'stone'. */
+    surface() {
+      const d = this.d;
+      for (const h of this.around().hubs) if (hexDist(this.x - h.x, this.z - h.z) <= d.stairA + 0.05) return 'wood';
+      return 'stone';
     }
 
     /** Back on the ground, met at `speed` metres a second: the knees give a little, the harder the further. */
     _land(speed) {
       this.air = null;
+      if (this.onLand) this.onLand(this.surface(), speed, this.room());
       const depth = Math.max(0, Math.min(1, (speed - 2.5) / 9));
       if (speed > 2.5) this.landing = { t: 0, depth: 0.25 + 0.75 * depth };
     }
@@ -625,7 +658,10 @@
             // the feet meet the top of a railing (or the edge of a floor): the reader rests on it a
             // moment and slips off, onto the floor if they were going that way or are already over
             // it, or else back into the shaft
-            if (a.vy < -6) this.landing = { t: 0, depth: Math.min(1, (-a.vy - 2.5) / 9) * 0.6 };
+            if (a.vy < -6) {
+              this.landing = { t: 0, depth: Math.min(1, (-a.vy - 2.5) / 9) * 0.6 };
+              if (this.onLand) this.onLand('wood', -a.vy * 0.7, this.room()); // (the railing's top rail, caught)
+            }
             a.vy = 0;
             const sh = this._shaftAt(this.x, this.z);
             if (sh) {
@@ -753,7 +789,14 @@
       // crouching down, or standing up, takes about a third of a second
       const goal = this.crouching ? 1 : 0;
       if (dt > 0) this.crouch += Math.sign(goal - this.crouch) * Math.min(Math.abs(goal - this.crouch), dt / 0.32);
-      this.bob += moved * 5.2;
+      // a footstep every half-turn of the bob, some 0.75 m (the head bobbing with the stride):
+      // louder hurrying, soft crouched
+      const was = Math.floor(this.bob / Math.PI);
+      this.bob += moved * (Math.PI / STRIDE);
+      if (moved > 0 && dt > 0 && Math.floor(this.bob / Math.PI) !== was && this.onStep) {
+        const pace = moved / dt / this.speed; // 1 walking, 1.9 hurrying, 0.5 crouched
+        this.onStep(this.surface(), this.crouch > 0.5 ? 0.45 : stepLoudness(0.55 + 0.35 * pace), this.room());
+      }
       const bobY = moved > 0 ? Math.sin(this.bob) * 0.018 : 0;
       this.camera.position.set(this.x, this.y + this.eyeHeight() - this._landingDip() + bobY, this.z);
       this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');

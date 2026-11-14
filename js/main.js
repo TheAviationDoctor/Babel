@@ -9,7 +9,7 @@
   const $ = (id) => document.getElementById(id);
   const isTouch = matchMedia('(hover: none) and (pointer: coarse)').matches;
 
-  let raw, lib, assets, world, player, renderer, scene, camera, sinkReflector, figure, figureLight, figureKey, terminal, music, ghost;
+  let raw, lib, assets, world, player, renderer, scene, camera, sinkReflector, figure, figureLight, figureKey, terminal, music, sounds, ghost;
   let mode = 'walking';
   let gaze = null, gazeKey = '';
   let reading = null;
@@ -85,9 +85,15 @@
     let musicOn = lib.config.music;
     try { const kept = localStorage.getItem('babel-music'); if (kept) musicOn = kept === 'on'; } catch (e) { /* as config.js says */ }
     music = new Babel.Music({ volume: lib.config.volume, on: musicOn });
-    for (const type of ['pointerdown', 'keydown', 'touchend']) window.addEventListener(type, () => music.start(), true);
+    // and what the reader's own body makes heard: footsteps, jumps, landings, the wind of a fall
+    sounds = new Babel.Sounds({ volume: lib.config.volume, on: lib.config.effects });
+    player.onStep = (surface, loud, room) => sounds.step(surface, loud, room);
+    player.onJump = (surface, room) => sounds.jump(surface, room);
+    player.onLand = (surface, speed, room) => sounds.land(surface, speed, room);
+    for (const type of ['pointerdown', 'keydown', 'touchend']) window.addEventListener(type, () => { music.start(); sounds.start(); }, true);
     document.addEventListener('visibilitychange', () => {
       music.setVisible(!document.hidden);
+      sounds.setVisible(!document.hidden);
       if (!document.hidden) last = performance.now(); // the time away is not a frame
     });
 
@@ -1072,6 +1078,9 @@
     // the music of the hexagons the reader is among, each as near as they are (planned 1.5 s
     // ahead, so a reader who is not moving need be listened for only now and then)
     if (!(picture || behind) || frameCount % 15 === 0) hearMusic();
+    // the wind of a fall, while the reader falls (and is not reading or asleep meanwhile)
+    const a = player.air;
+    sounds.wind(a && mode === 'walking' ? Math.hypot(a.vx, a.vy, a.vz) : 0);
 
     if (picture) dream.render(renderer, picture.t, picture.n, picture.mix);
     else if (!behind) renderer.render(scene, camera);
@@ -1212,7 +1221,7 @@
     get renderer() { return renderer; }, get mode() { return mode; }, get sleep() { return sleep; }, journey, here,
     get reading() { return reading; },
     openBook, openBookAt, startWalking, setMode, goToCell, goToAddress, fallAsleep, wakeUp, hexagonSeed,
-    get lastJourney() { return lastJourney; }, quality, adaptQuality,
+    get lastJourney() { return lastJourney; }, quality, adaptQuality, get sounds() { return sounds; },
     get terminal() { return terminal; },
     get ghost() { return ghost; }, get camera() { return camera; },
   };

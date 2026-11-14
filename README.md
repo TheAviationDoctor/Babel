@@ -4,15 +4,14 @@ A Web-based walkable simulation of Jorge Luis Borges's *[Library of Babel](https
 
 ## Features
 
-- Permanent book locations (deterministically generated from a seed).
-- Configurable environment (seed, book format, alphabet, bookshelves, look sensitivity, field of view).
-- Interactive objects (books, terminal display, doors, beds, bedside lamps).
-- Reverse-search any text and teleport to the corresponding book.
-- Copy and share locations of any book or text, incl. secret password-encrypted links.
-- Read from an index of copyright-free texts.
-- A painting for every hexagon of books, each one different, and every possible painting somewhere.
-- Find the passage where any picture hangs, and view famous copyright-free paintings.
-- Traces of other librarians: figures glimpsed across the shaft, above and below, and pencil marks in the margins.
+- Walk, crouch, jump, and run.
+- Interact with books, terminal display, doors, beds, and bedside lamps.
+- Configure the book format, alphabet, bookshelves, look sensitivity, and field of view.
+- Set a seed for deterministically persistent book locations.
+- Reverse-search any text or image and teleport to the corresponding book or painting.
+- Copy and share public or password-encrypted links to any book.
+- Browse an index of copyright-free short stories and paintings, and teleport to their location.
+- Look for ghosts of librarians past and the marginalia they left behind, and the elusive crimson hexagon.
 
 ## Getting started
 
@@ -22,10 +21,10 @@ No installation required: everything is self-contained HTML/JS/CSS. Just visit t
 |---|---|
 | Look | mouse (click once to capture it) |
 | Walk | `W` `A` `S` `D` or arrow keys |
-| Hurry | hold `Shift` or turn on `Caps Lock` |
-| Crouch | tap `C` to crouch, and again to stand; or hold it to crouch only while it is held. Crouched, the lower shelves are at eye level, and one walks slowly. |
-| Jump | `Space` (high enough to clear a shaft's low railing; in the air, `W` `A` `S` `D` steer a little) |
-| Interact with objects | `E` or click |
+| Hurry | hold `Shift` or toggle with `Caps Lock` |
+| Crouch | press `C` to toggle |
+| Jump | `Space` |
+| Interact | `E` or click |
 | Turn book pages | `←` `→`, `Page Up` `Page Down`, `Home` `End` |
 | Find words in a book | `F` |
 | Put a book back | `Esc` or `E` |
@@ -35,26 +34,29 @@ No installation required: everything is self-contained HTML/JS/CSS. Just visit t
 
 On a phone or tablet, drag on the right of the screen to look, hold and slide on the left to walk, and tap to interact with objects. Double-tap on the right to jump, while looking at nothing to interact with (so a running jump is a double tap while the other thumb walks). Tap again to wake from a dream.
 
+## Is the Library a maze?
+
+Not really; its topology is predictable. It is comprised of rows of repeating clusters of seven hexagonal rooms each: one hub hexagon featuring a central staircase to the floors above and below, plus hallways open on every side; and six surrounding spoke hexagons arranged in a circle around the hub, each containing four bookshelves and two connecting hallways. The cluster structure repeats itself across every floor and tiles the plane (see diagram below).
+
+![Topology of the Library](babel-seven-hexagon-modules.png)
+
 ## Is the Library infinite?
 
-No. The Library is *finite* in that it contains a fixed number of unique books, hexagons, and floors. But it is *boundless* (no hard edge) and is *cyclic* in every direction. Keep heading east from cluster to cluster and, past the last cluster of a row, you are back in the first; keep heading south, past the last row of a floor, and you are back in the first; take the stairs up or down past the last floor, and you are back at the first, just like an ant walking endlessly on the surface of a torus (which each floor is, topologically speaking; the whole Library is its three-dimensional cousin).
+No. The Library is *finite* in that it contains a fixed number of unique books, rooms, and floors. But it is *boundless* (no hard edge) and is *cyclic* in every direction (east-west, north-south, up-down).
 
-Positions are measured from the *seam*, which is where the numbers of the clusters, the rows and the floors roll over: east–west between the last cluster of a row and the first, north–south between the last row of a floor and the first, and up–down between the last floor and the first. The Catalogue's **Map** tab (see [The Catalogue](#the-Catalogue)) shows your distance from every seam. Walking barely changes your position, since each cluster is only `2 × 10^-736,520%` of the way along its row.
+If you were to walk past the last cluster of a row, or the last row of a floor, or the last floor up or down, you would roll over the first, just like an ant walking endlessly on the surface of a torus. The Catalogue's **Map** tab (see [The Catalogue](#the-Catalogue)) shows your distance from every such seam. Walking barely changes your position, since each cluster is only `2 × 10^-736,520%` of the way along its row.
 
-## So how big is the Library?
+## How big is the Library?
 
-Using the default settings from `config.js`:
+It's inconceivably big. For reference, there are about `10^80` atoms in our observable universe. Imagine every atom contained an entire universe, each with just as many atoms as ours. Then imagine every atom in *that* nested universe contained another universe, and so on. You would need nearly `28,000` levels of Matrioshka universes before the *cumulative* number of atoms approximated the number of books or hexagons in the Library. The Library is large enough to fit our observable universe `2.1 × 10^736,496` times in any direction, which would take light `1.9 × 10^736,507` years to traverse. Here's the math:
 
 - Each book holds `2^6 = 64` characters × `2^5 = 32` lines × `2^9 = 512` pages which yields `2^20 = 1,048,576` characters per book. That's about twice the length of a typical English novel, which gives plenty of headroom to capture most published literature.
 
-- The alphabet contains `2^7 = 128` symbols: `26` uppercase and `26` lowercase letters from the modern latin alphabet (A–Z); `27` accented letters and ligatures from French and Spanish, plus the umlauts ä and ö, and five accented capitals; `10` base-10 digits (0–9); `38` punctuation marks and signs; and the standard space. Those symbols were chosen by counting every one of the 697 million characters of 871 of the most-read literary classics: they hold 99.9% of them exactly as printed.
+- The alphabet contains `2^7 = 128` symbols: `26` uppercase and `26` lowercase letters from the modern latin alphabet (A–Z); `27` accented letters and ligatures from French and Spanish, plus the umlauts ä and ö, and five accented capitals; `10` base-10 digits (0–9); `38` punctuation marks and signs; and the standard space. Those symbols were carefully chosen by enumerating the 697 million characters of 871 of the most-read literary classics; the resulting alphabet holds 99.9% of them.
 
 - There are therefore `128^(2^20) = 2^7,340,032 ≈ 6.33 × 10^2,209,569` unique books in the Library. That's one followed by over 2.2 million zeros. If you kept repeating the word 'trillion' once per second, it would take you just over 51 hours to verbalize that number.
 
-- The Library is arranged into floors, and each floor into hexagon-shaped rooms that tile it like the cells of a honeycomb, in clusters of seven: six hexagons of books round a seventh that holds the spiral stair (see [Is the Library three-dimensional?](#is-the-library-three-dimensional)). Each hexagon of books holds `2^2 = 4` bookshelves × `2^2 = 4` shelves × `2^5 = 32` books = `2^9 = 512` books per hexagon. Therefore, the Library has `2^7,340,032 / 2^9 = 2^7,340,023 ≈ 1.24 × 10^2,209,567` hexagons of books (and a sixth as many stair hexagons). Barely two order of magnitude fewer hexagons than books; for all intents and purposes, they are the same number.
-
-> [!TIP] 
-> There are about `10^80` atoms in our observable universe. Imagine every atom contained an entire universe, each with just as many atoms as ours. Then imagine every atom in *that* nested universe contained another universe, and so on. You would need nearly `28,000` levels of Matrioshka universes before the *cumulative* number of atoms approximated the number of books or hexagons in the Library.
+- Each hexagon of books holds `2^2 = 4` bookshelves × `2^2 = 4` shelves × `2^5 = 32` books = `2^9 = 512` books per hexagon. Therefore, the Library has `2^7,340,032 / 2^9 = 2^7,340,023 ≈ 1.24 × 10^2,209,567` hexagons of books (and a sixth as many stair hexagons). Barely two order of magnitude fewer hexagons than books; for all intents and purposes, they are the same number.
 
 - There are `2^2,446,672 ≈ 4.59 × 10^736,521` clusters along each row, `2^2,446,673 ≈ 9.17 × 10^736,521` rows on each floor (twice as many), and about `4.89 × 10^736,522` floors. The clusters and the rows are counted in powers of 2; there being six hexagons of books to a cluster, the floors are not (`2^2,446,678 / 6`, rounded up: the last floor is partly empty).
 
@@ -298,7 +300,7 @@ The sentences are grammatical but not necessarily sensible. A small English gram
 
 ## Music
 
-Each hexagon plays its own soft music, made as it plays: nothing is downloaded. Like the hexagon's patina and its lamps, the music comes from a hash of its address, so it is the same on every visit. Each hexagon has its own key and mode (Lydian, Ionian, Mixolydian, Dorian or Aeolian). Over a quiet bass, a pad of four voices holds an open chord and drifts every half-minute or so to another chord of the mode. Now and then a soft bell sounds from the same scale, alone or in a short figure, and every so often two high, glassy tones swell and fade. Beneath it all is the faint breath of air in the shaft, and everything rings in a long reverb.
+Each hexagon plays its own procedural music generated in real time. Like the hexagon's patina and its lamps, the music comes from a hash of its address, so it is the same on every visit. Each hexagon has its own key and mode (Lydian, Ionian, Mixolydian, Dorian or Aeolian). Over a quiet bass, a pad of four voices holds an open chord and drifts every half-minute or so to another chord of the mode. Now and then a soft bell sounds from the same scale, alone or in a short figure, and every so often two high, glassy tones swell and fade. Beneath it all is the faint breath of air in the shaft, and everything rings in a long reverb.
 
 Walk from one hexagon to the next and the music of the one fades into the music of the other along the vestibule between them; climb the stairs and it fades into the next floor's. Browsers only let a page make sound once you have clicked, tapped or pressed a key, so the music begins then. `M` turns it off and on, and the Library remembers your choice. `sound.music` and `sound.volume` in `config.js` set whether it plays at first and how loud.
 
@@ -328,6 +330,9 @@ In `index.html`, every file name is followed by `?v=` and its version, a hash of
 | `js/main.js` | Start-up, reading, sleep |
 | `lib/` | three.js r147 and its `Reflector` (MIT licence, see `lib/three.LICENSE`) |
 | `tests/library.test.js` | Tests of the mathematics |
+| `tests/browser.test.js` | Tests of the Library in a browser |
+| `package.json`, `package-lock.json` | The tools the tests run on (Playwright), for `npm install`; the Library itself needs none |
+| `.github/workflows/tests.yml` | Runs the tests on GitHub at every push |
 | `books/index.js`, `books/compressed/` | The collection, as the Catalogue reads it, written by `books/shelve.js` from the `.md` and `.txt` files in `books/uncompressed/` (which are not published) |
 | `books/shelve.js` | Shelves the collection: see [Your books](#your-books) |
 | `paintings/index.js`, `paintings/compressed/` | The collection of paintings, as the Catalogue reads it, written by `paintings/hang.js` from the pictures in `paintings/originals/` (which are not published) |
@@ -338,6 +343,8 @@ In `index.html`, every file name is followed by `?v=` and its version, a hash of
 ## Testing
 
 With Node.js installed, run `node tests/library.test.js`. The tests enumerate every shelf of five small libraries and check that each holds a different book and that the inverse map finds every book again. They then check round trips, text search and timing on the Library described by `config.js`, and on Borges's own figures, and finally the Catalogue: preparing texts, setting whole books in pages and splitting long ones into parts, finding them in books, distances that wrap around the Library, reading back copied addresses, and making and reading links to books, secret ones included. The paintings are checked exhaustively on five small libraries, each painting different, keeping its rule and leading back to its hexagon, every picture that keeps the rule hanging somewhere, and every mirror image a painting too, then on the Library of `config.js`, with pictures made into paintings, cropped or fitted, always the same for the same picture, and mended to keep the rule. They also check the clusters and rows of each floor, the shortest way between two hexagons in rows and along them, positions measured from the seams, random hexagons to wake in, and the sentences of dreams: grammatical, varied, and always the same for the same hexagon.
+
+The tests of the Library in a browser open `index.html` from its file, as a double click does, in Chromium driven by [Playwright](https://playwright.dev), and do what a reader would: they wake and look at what is drawn, walk through sixty doorways at random, pick every kind of book, the Catalogue, the cell's door, its bed and the painting in every kind of hexagon, climb the stair a dozen floors and come back down, walk into every railing, jump (and hit a cell's ceiling), take a running jump across a shaft, fall down one and steer to its edge, walk off the stair, double-tap on a touch screen, read a book and find its words, find a text in the Catalogue and go to it, jump through the Catalogue, take down a book of the collection, follow a link to a painting, dream and wake, and check that the Library is not drawn again behind the Catalogue for nothing, that it adapts how finely it is drawn, and that it lets go of hexagons it no longer needs. To run them, once, `npm install` and `npx playwright install chromium`; then `npm test` runs both sets of tests, or `node tests/browser.test.js` these alone (`node tests/browser.test.js stair`, those whose names hold *stair*). They take two minutes or so: the page is drawn by the browser's own software renderer, the same on every machine. GitHub runs them all at every push (see the **Actions** tab), after checking that `index.html` is stamped.
 
 ## Credits
 
