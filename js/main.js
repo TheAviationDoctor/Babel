@@ -91,6 +91,7 @@
     const d = assets.dims;
     sinkReflector = new THREE.Reflector(assets.geometries.sinkMirror, {
       textureWidth: 512, textureHeight: 512, color: 0x8d877b, clipBias: 0.002,
+      multisample: 0, // (a mirror this small, its picture softened by the glass, needs no antialiasing)
     });
     sinkReflector.camera.layers.enableAll();
     sinkReflector.rotation.y = -Math.PI / 2;
@@ -145,7 +146,10 @@
 
   function sizeMirror() {
     const pr = renderer.getPixelRatio();
-    sinkReflector.getRenderTarget().setSize(Math.round(window.innerWidth * pr * 0.5), Math.round(window.innerHeight * pr * 0.5));
+    // half the screen's resolution, and no more than 1,024 pixels on its longer side: the mirror is
+    // small, and its picture need be no sharper than the screen shows it
+    const w = window.innerWidth * pr * 0.5, h = window.innerHeight * pr * 0.5, k = Math.min(1, 1024 / Math.max(w, h));
+    sinkReflector.getRenderTarget().setSize(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)));
   }
 
   function onResize() {

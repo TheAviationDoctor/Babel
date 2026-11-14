@@ -12,3 +12,5 @@ paintings/*
 !paintings/hang.js
 !paintings/index.js
 !paintings/compressed/
+# Notes kept out of the repository
+PERFORMANCE_REVIEW.md

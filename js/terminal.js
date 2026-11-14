@@ -79,10 +79,33 @@
    * deflated and in base64. They are scripts because a page opened by double-click may
    * load scripts but not read files; so the collection works there as on the web.
    */
+  /**
+   * A script that delivers one item of a collection (a book's text, a painting's colour numbers)
+   * by calling back with its id: loaded once however many ask for it at the same time, all of
+   * them answered by that one load. waiting: id → the function the callback resolves;
+   * loads: id → the load under way. (A failed load is forgotten, so that it can be tried again.)
+   */
+  function loadItem(waiting, loads, id, url, broken) {
+    let load = loads.get(id);
+    if (!load) {
+      load = new Promise((resolve, reject) => {
+        waiting.set(id, resolve);
+        loadScript(url).then(() => {
+          if (waiting.delete(id)) reject(new Error(broken));
+        }, (e) => { waiting.delete(id); reject(e); });
+      });
+      loads.set(id, load);
+      const done = () => { if (loads.get(id) === load) loads.delete(id); };
+      load.then(done, done);
+    }
+    return load;
+  }
+
   const collection = {
     books: null, // the list, once loaded
     _loading: null,
     _arrived: new Map(), // shelf id → the function waiting for that book's text
+    _loads: new Map(), // shelf id → its text's load, while under way
     _script: loadScript,
     /** The list of books, or [] if none has been shelved beside this Library. */
     load() {
@@ -95,12 +118,7 @@
     },
     /** The text of a book of the collection. */
     async text(book) {
-      const packed = await new Promise((resolve, reject) => {
-        this._arrived.set(book.shelf, resolve);
-        this._script(`books/compressed/${book.shelf}.js`).then(() => {
-          if (this._arrived.delete(book.shelf)) reject(new Error('its file on the shelf is not what was expected'));
-        }, (e) => { this._arrived.delete(book.shelf); reject(e); });
-      });
+      const packed = await loadItem(this._arrived, this._loads, book.shelf, `books/compressed/${book.shelf}.js`, 'its file on the shelf is not what was expected');
       return new TextDecoder('utf-8').decode(await inflate(packed, 'books'));
     },
   };
@@ -122,6 +140,7 @@
     paintings: null, // the list, once loaded
     _loading: null,
     _arrived: new Map(), // id → the function waiting for that painting
+    _loads: new Map(), // id → its load, while under way
     /** The list of paintings, or [] if none has been hung beside this Library. */
     load() {
       if (!this._loading) {
@@ -133,12 +152,7 @@
     },
     /** A painting's colour numbers, if it was hung for this Library's paintings. */
     async pixels(painting, lib) {
-      const got = await new Promise((resolve, reject) => {
-        this._arrived.set(painting.id, resolve);
-        loadScript(`paintings/compressed/${painting.id}.js`).then(() => {
-          if (this._arrived.delete(painting.id)) reject(new Error('its file is not what was expected'));
-        }, (e) => { this._arrived.delete(painting.id); reject(e); });
-      });
+      const got = await loadItem(this._arrived, this._loads, painting.id, `paintings/compressed/${painting.id}.js`, 'its file is not what was expected');
       const P = lib.painting;
       if (!P || got.width !== P.width || got.height !== P.height || got.colours !== lib.N) {
         throw new Error(`it was hung for paintings of ${got.width} × ${got.height} pixels in ${got.colours} colours, ` +
@@ -352,7 +366,7 @@
       $('painting-link').addEventListener('click', () => {
         this._copyLink(this._shortLink(BabelCore.Library.paintingLink(this.painting.entry.id)), 'Copied a link to this painting. Whoever opens it is set down before it.');
       });
-      $('find-text').addEventListener('input', () => this._note());
+      $('find-text').addEventListener('input', () => this._noteSoon());
       $('find-upload').addEventListener('click', () => $('find-upload-input').click());
       $('find-upload-input').addEventListener('change', () => this._upload($('find-upload-input')));
       $('find-paste').addEventListener('click', () => this._paste());
@@ -448,10 +462,23 @@
       box.focus();
     }
 
-    /** Describes what will be searched for, as the reader types. */
+    /**
+     * Describes what will be searched for, as the reader types: at once for a short text; for a
+     * long one, once the typing pauses, since setting it out takes a while.
+     */
+    _noteSoon() {
+      clearTimeout(this._noteTimer);
+      if ($('find-text').value.length < 4000) { this._note(); return; }
+      $('find-go').disabled = true; // until it is described
+      this._noteTimer = setTimeout(() => this._note(), 180);
+    }
+
+    /** Describes what will be searched for; returns the text as set out (kept, for the same text, until it changes). */
     _note() {
+      clearTimeout(this._noteTimer);
       const lib = this.lib, raw = $('find-text').value;
-      const p = lib.layText(raw);
+      if (!this._laid || this._laid.raw !== raw || this._laid.lib !== lib) this._laid = { raw, lib, p: lib.layText(raw) };
+      const p = this._laid.p;
       const parts = [];
 //      if (!raw) parts.push(`Up to ${fmt(lib.M)} characters, in the Library's alphabet: ${alphabetWords(lib)}.`);
       if (!raw) parts.push(`Up to ${fmt(lib.M)} characters (A–Z, a-z, accented letters, digits, and punctuation).`);

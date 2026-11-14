@@ -414,15 +414,11 @@
         farCanvas.position.set(d.Dx, 0, 0);
         farCanvas.rotation.y = Math.PI;
         passage.add(canvas, farCanvas);
-        // and the plates under them, with their names
-        const named = () => {
-          const t = Babel.Textures.titlePlate();
-          const m = new THREE.Mesh(G.paintingPlate, this.assets.plateMaterial(t.texture));
-          m.userData.plate = t;
-          return m;
-        };
-        plate = named();
-        farPlate = named();
+        // and the plates under them: blank and hidden until a painting near the reader is named on
+        // one (the lettered faces are few, and lent to whichever plates need them; see _showPaintings)
+        plate = new THREE.Mesh(G.paintingPlate, this.paintings.blank);
+        farPlate = new THREE.Mesh(G.paintingPlate, this.paintings.blank);
+        plate.visible = farPlate.visible = false;
         farPlate.position.set(d.Dx, 0, 0);
         farPlate.rotation.y = Math.PI;
         passage.add(plate, farPlate);
@@ -776,7 +772,33 @@
     /** Names the painting of site s of floor df (as the catalogue knows it), on the plate under it. */
     namePainting(s, df, title) {
       if (!this.paintings || !title) return;
-      this.paintingTitles.set(this.paintings.key(this.hexagon(s), this.floor(df)), title); // (shown at the next update)
+      const key = this.paintings.key(this.hexagon(s), this.floor(df));
+      this.paintingTitles.set(key, title); // (shown at the next update)
+      const face = this._faces && this._faces.get(key);
+      if (face) face.title = null; // to be lettered again
+    }
+
+    /** The lettered face for the painting of `key` (site s of floor df), lent from the few there are. */
+    _plateFace(key, s, df) {
+      this._faces = this._faces || new Map(); // the faces lent, by painting
+      this._spareFaces = this._spareFaces || [];
+      let face = this._faces.get(key);
+      if (!face) {
+        face = this._spareFaces.pop();
+        if (!face) {
+          const plate = Babel.Textures.titlePlate();
+          face = { plate, material: this.assets.plateMaterial(plate.texture), title: null };
+        }
+        face.title = null;
+        this._faces.set(key, face);
+      }
+      // its name: the one it was sought by in the catalogue, or else the one its hexagon gives it
+      if (face.title === null) {
+        face.title = this.paintingTitles.get(key) || this.lib.paintingTitle(this.fingerprint(s, df));
+        face.plate.show(face.title);
+      }
+      face.used = true;
+      return face;
     }
 
     /** Hangs each painting that is ready in the passages near the reader; the others show the far colour. */
@@ -785,18 +807,19 @@
       const pf = this.center[1], P = this.paintings, near = this._paintingSites || new Set();
       const hang = (canvas, plate, s, df) => {
         const key = P.key(this.hexagon(s), this.floor(df));
-        canvas.material = df === pf && near.has(s) ? P.material(key) : P.blank;
-        // its name: the one it was sought by in the catalogue, or else the one its hexagon gives it
-        // (worked out again only when the plate is moved to another painting, or a painting is named)
-        const named = key + '#' + this.paintingTitles.size;
-        if (plate.userData.named === named) return;
-        plate.userData.named = named;
-        plate.userData.plate.show(this.paintingTitles.get(key) || this.lib.paintingTitle(this.fingerprint(s, df)));
+        const close = df === pf && near.has(s);
+        canvas.material = close ? P.material(key) : P.blank;
+        // only the plates of the paintings near the reader are lettered; the others are not drawn
+        plate.visible = close;
+        if (close) plate.material = this._plateFace(key, s, df).material;
       };
+      if (this._faces) for (const face of this._faces.values()) face.used = false;
       for (const cell of this.cells.values()) {
         hang(cell.canvas, cell.plate, cell.dh, cell.df);
         hang(cell.farCanvas, cell.farPlate, this.neighbours(cell.dh)[1], cell.df); // the hexagon beyond the passage
       }
+      // the faces no plate needs now go back to be lent again
+      if (this._faces) for (const [key, face] of this._faces) if (!face.used) { this._faces.delete(key); this._spareFaces.push(face); }
     }
 
     /** Forgets what was worked out for places the reader has left far behind. */
