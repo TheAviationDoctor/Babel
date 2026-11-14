@@ -20,8 +20,8 @@ const key = (a) => Buffer.from(a).toString('hex');
 const valueOf = (digits, N) => digits.reduceRight((v, d) => v * N + d, 0);
 
 /** Enumerates every shelf position of a small library and checks the map is a bijection. */
-function exhaustive(raw) {
-  const lib = new Library(raw);
+function exhaustive(raw, spacing) {
+  const lib = new Library(raw, spacing);
   const N = lib.N, M = lib.M;
   const total = N ** M;
   const seen = new Set();
@@ -54,7 +54,7 @@ function exhaustive(raw) {
         assert.strictEqual(back.slot, slot);
       }
       assert.strictEqual(present, expected, 'booksInHexagon disagrees with the shelves');
-      g = lib.offsetHexagon(g, 1);
+      g = lib._wrap(g, 1, lib.hexagonCount); // the next hexagon number of the floor
     }
   }
   assert.strictEqual(seen.size, total, `expected ${total} distinct books, found ${seen.size}`);
@@ -132,18 +132,24 @@ test('4-symbol alphabet (power of two), 6-symbol books, 8 per hexagon (4,096 boo
     book: { pagesPerBook: 2, linesPerPage: 1, charactersPerLine: 3 },
     hexagon: { wallsWithShelves: 2, shelvesPerWall: 2, booksPerShelf: 2 },
   });
-  assert.strictEqual(r.empty, 0);
+  // 512 hexagons, six to a cluster: no whole number of floors, so the last floor is partly empty
+  assert.strictEqual(r.empty + r.total, r.floors * r.hexagons * 8);
+  assert.ok(r.empty > 0 && r.empty < r.hexagons * 8);
 });
 
-test('4-symbol alphabet, 6-symbol books, 4 per hexagon (1,024 hexagons: 32 floors of 32)', () => {
+test('4-symbol alphabet, 6-symbol books, 4 per hexagon (1,024 hexagons: 6 floors of 8 rows of 4 clusters of 6)', () => {
   const r = exhaustive({
     seed: 'square', alphabet: 'ABCD',
     book: { pagesPerBook: 1, linesPerPage: 1, charactersPerLine: 6 },
     hexagon: { wallsWithShelves: 1, shelvesPerWall: 1, booksPerShelf: 4 },
   });
-  assert.strictEqual(r.empty, 0);
-  assert.strictEqual(r.floors, 32);
-  assert.strictEqual(r.hexagons, 32);
+  // the 170 whole clusters of 6 hexagons (and 4 hexagons of the next) have 8 bits: 2^2 clusters to a
+  // row, for a third of them rounded down, and 2^3 rows, for half the 6 left; 192 hexagons to a floor
+  assert.strictEqual(r.hexagons, 192);
+  assert.strictEqual(r.floors, 6);
+  assert.strictEqual(valueOf(r.lib.columnCount, 4), 4);
+  assert.strictEqual(valueOf(r.lib.rowCount, 4), 8);
+  assert.strictEqual(r.empty + r.total, r.floors * r.hexagons * 4);
 });
 
 test('8-symbol alphabet, 4-symbol books, 6 per hexagon (683 hexagons, the last floor partly built)', () => {
@@ -152,9 +158,13 @@ test('8-symbol alphabet, 4-symbol books, 6 per hexagon (683 hexagons, the last f
     book: { pagesPerBook: 1, linesPerPage: 2, charactersPerLine: 2 },
     hexagon: { wallsWithShelves: 1, shelvesPerWall: 2, booksPerShelf: 3 },
   });
-  // 4,096 = 682 × 6 + 4: 683 hexagons, 32 along each floor (2^5, half of the 10 bits of 682, rounded down)
-  assert.strictEqual(r.hexagons, 32);
-  assert.strictEqual(r.floors, 22);
+  // 4,096 = 682 × 6 + 4: 683 hexagons, in 113 whole clusters and part of another (7 bits): 4 rows
+  // of 4 clusters on each floor (2^2 for a third of the bits, and 2^2 for half the 5 left), so 96
+  // hexagons to a floor, and 8 floors, the last partly built
+  assert.strictEqual(r.hexagons, 96);
+  assert.strictEqual(r.floors, 8);
+  assert.strictEqual(valueOf(r.lib.columnCount, 8), 4);
+  assert.strictEqual(valueOf(r.lib.rowCount, 8), 4);
   assert.strictEqual(r.empty + r.total, r.floors * r.hexagons * 6);
 });
 
@@ -471,37 +481,121 @@ test('a text is found in a book exactly where it was put', () => {
 
 test('distances between hexagons take the shorter way round', () => {
   const s = lib.wakingLocation(4);
-  for (const [dh, df] of [[0, 0], [1, -1], [-123456789, 987654], [5e15, -3e15]]) {
-    const g = lib.offsetHexagon(s.hexagon, dh), f = lib.offsetFloor(s.floor, df);
-    const a = lib.hexagonDifference(s.hexagon, g), b = lib.floorDifference(s.floor, f);
-    assert.strictEqual(a.sign * (lib.magnitude(a.digits).exact || 0), dh);
-    assert.strictEqual(b.sign * (lib.magnitude(b.digits).exact || 0), df);
+  const exact = (x) => x.sign * (lib.magnitude(x.digits).exact || 0);
+  for (const [east, south, df] of [[0, 0, 0], [1, -1, -1], [-123456789, 31, 987654], [5e15, -7e15, -3e15]]) {
+    const g = lib.offsetHexagon(s.hexagon, east, south), f = lib.offsetFloor(s.floor, df);
+    const a = lib.hexagonSteps(s.hexagon, g), b = lib.floorDifference(s.floor, f);
+    assert.strictEqual(exact(a.columns), east);
+    assert.strictEqual(exact(a.rows), south);
+    assert.strictEqual(a.petals[0], a.petals[1]);
+    assert.strictEqual(exact(b), df);
   }
-  // across the seam, east–west and up–down
+  // across the seams: east–west, north–south and up–down
   const zeroG = new Uint8Array(lib.hexagonDigits), zeroF = new Uint8Array(lib.floorDigits);
-  const a = lib.hexagonDifference(zeroG, lib.offsetHexagon(zeroG, -7));
-  assert.strictEqual(a.sign, -1); assert.strictEqual(lib.magnitude(a.digits).exact, 7);
+  const a = lib.hexagonSteps(zeroG, lib.offsetHexagon(zeroG, -7, -2));
+  assert.strictEqual(exact(a.columns), -7);
+  assert.strictEqual(exact(a.rows), -2);
   const b = lib.floorDifference(lib.offsetFloor(zeroF, -3), lib.offsetFloor(zeroF, 2));
   assert.strictEqual(b.sign, 1); assert.strictEqual(lib.magnitude(b.digits).exact, 5);
 });
 
-test('there are as many floors as hexagons along each, or twice as many', () => {
-  // 2^7,340,023 hexagons, an odd power of 2: 2^3,670,011 along each floor, and 2^3,670,012 floors
-  const ratio = lib.stats.log10Floors - lib.stats.log10HexagonsPerFloor;
-  assert.ok(Math.abs(ratio - Math.log10(2)) < 1e-6, ratio);
-  assert.strictEqual(lib.hexagonMax[lib.hexagonDigits - 1], 3);
-  assert.strictEqual(lib.floorMax[lib.floorDigits - 1], 7);
-  // past the last hexagon of a floor, the first again
-  assert.strictEqual(key(lib.offsetHexagon(lib.hexagonMax, 1)), key(new Uint8Array(lib.hexagonDigits)));
-  assert.strictEqual(key(lib.offsetHexagon(new Uint8Array(lib.hexagonDigits), -1)), key(lib.hexagonMax));
+test('told how far apart its clusters and floors stand, the Library is nearly a cube', () => {
+  // as in the game: clusters 11.43 × √7 m apart along a row, rows √3/2 of that apart, floors 3.56 m apart
+  const across = 11.426 * Math.sqrt(7), spacing = { east: across, south: (across * Math.sqrt(3)) / 2, up: 3.56 };
+  const cube = new Library(sandbox.window.BABEL_CONFIG, spacing), S = cube.stats;
+  const sides = [S.log10ClustersPerRow + Math.log10(spacing.east), S.log10Rows + Math.log10(spacing.south), S.log10Floors + Math.log10(spacing.up)];
+  // no side twice as long as another: the sides are whole powers of 2 of clusters and rows
+  assert.ok(Math.max(...sides) - Math.min(...sides) < Math.log10(2), sides.join(' '));
+  assert.ok(Math.abs(S.log10Rows + S.log10ClustersPerRow + Math.log10(6) - S.log10HexagonsPerFloor) < 1e-6);
+  assert.ok(Math.abs(S.log10Floors + S.log10HexagonsPerFloor - S.log10Hexagons) < 1e-6);
+  // the floors being closer together than the clusters, there are more of them than clusters in a row
+  assert.ok(S.log10Floors > S.log10ClustersPerRow + 0.5);
+  // and still every place has its hexagon and floor, and back
+  for (const g of [cube.hexagonMax, cube.hexagonMaxOnTopFloor]) {
+    const text = cube.hexagonAddressText(g, cube.floorMax);
+    assert.ok(text.length > 0);
+  }
+  // a small Library, shaped so, is still every book in one place
+  const r = exhaustive({
+    seed: 'cube', alphabet: 'ABCD',
+    book: { pagesPerBook: 1, linesPerPage: 1, charactersPerLine: 6 },
+    hexagon: { wallsWithShelves: 1, shelvesPerWall: 1, booksPerShelf: 4 },
+  }, { east: 30, south: 26, up: 3.5 });
+  assert.strictEqual(r.empty + r.total, r.floors * r.hexagons * 4);
+  // 170⅔ clusters: 2 along a row (60 m), 4 rows (104 m) and 22 floors (77 m) is the nearest to a cube
+  assert.strictEqual(valueOf(r.lib.columnCount, 4), 2);
+  assert.strictEqual(valueOf(r.lib.rowCount, 4), 4);
+  assert.strictEqual(r.floors, 22);
+  // an alphabet that is no power of 2 is split by whole symbols
+  exhaustive({
+    seed: 'x', alphabet: 'ABCDEF ',
+    book: { pagesPerBook: 2, linesPerPage: 2, charactersPerLine: 1 },
+    hexagon: { wallsWithShelves: 1, shelvesPerWall: 2, booksPerShelf: 5 },
+  }, { east: 30, south: 26, up: 3.5 });
+});
+
+test('there are as many rows of clusters as clusters along each, or twice as many, and about as many floors', () => {
+  // 2^7,340,023 hexagons in clusters of 6: 2^2,446,673 clusters along each row, 2^2,446,674 rows on each
+  // floor, and 2^2,446,676 ÷ 6 floors, about 2^2,446,673.4
+  const S = lib.stats, two = Math.log10(2);
+  assert.ok(Math.abs(S.log10Rows - S.log10ClustersPerRow - two) < 1e-6);
+  assert.ok(Math.abs(S.log10Rows + S.log10ClustersPerRow + Math.log10(6) - S.log10HexagonsPerFloor) < 1e-6);
+  assert.ok(Math.abs(S.log10Floors + S.log10HexagonsPerFloor - S.log10Hexagons) < 1e-6);
+  assert.ok(S.log10Floors > S.log10ClustersPerRow && S.log10Floors < S.log10Rows);
+  // hexagons on a floor: 6 × 2^4,893,347 = 96 × 128^699,049
+  assert.strictEqual(lib.hexagonDigits, 699050);
+  assert.strictEqual(lib.hexagonCount[lib.hexagonDigits], 0);
+  assert.strictEqual(lib.hexagonCount[lib.hexagonDigits - 1], 96);
+  assert.strictEqual(lib.hexagonMax[lib.hexagonDigits - 1], 95);
+  // the last floor is partly empty: its last hexagon comes before the last of a floor
+  assert.ok(util.compareDigits(lib.hexagonMaxOnTopFloor, lib.hexagonMax) < 0);
+  assert.ok(lib.hexagonExists(lib.hexagonMaxOnTopFloor, lib.floorMax) && !lib.hexagonExists(lib.hexagonMax, lib.floorMax));
+  assert.ok(lib.hexagonExists(lib.hexagonMax, lib.offsetFloor(lib.floorMax, -1)));
   // an address past the last hexagon of a floor is refused
   const past = lib.hexagonMax.slice();
   past[past.length - 1] = lib.N - 1;
   assert.throws(() => lib.parseHexagonAddress(lib.hexagonAddressText(past, lib.floorMax)), /past the last hexagon/);
-  // so is the first alphabet's, of 64 symbols (once 8 floors for every hexagon along one)
-  const first = new Library({ alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + '0123456789' + '.,;:!?\'"-\u2014()[]_*&/$%\u00A3\u00B0\u2020\u00A7#+=' + ' ' });
-  const r64 = first.stats.log10Floors - first.stats.log10HexagonsPerFloor;
-  assert.ok(Math.abs(r64 - Math.log10(2)) < 1e-6, r64);
+});
+
+test('the hexagons of a floor stand six to a cluster, the clusters in rows that close on themselves', () => {
+  for (const raw of [
+    { seed: 'r', alphabet: 'ABCD', book: { pagesPerBook: 1, linesPerPage: 1, charactersPerLine: 6 }, hexagon: { wallsWithShelves: 1, shelvesPerWall: 1, booksPerShelf: 4 } },
+    { seed: 'r', alphabet: 'ABCDEFG ', book: { pagesPerBook: 1, linesPerPage: 1, charactersPerLine: 4 }, hexagon: { wallsWithShelves: 1, shelvesPerWall: 2, booksPerShelf: 3 } },
+    { seed: 'r', alphabet: 'ABCDEF', book: { pagesPerBook: 1, linesPerPage: 1, charactersPerLine: 5 }, hexagon: { wallsWithShelves: 1, shelvesPerWall: 1, booksPerShelf: 2 } },
+    { seed: 'r', alphabet: 'ABC', book: { pagesPerBook: 1, linesPerPage: 1, charactersPerLine: 7 }, hexagon: { wallsWithShelves: 1, shelvesPerWall: 1, booksPerShelf: 2 } },
+  ]) {
+    const small = new Library(raw), N = small.N;
+    const L = valueOf(small.hexagonCount, N), C = valueOf(small.clusterCount, N), W = valueOf(small.columnCount, N), R = valueOf(small.rowCount, N);
+    assert.strictEqual(L, 6 * C);
+    assert.strictEqual(R * W, C);
+    assert.strictEqual(valueOf(small.hexagonMax, N), L - 1);
+    const digitsOf = (v) => { const g = new Uint8Array(small.hexagonDigits); for (let i = 0; i < g.length; i++, v = Math.floor(v / N)) g[i] = v % N; return g; };
+    const signed = (x) => x.sign * valueOf(x.digits, N), mod = (v, m) => ((v % m) + m) % m;
+    const keys = new Set();
+    for (let h = 0; h < L; h++) {
+      const g = digitsOf(h), c = small.clusterOf(g), cluster = Math.floor(h / 6), row = Math.floor(cluster / W), col = cluster % W;
+      assert.strictEqual(c.petal, h % 6);
+      assert.strictEqual(valueOf(c.row, N), row);
+      assert.strictEqual(valueOf(c.column, N), col);
+      assert.strictEqual(valueOf(small.hexagonAt(c.row, c.column, c.petal), N), h);
+      keys.add(small.hexagonKey(g).join(','));
+      for (const [e, s] of [[1, 0], [-1, 0], [0, 1], [0, -1], [W + 2, -R - 1]]) {
+        assert.strictEqual(valueOf(small.offsetHexagon(g, e, s), N), (mod(row + s, R) * W + mod(col + e, W)) * 6 + (h % 6));
+      }
+      const p = small.position(g, new Uint8Array(small.floorDigits));
+      assert.ok(Math.abs(p.east.fraction - col / W) < 1e-12 && Math.abs(p.south.fraction - row / R) < 1e-12 && p.petal === h % 6);
+      // the shortest way to every other hexagon of the floor, in rows of clusters and along them
+      for (let k = 0; k < L; k += 5) {
+        const s = small.hexagonSteps(g, digitsOf(k)), kc = Math.floor(k / 6);
+        const rows = signed(s.rows), cols = signed(s.columns);
+        assert.strictEqual(mod(row + rows, R), Math.floor(kc / W), `${h} to ${k}: ${rows} rows`);
+        assert.strictEqual(mod(col + cols, W), kc % W, `${h} to ${k}: ${cols} along`);
+        assert.ok(Math.abs(cols) <= W / 2 && Math.abs(rows) <= R / 2, `${h} to ${k}: ${rows} rows and ${cols}`);
+        assert.deepStrictEqual(s.petals, [h % 6, k % 6]);
+      }
+    }
+    assert.strictEqual(keys.size, L, 'every hexagon of a floor has its own key');
+  }
 });
 
 test('full addresses can be copied and read back', () => {
@@ -567,16 +661,25 @@ test('positions are measured from the seam, as a fraction of the way round', () 
   assert.strictEqual(p.east.exact, 0);
   assert.strictEqual(p.east.fraction, 0);
   assert.strictEqual(p.up.fraction, 0);
-  g[g.length - 1] = (lib.hexagonMax[lib.hexagonMax.length - 1] + 1) / 2; // halfway round
-  f[f.length - 1] = (lib.floorMax[lib.floorMax.length - 1] + 1) / 2; // halfway up
-  p = lib.position(g, f);
+  // halfway south, halfway along the row, and nearly halfway up (the number of floors is odd)
+  const zero = lib.clusterOf(g), half = (count) => { const h = count.slice(); util.divSmall(h, 2, lib.N); return h.slice(0, count.length - 1); };
+  let mid = lib.hexagonAt(half(lib.rowCount), zero.column, 3);
+  p = lib.position(mid, f);
+  assert.strictEqual(p.east.fraction, 0);
+  assert.strictEqual(p.petal, 3);
+  assert.ok(Math.abs(p.south.fraction - 0.5) < 1e-12, p.south.fraction);
+  mid = lib.hexagonAt(half(lib.rowCount), half(lib.columnCount), 5);
+  p = lib.position(mid, half(lib.floorCount));
   assert.ok(Math.abs(p.east.fraction - 0.5) < 1e-12, p.east.fraction);
+  assert.ok(Math.abs(p.south.fraction - 0.5) < 1e-12, p.south.fraction);
   assert.ok(Math.abs(p.up.fraction - 0.5) < 1e-12, p.up.fraction);
-  assert.ok(Math.abs(p.east.log10 - (lib.stats.log10HexagonsPerFloor - Math.log10(2))) < 1e-6);
+  assert.ok(Math.abs(p.east.log10 - (lib.stats.log10ClustersPerRow - Math.log10(2))) < 1e-6);
   p = lib.position(lib.hexagonMax, lib.floorMax);
-  // the last hexagon is 1 − 2^−3,670,011 of the way round: 1, as near as a double can tell
+  // the last cluster is 1 − 2^−2,446,673 of the way along its row: 1, as near as a double can tell
   assert.ok(p.east.fraction > 0.999999 && p.east.fraction <= 1, p.east.fraction);
+  assert.ok(p.south.fraction > 0.999999 && p.south.fraction <= 1, p.south.fraction);
   assert.ok(p.up.fraction > 0.999999 && p.up.fraction <= 1, p.up.fraction);
+  assert.strictEqual(p.petal, 5);
   // a small library whose number of floors is not a power of its alphabet
   const small = new Library({ seed: 's', alphabet: 'ABC', book: { pagesPerBook: 1, linesPerPage: 1, charactersPerLine: 7 }, hexagon: { wallsWithShelves: 1, shelvesPerWall: 1, booksPerShelf: 5 } });
   const floors = small.floorMax.reduceRight((v, d) => v * 3 + d, 0) + 1;
@@ -587,8 +690,9 @@ test('positions are measured from the seam, as a fraction of the way round', () 
     const q = small.position(new Uint8Array(small.hexagonDigits), digits);
     assert.ok(Math.abs(q.up.fraction - n / floors) < 1e-12, `floor ${n} of ${floors}: ${q.up.fraction}`);
   }
-  const last = small.position(small.hexagonMax, small.floorMax);
-  assert.ok(Math.abs(last.east.fraction - (hexagons - 1) / hexagons) < 1e-12);
+  const last = small.position(small.hexagonMax, small.floorMax), W = valueOf(small.columnCount, 3), R = hexagons / 6 / W;
+  assert.ok(Math.abs(last.east.fraction - (W - 1) / W) < 1e-12);
+  assert.ok(Math.abs(last.south.fraction - (R - 1) / R) < 1e-12);
 });
 
 test('random locations can be anywhere, and are real hexagons', () => {

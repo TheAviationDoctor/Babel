@@ -2,14 +2,19 @@
  * Architecture: the dimensions of a hexagon and its vestibule, derived from the
  * configuration, and the geometry and materials that draw them.
  *
- * Coordinates are metres. Each "cell" holds one hexagon centred on the origin and
- * the vestibule that leaves it through its east door (+x) towards the next hexagon.
- * The two free sides of every hexagon face east and west, so each floor is one
- * endless row of hexagons; the spiral stair in every vestibule joins the floors.
+ * Coordinates are metres. The hexagons of a floor tile it like a honeycomb, in clusters of
+ * seven: six hexagons of books round a seventh, which holds no books but the spiral stair
+ * that joins the floors, and has a door in each of its six sides (see Honeycomb below).
  *
- * Every hexagon is identical, so lighting is computed in the shaders from the
- * fragment's position within its cell: the lamps over the bookcases of each hexagon
- * light it the same way everywhere in the Library.
+ * Each "cell" holds one hexagon of books centred on the origin, the vestibule that leaves
+ * it through its east door (+x) towards the stair hexagon of its cluster, and the plain
+ * passage that leaves it by its other door, 120° round (side 4), towards a hexagon of the
+ * next cluster. So every hexagon of books has two free sides, each giving onto a narrow
+ * vestibule, and four walls of shelves. The stair hexagons ("hubs") are built apart.
+ *
+ * Every hexagon of books is identical, and so is every hub, so lighting is computed in the
+ * shaders from the fragment's position within its cell: the lamps over the bookcases of
+ * each hexagon light it the same way everywhere in the Library.
  */
 (function () {
   'use strict';
@@ -39,28 +44,51 @@
     d.postW = 0.06;
 
     d.rowLen = d.books * d.bookT;
-    d.shelfLen = Math.max(d.rowLen + 0.06, 1.6);
-    // wooden panelling at either end of each wall's bookcase, which makes the room roomier than
-    // its shelves alone would
-    d.panel = 0.35;
-    d.sIn = d.shelfLen + 2 * (d.postW + d.panel); // side of the room's inner hexagon
+    // The room is as wide as its shelves alone would make it, and 1.62 m more, for a walkway round
+    // the shaft (see shaftA).
+    d.sIn = Math.max(d.rowLen + 0.06, 1.6) + 1.62; // side of the room's inner hexagon
+    // A shelf as long as a wall's books would sag under them, so each bookcase is built in bays
+    // of 8 books or so (half a metre, at most twice that), with a wooden pilaster between bays
+    // and panelling at either end, which fill the rest of the wall.
+    d.bays = 1;
+    for (let k = 2; k <= d.books; k++) if (d.books % k === 0 && (d.books / k) * d.bookT >= 0.45) d.bays = k;
+    d.perBay = d.books / d.bays;
+    d.bayLen = d.bays > 1 ? d.perBay * d.bookT + 0.016 : Math.max(d.rowLen + 0.06, 1.6);
+    const spare = d.sIn - d.bays * d.bayLen - 2 * (d.postW + 0.3); // what pilasters may take, leaving panels of 0.3 m at least
+    d.pilasterW = d.bays > 1 ? Math.max(0.06, Math.min(0.2, spare / (d.bays - 1))) : 0;
+    d.shelfLen = d.bays * d.bayLen + (d.bays - 1) * d.pilasterW; // the bookcase, from end post to end post
+    d.panel = (d.sIn - d.shelfLen) / 2 - d.postW; // the panelling at either end
+    // where along its bookcase (from its middle, towards +x) a volume stands, and which volume stands
+    // at a place (−1 at a pilaster or past the ends)
+    const bayMid = (b) => d.shelfLen / 2 - d.bayLen / 2 - b * (d.bayLen + d.pilasterW);
+    d.bookX = (volume) => {
+      const b = Math.floor(volume / d.perBay), i = volume - b * d.perBay;
+      return bayMid(b) + (d.perBay * d.bookT) / 2 - (i + 0.5) * d.bookT;
+    };
+    d.volumeAt = (x) => {
+      const b = Math.floor((d.shelfLen / 2 - x) / (d.bayLen + d.pilasterW));
+      if (b < 0 || b >= d.bays) return -1;
+      const i = Math.floor((bayMid(b) + (d.perBay * d.bookT) / 2 - x) / d.bookT);
+      return i < 0 || i >= d.perBay ? -1 : b * d.perBay + i;
+    };
     d.aIn = (d.sIn * SQ3) / 2; // apothem of the room (to the face of the shelves)
     d.a = d.aIn + d.shelfDepth; // apothem to the back of the shelves
-    d.shaftA = Math.max(0.45, d.aIn - 1.1); // apothem of the central air shaft, with a walkway round it
+    d.shaftA = Math.max(0.45, d.aIn - 1.75); // apothem of the central air shaft, with a walkway round it
     d.railH = 0.46; // "very low railings"
     d.shelfTop = d.base + d.shelves * d.pitch + d.board + d.cornice; // height of the bookcases
     d.roomH = Math.max(d.shelfTop, 3.2); // and of the ceiling, with plaster between them
     d.slabT = 0.36;
     d.Hf = d.roomH + d.slabT; // floor-to-floor height
 
-    d.hallW = Math.min(1.4, d.sIn - 0.3);
+    // the vestibules and passages are as wide as a bookcase without its panelling
+    d.hallW = Math.max(1.4, Math.min(d.shelfLen, d.sIn - 0.6, 3));
     d.doorH = Math.min(2.0, d.roomH - 0.12);
     d.hallLen = 4.4;
     d.Dx = 2 * d.a + d.hallLen; // distance between hexagon centres along a floor
     d.hallX0 = d.a;
     d.hallX1 = d.Dx - d.a;
-    // a wooden lintel across the top of the doorway at each end of the vestibule, bearing a
-    // sign that names the way one is facing: EAST at the east end, WEST at the west end
+    // a wooden lintel across the top of the doorway at each end of a vestibule, bearing a
+    // sign that names the way one is facing: one of the six ways of the honeycomb
     d.lintelH = Math.min(0.2, Math.max(0.06, d.roomH - d.doorH - 0.03));
     d.lintelDepth = 0.04;
     d.signW = Math.min(4.5 * (d.lintelH - 0.04), d.hallW - 0.2); // the texture's proportions: 4.5 to 1
@@ -72,11 +100,15 @@
     // down on the books: the height of its underside, how far it stands out from the wall, half its length
     d.lampY = Math.min(d.shelfTop + 0.15, d.roomH - 0.12);
     d.lampOut = 0.3;
-    d.lampHalfW = Math.min(0.4, d.shelfLen / 2 - 0.2);
+    d.lampHalfW = Math.min(0.5, d.shelfLen / 2 - 0.2);
 
     // closets, mirror, stairwell (all within the vestibule)
     d.closetW = 0.8;
-    d.closetX = d.hallX0 + 0.32 + d.closetW / 2;
+    // On the vestibule's south wall, the door of the cell and the mirror stand together in its
+    // middle, the door nearer the hexagon; opposite them, on the north wall, the catalogue's niche.
+    d.hallMid = (d.hallX0 + d.hallX1) / 2;
+    d.closetX = d.hallMid - 0.735;
+    d.nicheX = d.hallMid;
     d.closetH = Math.min(1.95, d.doorH - 0.05);
     d.hingeX = d.closetX - d.closetW / 2; // the south door is hung on its west side and opens inwards
 
@@ -102,27 +134,37 @@
 
     // The north door gives onto a shallow niche holding the catalogue's touchscreen.
     d.nicheDepth = 0.45;
-    d.screen = { x: d.closetX, y: 1.33, w: 0.52, h: 0.38, z: d.hallW / 2 + d.nicheDepth - 0.052 };
-    d.wellR = 1.3;
-    d.openW = 1.2;
+    d.screen = { x: d.nicheX, y: 1.33, w: 0.52, h: 0.38, z: d.hallW / 2 + d.nicheDepth - 0.052 };
+    // The spiral stair stands in a round drum in the middle of each hub. It is built, and lit,
+    // about the point (wellX, wellZ), its doorway in the plane z = hallW / 2 and facing −z; the
+    // World sets that point on the hub's middle, so that the doorway faces a corner of the hub,
+    // between two of its doors.
+    d.wellR = Math.min(1.3, d.aIn - 0.95);
+    d.openW = Math.min(1.2, 2 * d.wellR - 0.5);
     d.colR = 0.14;
     d.wellX = d.hallX0 + d.hallLen * 0.62;
     d.wellZ = d.hallW / 2 + Math.sqrt(d.wellR * d.wellR - (d.openW / 2) * (d.openW / 2));
+    d.drumR = d.wellR + 0.1; // the drum's outer face
+    d.drumZ = d.hallW / 2 - d.wellZ; // the plane of its doorway, from the hub's middle (negative: the doorway faces −z)
+    d.hubLamps = [0, 2, 4]; // the sides of a hub with a lamp above the door
     d.landingHalf = (55 * Math.PI) / 180; // half-angle of the landing sector
-    d.landingTheta = -Math.PI / 2; // landing faces the vestibule (−z from the stair's axis)
+    d.landingTheta = -Math.PI / 2; // landing faces the doorway (−z from the stair's axis)
     d.stairStart = d.landingTheta + d.landingHalf; // the stair rises counter-clockwise from here
     d.stairSweep = 2 * Math.PI - 2 * d.landingHalf;
     d.steps = Math.max(8, Math.round(d.Hf / 0.18));
     d.riser = d.Hf / d.steps;
-    d.mirrorX = d.wellX;
+    d.mirrorX = d.hallMid + 0.735;
     d.mirrorW = 0.78;
     d.mirrorH = 1.45;
     d.mirrorY0 = 0.45;
 
-    // Shelved sides of the hexagon, by normal angle (multiples of 60°), in the order the walls are
-    // numbered. Sides 0 and 3 are the free ones. With fewer than four walls of shelves, the
-    // shelved ones are spread around the room and the others are bare.
-    d.shelvedSides = { 4: [1, 2, 4, 5], 3: [1, 2, 4], 2: [1, 4], 1: [1] }[d.walls];
+    // Shelved sides of the room, by normal angle (multiples of 60°), in the order the walls are
+    // numbered. Sides 0 and 4 are the free ones, 120° apart: side 0 gives onto the vestibule that
+    // leads to the hub, side 4 onto the passage to the next cluster. With fewer than four walls
+    // of shelves, the shelved ones are spread around the room and the others are bare.
+    d.freeSides = [0, 4];
+    d.shelvedSides = { 4: [1, 2, 3, 5], 3: [1, 3, 5], 2: [2, 5], 1: [2] }[d.walls];
+    d.passageTurn = (4 * Math.PI) / 3; // the direction of the passage (radians from +x towards +z)
     d.eye = 1.6;
     return d;
   }
@@ -288,6 +330,69 @@
   }
 
   /* ------------------------------------------------------------------ *
+   * The honeycomb
+   * ------------------------------------------------------------------ */
+
+  // The hexagons of a floor are the points (q, r) of a honeycomb: point (q, r) stands at
+  // q × e0 + r × e1, where e0 points east (+x) and e1 60° round from it towards +z (south), each as
+  // long as the distance between two hexagons. Its six neighbours lie in the directions DIRS[0…5],
+  // at 0°, 60°, … 300° from east (east, south-east, south-west, west, north-west, north-east).
+  //
+  // One point in seven is a hub (a stair hexagon): those where 3q + r is a multiple of 7, counting
+  // from any hub. They are the points a × (2, 1) + b × (−1, 3): a clusters east and b rows south.
+  // The six neighbours of a hub are its petals, hexagons of books: petal k lies in direction k.
+  // Petal k has a door facing its hub (direction k + 3) and another in direction k + 1, which gives
+  // onto petal k + 3 of the cluster 2 × DIRS[k] + DIRS[k + 1] away. So each cluster is joined to the
+  // six clusters round it, and every hexagon of a floor can be reached from every other.
+  const DIRS = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
+  const KINDS = [6, 1, 5, 0, 3, 2, 4]; // by (3q + r) mod 7: the petal a point is, or 6 for a hub
+  const SPAN = 1 << 20; // sites are numbered q + r × SPAN, so that a step on the honeycomb is a sum
+  const mod = (v, m) => ((v % m) + m) % m;
+
+  const Honeycomb = {
+    DIRS, SPAN, HUB: 6,
+    /** The number of the site (q, r), and back. */
+    id(q, r) { return q + r * SPAN; },
+    at(id) { const r = Math.round(id / SPAN); return [id - r * SPAN, r]; },
+    /** What stands at (q, r), counted from a hub: petal 0 to 5, or 6 for a hub. */
+    kind(q, r) { return KINDS[mod(3 * q + r, 7)]; },
+    /** The cluster of the hub at (q, r): [clusters east, rows south]. */
+    cluster(q, r) { return [(3 * q + r) / 7, (2 * r - q) / 7]; },
+    /** Where (q, r) stands on the plan, in units of the distance between hexagons: [x, z]. */
+    plan(q, r) { return [q + r / 2, (r * SQ3) / 2]; },
+    /** The angle of direction k (radians from +x towards +z). */
+    angle(k) { return (mod(k, 6) * Math.PI) / 3; },
+    /** How a petal's cell is turned: its +x points at its hub. */
+    turn(petal) { return (mod(petal + 3, 6) * Math.PI) / 3; },
+    /**
+     * The sites a reader can walk to from a site of this kind, through its doors:
+     * [{ dir, step: the number to add to the site's, kind }], a hub's petals in order.
+     */
+    doors(kind) {
+      if (kind === 6) return DIRS.map((v, k) => ({ dir: k, step: Honeycomb.id(v[0], v[1]), kind: k }));
+      const hub = mod(kind + 3, 6), out = mod(kind + 1, 6);
+      return [
+        { dir: hub, step: Honeycomb.id(DIRS[hub][0], DIRS[hub][1]), kind: 6 },
+        { dir: out, step: Honeycomb.id(DIRS[out][0], DIRS[out][1]), kind: hub },
+      ];
+    },
+  };
+
+  /** A point (x, z) seen from a frame at (f.x, f.z) turned by f.turn (its cosine and sine in f.c and f.s). */
+  function intoFrame(f, x, z) {
+    const X = x - f.x, Z = z - f.z;
+    return [X * f.c + Z * f.s, -X * f.s + Z * f.c];
+  }
+
+  /** A frame at (x, z) turned by `turn` (radians from +x towards +z), for intoFrame. */
+  function frameAt(x, z, turn) { return { x, z, turn, c: Math.cos(turn), s: Math.sin(turn) }; }
+
+  /** The directions (x, z) of a room's doors in its own frame: towards its vestibule, then towards its passage. */
+  function doorDirections(d) {
+    return [1, 0, Math.cos(d.passageTurn), Math.sin(d.passageTurn)];
+  }
+
+  /* ------------------------------------------------------------------ *
    * Hexagon
    * ------------------------------------------------------------------ */
 
@@ -305,7 +410,7 @@
       const v0 = hexVertex(d.aIn, k - 1), v1 = hexVertex(d.aIn, k);
       // on the sides with doors, the edge is divided where the doorway's floor meets it
       const outer = [v0];
-      if (k === 0 || k === 3) {
+      if (d.freeSides.includes(k)) {
         const len = Math.hypot(v1[0] - v0[0], v1[1] - v0[1]), t = (len / 2 - d.hallW / 2) / len;
         outer.push([v0[0] + (v1[0] - v0[0]) * t, v0[1] + (v1[1] - v0[1]) * t], [v1[0] + (v0[0] - v1[0]) * t, v1[1] + (v0[1] - v1[1]) * t]);
       }
@@ -338,43 +443,15 @@
     const above = d.roomH > d.shelfTop + 0.01;
     for (let j = 0; j < 6; j++) {
       const m = sideMatrix(j);
-      const free = j === 0 || j === 3;
+      const free = d.freeSides.includes(j);
       const half = d.sIn / 2;
       const wallIndex = d.shelvedSides.indexOf(j); // −1 for a bare wall
       if (free) {
-        plaster.setMatrix(m);
-        const hw = d.hallW / 2;
-        gridWall(plaster, -half, half, 0, d.roomH, d.aIn, -1, [[-hw, hw, 0, d.doorH]]);
-        // door reveal (the passage through the thickness of the wall), divided where the vestibule's walls are, which it meets
-        plaster.poly([[-hw, 0, d.aIn], [-hw, 0, d.a], [-hw, d.closetH, d.a], [-hw, d.doorH, d.a], [-hw, d.doorH, d.aIn]], [1, 0, 0]);
-        plaster.poly([[hw, 0, d.aIn], [hw, 0, d.a], [hw, d.closetH, d.a], [hw, d.doorH, d.a], [hw, d.doorH, d.aIn]], [-1, 0, 0]);
-        plaster.poly([[-hw, d.doorH, d.aIn], [hw, d.doorH, d.aIn], [hw, d.doorH, d.a], [-hw, d.doorH, d.a]], [0, -1, 0]);
-        plaster.reset();
-        tiles.setMatrix(m);
-        tiles.poly([[-hw, 0, d.aIn], [hw, 0, d.aIn], [hw, 0, d.a], [-hw, 0, d.a]], [0, 1, 0]);
-        tiles.reset();
-        // door frame and skirting
-        wood.setMatrix(m);
-        // the vestibule's skirting boards, run on through the doorway up to its frame
-        wood.box(-hw, 0, d.aIn, -hw + 0.02, 0.1, d.a, 'XYz');
-        wood.box(hw - 0.02, 0, d.aIn, hw, 0.1, d.a, 'xYz');
-        wood.box(-hw - 0.07, 0, d.aIn - 0.025, -hw, d.doorH + 0.07, d.aIn, 'xXyYz');
-        wood.box(hw, 0, d.aIn - 0.025, hw + 0.07, d.doorH + 0.07, d.aIn, 'xXyYz');
-        wood.box(-hw, d.doorH, d.aIn - 0.025, hw, d.doorH + 0.07, d.aIn, 'yYz');
-        wood.box(-half, 0, d.aIn - 0.02, -hw - 0.07, 0.11, d.aIn, 'Yz');
-        wood.box(hw + 0.07, 0, d.aIn - 0.02, half, 0.11, d.aIn, 'Yz');
-        wood.box(-half, d.roomH - 0.08, d.aIn - 0.03, half, d.roomH, d.aIn, 'yz');
-        wood.reset();
+        freeSide(d, m, wood, plaster, tiles);
       } else if (wallIndex >= 0) {
         buildShelfUnit(wood, m, d);
         // the lamp above the bookcase: a bar on two arms from the wall (its glowing underside is the World's, lit or not)
-        {
-          const y = d.lampY, z = d.aIn - d.lampOut, lw = d.lampHalfW;
-          wood.setMatrix(m);
-          wood.box(-lw - 0.01, y, z - 0.025, lw + 0.01, y + 0.045, z + 0.025, 'xXyYzZ');
-          for (const ax of [-lw * 0.6, lw * 0.6]) wood.box(ax - 0.008, y + 0.015, z + 0.025, ax + 0.008, y + 0.03, d.aIn, 'xXyYz');
-          wood.reset();
-        }
+        wallLamp(d, m, wood);
         if (above) {
           // plaster from the top of the bookcase to the ceiling, and a moulding where they meet
           plaster.setMatrix(m);
@@ -404,6 +481,134 @@
     return { wood: wood.geometry(), plaster: plaster.geometry(), tiles: tiles.geometry() };
   }
 
+  /** A side with a doorway: the wall round it, the passage through the wall's thickness, the door's frame. */
+  function freeSide(d, m, wood, plaster, tiles) {
+    const half = d.sIn / 2;
+    plaster.setMatrix(m);
+    const hw = d.hallW / 2;
+    gridWall(plaster, -half, half, 0, d.roomH, d.aIn, -1, [[-hw, hw, 0, d.doorH]]);
+    // door reveal (the passage through the thickness of the wall), divided where the vestibule's walls are, which it meets
+    plaster.poly([[-hw, 0, d.aIn], [-hw, 0, d.a], [-hw, d.closetH, d.a], [-hw, d.doorH, d.a], [-hw, d.doorH, d.aIn]], [1, 0, 0]);
+    plaster.poly([[hw, 0, d.aIn], [hw, 0, d.a], [hw, d.closetH, d.a], [hw, d.doorH, d.a], [hw, d.doorH, d.aIn]], [-1, 0, 0]);
+    plaster.poly([[-hw, d.doorH, d.aIn], [hw, d.doorH, d.aIn], [hw, d.doorH, d.a], [-hw, d.doorH, d.a]], [0, -1, 0]);
+    plaster.reset();
+    tiles.setMatrix(m);
+    tiles.poly([[-hw, 0, d.aIn], [hw, 0, d.aIn], [hw, 0, d.a], [-hw, 0, d.a]], [0, 1, 0]);
+    tiles.reset();
+    // door frame and skirting
+    wood.setMatrix(m);
+    // the vestibule's skirting boards, run on through the doorway up to its frame
+    wood.box(-hw, 0, d.aIn, -hw + 0.02, 0.1, d.a, 'XYz');
+    wood.box(hw - 0.02, 0, d.aIn, hw, 0.1, d.a, 'xYz');
+    wood.box(-hw - 0.07, 0, d.aIn - 0.025, -hw, d.doorH + 0.07, d.aIn, 'xXyYz');
+    wood.box(hw, 0, d.aIn - 0.025, hw + 0.07, d.doorH + 0.07, d.aIn, 'xXyYz');
+    wood.box(-hw, d.doorH, d.aIn - 0.025, hw, d.doorH + 0.07, d.aIn, 'yYz');
+    wood.box(-half, 0, d.aIn - 0.02, -hw - 0.07, 0.11, d.aIn, 'Yz');
+    wood.box(hw + 0.07, 0, d.aIn - 0.02, half, 0.11, d.aIn, 'Yz');
+    wood.box(-half, d.roomH - 0.08, d.aIn - 0.03, half, d.roomH, d.aIn, 'yz');
+    wood.reset();
+  }
+
+  /** A lamp on the wall of side matrix m, like those above the bookcases: its bar on two arms. */
+  function wallLamp(d, m, wood) {
+    const y = d.lampY, z = d.aIn - d.lampOut, lw = d.lampHalfW;
+    wood.setMatrix(m);
+    wood.box(-lw - 0.01, y, z - 0.025, lw + 0.01, y + 0.045, z + 0.025, 'xXyYzZ');
+    for (const ax of [-lw * 0.6, lw * 0.6]) wood.box(ax - 0.008, y + 0.015, z + 0.025, ax + 0.008, y + 0.03, d.aIn, 'xXyYz');
+    wood.reset();
+  }
+
+  /**
+   * A hub: a hexagon with a door in each side and no books, and in its middle the round drum
+   * of the spiral stair, whose doorway faces −z, a corner of the hexagon. (The stair itself,
+   * inside the drum, is buildStair's.) Lamps hang above every other door, and above the drum's.
+   */
+  function buildHub(d) {
+    const wood = new Builder(), plaster = new Builder(), tiles = new Builder(), glow = new Builder();
+    const Ro = d.drumR, zc = d.drumZ, H = d.roomH, ow = d.openW / 2, hw = d.hallW / 2;
+    const g2 = Math.acos(-zc / Ro), xe = Ro * Math.sin(g2); // half the angle the doorway's flat wall cuts from the drum; half that wall's width
+    const A0 = -Math.PI / 2 + g2, A1 = (3 * Math.PI) / 2 - g2; // the round of the drum, from one end of the flat wall to the other
+
+    // Floor and ceiling, between the drum and the walls: in thin slices, cut wherever a corner of
+    // the walls, a doorway or the drum's flat wall begins, so that every piece meets its neighbours corner to corner.
+    const inner = (th) => { const sn = Math.sin(th); return sn < 0 && zc / sn < Ro ? zc / sn : Ro; };
+    const outer = (th) => { const k = Math.round(th / (Math.PI / 3)); return d.aIn / Math.cos(th - (k * Math.PI) / 3); };
+    const cuts = [];
+    for (let k = 0; k < 6; k++) {
+      const c = (k * Math.PI) / 3, da = Math.atan(hw / d.aIn);
+      cuts.push(c - Math.PI / 6, c - da, c + da);
+    }
+    cuts.push(A0, A0 - 2 * g2, Math.atan2(zc, ow), Math.atan2(zc, -ow));
+    for (let i = 0; i < 96; i++) cuts.push((2 * Math.PI * i) / 96);
+    const TAU = 2 * Math.PI;
+    const angles = [...new Set(cuts.map((a) => +(((a % TAU) + TAU) % TAU).toFixed(9)))].sort((a, b) => a - b);
+    angles.push(angles[0] + TAU);
+    const at = (r, th, y) => [r * Math.cos(th), y, r * Math.sin(th)];
+    for (let i = 0; i + 1 < angles.length; i++) {
+      const t0 = angles[i], t1 = angles[i + 1];
+      if (t1 - t0 < 1e-7) continue;
+      // (the walls' corners lie at odd multiples of 30°, where `outer` changes sides: each slice is taken at its own middle's side)
+      const km = Math.round((t0 + t1) / 2 / (Math.PI / 3)), out = (th) => d.aIn / Math.cos(th - (km * Math.PI) / 3);
+      const mid = (t0 + t1) / 2, flat = Math.sin(mid) < 0 && zc / Math.sin(mid) < Ro, inn = (th) => (flat ? zc / Math.sin(th) : Ro);
+      tiles.poly([at(inn(t0), t0, 0), at(out(t0), t0, 0), at(out(t1), t1, 0), at(inn(t1), t1, 0)], [0, 1, 0]);
+      plaster.poly([at(inn(t0), t0, H), at(out(t0), t0, H), at(out(t1), t1, H), at(inn(t1), t1, H)], [0, -1, 0]);
+    }
+    void inner; void outer;
+
+    // the six sides, each with its door; above the doors, the line of the bookcases' cornice, as in the other hexagons
+    const above = d.roomH > d.shelfTop + 0.01, half = d.sIn / 2;
+    for (let j = 0; j < 6; j++) {
+      const m = sideMatrix(j);
+      freeSide(d, m, wood, plaster, tiles);
+      if (above) {
+        wood.setMatrix(m);
+        wood.box(-half, d.shelfTop - d.cornice, d.aIn - 0.035, half, d.shelfTop + 0.03, d.aIn, 'yYz');
+        wood.reset();
+      }
+      if (d.hubLamps.includes(j)) {
+        wallLamp(d, m, wood);
+        const lw = d.lampHalfW, z = d.aIn - d.lampOut;
+        glow.setMatrix(m);
+        glow.box(-lw, d.lampY - 0.002, z - 0.016, lw, d.lampY, z + 0.016, 'y');
+        glow.reset();
+      }
+    }
+
+    // the drum: its round wall, and the flat one its doorway is cut in
+    plaster.cylinder(0, 0, Ro, A0, A1, 0, H, false, 64);
+    gridWall(plaster, -xe, xe, 0, H, zc, -1, [[-ow, ow, 0, d.doorH]]);
+    // skirting and a moulding under the ceiling, round the drum
+    wood.cylinder(0, 0, Ro + 0.02, A0, A1, 0, 0.1, false, 64);
+    wood.sector(0, 0, Ro, Ro + 0.02, A0, A1, 0.1, 1, undefined, 64);
+    wood.cylinder(0, 0, Ro + 0.03, A0, A1, H - 0.08, H, false, 64);
+    wood.sector(0, 0, Ro, Ro + 0.03, A0, A1, H - 0.08, -1, undefined, 64);
+    wood.box(-xe, 0, zc - 0.02, -ow - 0.06, 0.1, zc, 'Yz');
+    wood.box(ow + 0.06, 0, zc - 0.02, xe, 0.1, zc, 'Yz');
+    wood.box(-xe, H - 0.08, zc - 0.03, xe, H, zc, 'yz');
+    // the frame of the doorway
+    wood.box(-ow - 0.06, 0, zc - 0.025, -ow, d.doorH + 0.06, zc, 'xXYz');
+    wood.box(ow, 0, zc - 0.025, ow + 0.06, d.doorH + 0.06, zc, 'xXYz');
+    wood.box(-ow, d.doorH, zc - 0.025, ow, d.doorH + 0.06, zc, 'yz');
+    // and the lamp above it
+    {
+      const y = Math.min(d.lampY, H - 0.12), z = zc - d.lampOut, lw = Math.min(d.lampHalfW, ow);
+      wood.box(-lw - 0.01, y, z - 0.025, lw + 0.01, y + 0.045, z + 0.025, 'xXyYzZ');
+      for (const ax of [-lw * 0.6, lw * 0.6]) wood.box(ax - 0.008, y + 0.015, z + 0.025, ax + 0.008, y + 0.03, zc, 'xXyYZ');
+      glow.box(-lw, y - 0.002, z - 0.016, lw, y, z + 0.016, 'y');
+    }
+    return { wood: wood.geometry(), plaster: plaster.geometry(), tiles: tiles.geometry(), glow: glow.geometry() };
+  }
+
+  /** Where the light of each of a hub's lamps comes from, in the hub's coordinates. */
+  function hubLights(d) {
+    const out = d.hubLamps.map((j) => {
+      const f = (j * Math.PI) / 3, r = d.aIn - d.lampOut - 0.15;
+      return new THREE.Vector3(r * Math.cos(f), d.lampY - 0.05, r * Math.sin(f));
+    });
+    out.push(new THREE.Vector3(0, Math.min(d.lampY, d.roomH - 0.12) - 0.05, d.drumZ - d.lampOut - 0.15));
+    return out;
+  }
+
   function buildShelfUnit(wood, m, d) {
     wood.setMatrix(m);
     const L = d.shelfLen / 2, half = d.sIn / 2;
@@ -415,10 +620,14 @@
     wood.box(L, 0, front, half, d.shelfTop, back, 'xz');
     // plinth
     wood.box(-L, 0, front + 0.015, L, d.base, back, 'Yz');
-    // shelves
-    for (let i = 0; i <= d.shelves; i++) {
-      const y = d.base + i * d.pitch;
-      wood.box(-L, y, front, L, y + d.board, back - 0.02, i === 0 ? 'Yz' : 'yYz');
+    // the pilasters between bays, standing a little proud of the shelves, and the shelves of each bay
+    for (let k = 0; k < d.bays; k++) {
+      const x1 = L - k * (d.bayLen + d.pilasterW), x0 = x1 - d.bayLen;
+      if (k > 0) wood.box(x1, d.base, front - 0.02, x1 + d.pilasterW, d.shelfTop - d.cornice, back - 0.02, 'xXz');
+      for (let i = 0; i <= d.shelves; i++) {
+        const y = d.base + i * d.pitch;
+        wood.box(x0, y, front, x1, y + d.board, back - 0.02, i === 0 ? 'Yz' : 'yYz');
+      }
     }
     // cornice
     const top = d.base + d.shelves * d.pitch + d.board;
@@ -459,56 +668,89 @@
     });
   }
 
-  /** The glowing underside of the picture lamp in the vestibule. */
+  /** A passage's frame turned half round about its middle: where things of the hexagon at its other end stand. */
+  function otherEnd(d) {
+    return new THREE.Matrix4().makeRotationY(Math.PI).setPosition(d.Dx, 0, 0);
+  }
+
+  /** The glowing undersides of the picture lamps in a passage. */
   function buildPictureGlow(d) {
     const b = new Builder(), L = d.painting.lamp;
     b.box(L.x - L.halfW, L.y - 0.002, L.z - 0.016, L.x + L.halfW, L.y, L.z + 0.016, 'y');
+    b.setMatrix(otherEnd(d));
+    b.box(L.x - L.halfW, L.y - 0.002, L.z - 0.016, L.x + L.halfW, L.y, L.z + 0.016, 'y');
+    b.reset();
     return b.geometry();
   }
 
   /* ------------------------------------------------------------------ *
-   * Vestibule: closets, mirror, spiral stair
+   * Vestibule: closets, mirror; and the spiral stair
    * ------------------------------------------------------------------ */
 
-  function buildVestibule(d) {
+  /**
+   * A vestibule, from the hexagon at the origin east (+x) to the next. `plain`: the passage
+   * between two clusters, with nothing along its walls; otherwise the vestibule between a
+   * hexagon of books and its hub, with the cell's door and the mirror on its south wall (−z),
+   * the catalogue's niche and the painting on its north wall.
+   */
+  function buildVestibule(d, plain) {
     const wood = new Builder(), plaster = new Builder(), tiles = new Builder();
     const x0 = d.hallX0, x1 = d.hallX1, hw = d.hallW / 2, H = d.roomH;
-    const ox0 = d.wellX - d.openW / 2, ox1 = d.wellX + d.openW / 2;
 
     tiles.poly([[x0, 0, -hw], [x1, 0, -hw], [x1, 0, hw], [x0, 0, hw]], [0, 1, 0]);
     plaster.poly([[x0, H, -hw], [x1, H, -hw], [x1, H, hw], [x0, H, hw]], [0, -1, 0]);
     // end walls above the doors
     plaster.poly([[x0, d.doorH, -hw], [x0, d.doorH, hw], [x0, H, hw], [x0, H, -hw]], [1, 0, 0]);
     plaster.poly([[x1, d.doorH, -hw], [x1, d.doorH, hw], [x1, H, hw], [x1, H, -hw]], [-1, 0, 0]);
-    // south wall (−z): the door of the cell, then the mirror
-    const dx0 = d.hingeX, dx1 = d.hingeX + d.closetW, dH = d.closetH, cz0 = d.cellZ0;
-    gridWall(plaster, x0, x1, 0, H, -hw, 1, [[dx0, dx1, 0, dH]], [d.doorH]);
-    // the doorway through the thickness of the wall, and its threshold
-    plaster.poly([[dx0, 0, -hw], [dx0, 0, cz0], [dx0, dH, cz0], [dx0, dH, -hw]], [1, 0, 0]);
-    plaster.poly([[dx1, 0, -hw], [dx1, 0, cz0], [dx1, dH, cz0], [dx1, dH, -hw]], [-1, 0, 0]);
-    plaster.poly([[dx0, dH, -hw], [dx1, dH, -hw], [dx1, dH, cz0], [dx0, dH, cz0]], [0, -1, 0]);
-    wood.box(dx0, 0, cz0, dx1, 0.012, -hw, 'YzZ');
-    // north wall (+z): the niche of the catalogue, then the opening onto the stair
-    const nx0 = d.closetX - d.closetW / 2, nx1 = d.closetX + d.closetW / 2;
-    gridWall(plaster, x0, x1, 0, H, hw, -1, [[nx0, nx1, 0, dH], [ox0, ox1, 0, d.doorH]]);
-
     // the lintels over the two doorways, and the boards of their signs
     const ld = d.lintelDepth, sd = d.signDepth, sw = d.signW / 2 + 0.012, sh = d.signH / 2 + 0.012, sy = d.signY;
     wood.box(x0, d.doorH, -hw, x0 + ld, d.doorH + d.lintelH, hw, 'XyY');
     wood.box(x1 - ld, d.doorH, -hw, x1, d.doorH + d.lintelH, hw, 'xyY');
     wood.box(x0 + ld, sy - sh, -sw, x0 + ld + sd, sy + sh, sw, 'XyYzZ');
     wood.box(x1 - ld - sd, sy - sh, -sw, x1 - ld, sy + sh, sw, 'xyYzZ');
+    const dx0 = d.hingeX, dx1 = d.hingeX + d.closetW, dH = d.closetH, cz0 = d.cellZ0;
+    const nx0 = d.nicheX - d.closetW / 2, nx1 = d.nicheX + d.closetW / 2;
+    if (plain) {
+      // bare walls (divided at the heights where the doorways' own walls are), and their skirting boards
+      gridWall(plaster, x0, x1, 0, H, -hw, 1, [], [dH, d.doorH]);
+      gridWall(plaster, x0, x1, 0, H, hw, -1, [], [dH, d.doorH]);
+      wood.box(x0, 0, -hw, x1, 0.1, -hw + 0.02, 'YZ');
+      wood.box(x0, 0, hw - 0.02, x1, 0.1, hw, 'Yz');
+      // the paintings of the two hexagons it joins, each on the right as one leaves its hexagon,
+      // a third of the way along: this one's on the north wall (+z), the other's, turned half
+      // round about the passage's middle, on the south wall
+      if (d.painting) {
+        for (const m of [null, otherEnd(d)]) {
+          if (m) wood.setMatrix(m);
+          const p = d.painting, px0 = p.x - p.w / 2, px1 = p.x + p.w / 2, py0 = p.y - p.h / 2, py1 = p.y + p.h / 2;
+          const pw = p.frame, pz = hw - p.depth;
+          wood.box(px0 - pw, py0 - pw, pz, px1 + pw, py0, hw, 'xXyYz');
+          wood.box(px0 - pw, py1, pz, px1 + pw, py1 + pw, hw, 'xXyYz');
+          wood.box(px0 - pw, py0, pz, px0, py1, hw, 'xXz');
+          wood.box(px1, py0, pz, px1 + pw, py1, hw, 'xXz');
+          const L = p.lamp;
+          wood.box(L.x - L.halfW - 0.01, L.y, L.z - 0.025, L.x + L.halfW + 0.01, L.y + 0.045, L.z + 0.025, 'xXyYzZ');
+          for (const ax of [L.x - L.halfW * 0.6, L.x + L.halfW * 0.6]) wood.box(ax - 0.008, L.y + 0.015, L.z + 0.025, ax + 0.008, L.y + 0.03, hw, 'xXyYz');
+          if (m) wood.reset();
+        }
+      }
+      return { wood: wood.geometry(), plaster: plaster.geometry(), tiles: tiles.geometry() };
+    }
+    // south wall (−z): the door of the cell, then the mirror
+    gridWall(plaster, x0, x1, 0, H, -hw, 1, [[dx0, dx1, 0, dH]], [d.doorH]);
+    // the doorway through the thickness of the wall, and its threshold
+    plaster.poly([[dx0, 0, -hw], [dx0, 0, cz0], [dx0, dH, cz0], [dx0, dH, -hw]], [1, 0, 0]);
+    plaster.poly([[dx1, 0, -hw], [dx1, 0, cz0], [dx1, dH, cz0], [dx1, dH, -hw]], [-1, 0, 0]);
+    plaster.poly([[dx0, dH, -hw], [dx1, dH, -hw], [dx1, dH, cz0], [dx0, dH, cz0]], [0, -1, 0]);
+    wood.box(dx0, 0, cz0, dx1, 0.012, -hw, 'YzZ');
+    // north wall (+z): the niche of the catalogue, then the painting
+    gridWall(plaster, x0, x1, 0, H, hw, -1, [[nx0, nx1, 0, dH]], [d.doorH]);
 
     // skirting boards
     wood.box(x0, 0, -hw, dx0 - 0.06, 0.1, -hw + 0.02, 'YZX');
     wood.box(dx1 + 0.06, 0, -hw, x1, 0.1, -hw + 0.02, 'YZx');
     wood.box(x0, 0, hw - 0.02, nx0 - 0.06, 0.1, hw, 'YzX');
-    wood.box(nx1 + 0.06, 0, hw - 0.02, ox0 - 0.06, 0.1, hw, 'Yzx');
-    wood.box(ox1 + 0.06, 0, hw - 0.02, x1, 0.1, hw, 'YzX');
-    // frame around the stair opening
-    wood.box(ox0 - 0.06, 0, hw - 0.025, ox0, d.doorH + 0.06, hw, 'xXYz');
-    wood.box(ox1, 0, hw - 0.025, ox1 + 0.06, d.doorH + 0.06, hw, 'xXYz');
-    wood.box(ox0, d.doorH, hw - 0.025, ox1, d.doorH + 0.06, hw, 'yz');
+    wood.box(nx1 + 0.06, 0, hw - 0.02, x1, 0.1, hw, 'Yzx');
     // frame around the door of the cell (its leaf is a separate, moving object)
     wood.box(dx0 - 0.06, 0, -hw, dx0, dH + 0.06, -hw + 0.045, 'xXYZ');
     wood.box(dx1, 0, -hw, dx1 + 0.06, dH + 0.06, -hw + 0.045, 'xXYZ');
@@ -519,27 +761,22 @@
     wood.box(nx1, 0, hw - 0.045, nx1 + 0.06, dH + 0.06, hw, 'xXYz');
     wood.box(nx0, dH, hw - 0.045, nx1, dH + 0.06, hw, 'yYz');
 
-    // the frame of the painting on the north wall, opposite the mirror
-    if (d.painting) {
-      const p = d.painting, px0 = p.x - p.w / 2, px1 = p.x + p.w / 2, py0 = p.y - p.h / 2, py1 = p.y + p.h / 2;
-      const pw = p.frame, pz = hw - p.depth;
-      wood.box(px0 - pw, py0 - pw, pz, px1 + pw, py0, hw, 'xXyYz');
-      wood.box(px0 - pw, py1, pz, px1 + pw, py1 + pw, hw, 'xXyYz');
-      wood.box(px0 - pw, py0, pz, px0, py1, hw, 'xXz');
-      wood.box(px1, py0, pz, px1 + pw, py1, hw, 'xXz');
-      const L = p.lamp;
-      wood.box(L.x - L.halfW - 0.01, L.y, L.z - 0.025, L.x + L.halfW + 0.01, L.y + 0.045, L.z + 0.025, 'xXyYzZ');
-      for (const ax of [L.x - L.halfW * 0.6, L.x + L.halfW * 0.6]) wood.box(ax - 0.008, L.y + 0.015, L.z + 0.025, ax + 0.008, L.y + 0.03, hw, 'xXyYz');
-    }
-
-    // mirror frame on the south wall, facing the stair
+    // mirror frame on the south wall, beside the door of the cell
     const mx0 = d.mirrorX - d.mirrorW / 2, mx1 = d.mirrorX + d.mirrorW / 2, my0 = d.mirrorY0, my1 = d.mirrorY0 + d.mirrorH;
     const fw = 0.07, fz = -hw + 0.04;
     wood.box(mx0 - fw, my0 - fw, -hw, mx1 + fw, my0, fz, 'xXyYZ');
     wood.box(mx0 - fw, my1, -hw, mx1 + fw, my1 + fw, fz, 'xXyYZ');
     wood.box(mx0 - fw, my0, -hw, mx0, my1, fz, 'xXZ');
     wood.box(mx1, my0, -hw, mx1 + fw, my1, fz, 'xXZ');
+    return { wood: wood.geometry(), plaster: plaster.geometry(), tiles: tiles.geometry() };
+  }
 
+  /**
+   * The spiral stair in its well, built about (wellX, wellZ) with its doorway in the plane
+   * z = hallW / 2, facing −z: the well's wall seen from inside, the column, the landing and the treads.
+   */
+  function buildStair(d) {
+    const ox0 = d.wellX - d.openW / 2, ox1 = d.wellX + d.openW / 2;
     // ---- the stairwell ----
     const well = new Builder(), steps = new Builder();
     const cx = d.wellX, cz = d.wellZ, R = d.wellR, zc = d.hallW / 2;
@@ -579,10 +816,7 @@
       rise(a1, -1);
     }
 
-    return {
-      wood: wood.geometry(), plaster: plaster.geometry(), tiles: tiles.geometry(),
-      well: well.geometry(), steps: steps.geometry(),
-    };
+    return { well: well.geometry(), steps: steps.geometry() };
   }
 
   /** The leaf of the cell's door, in the frame of its hinge (x along the door, z across it). */
@@ -604,7 +838,7 @@
   /** The niche of the catalogue: its walls, and the terminal's casing (the screen is separate). */
   function buildNiche(d) {
     const b = new Builder();
-    const hw = d.hallW / 2, x0 = d.closetX - d.closetW / 2, x1 = d.closetX + d.closetW / 2;
+    const hw = d.hallW / 2, x0 = d.nicheX - d.closetW / 2, x1 = d.nicheX + d.closetW / 2;
     const z0 = hw, z1 = hw + d.nicheDepth, H = d.closetH, sc = d.screen;
     b.tint(0xd5d0c2);
     b.poly([[x0, 0, z0], [x0, 0, z1], [x0, H, z1], [x0, H, z0]], [1, 0, 0]);
@@ -734,21 +968,28 @@
     return { wood: wood.geometry(), soft: soft.geometry(), shade, bulb };
   }
 
-  /** The faces of the two signs, textured from the signs' texture (EAST above, WEST below). */
-  function buildSignFaces(d) {
+  /** The names of the six directions of the honeycomb, as the signs give them, by direction (see Honeycomb). */
+  const WAYS = ['EAST', 'SOUTH-EAST', 'SOUTH-WEST', 'WEST', 'NORTH-WEST', 'NORTH-EAST'];
+
+  /**
+   * The faces of the two signs of a vestibule that heads in direction `way` of the honeycomb,
+   * textured from the signs' texture, where the six directions' names are one above the other:
+   * over its far doorway the name of the way it heads, over its near one the name of the way back.
+   */
+  function buildSignFaces(d, way) {
     const off = d.lintelDepth + d.signDepth + 0.0015;
     const yb = d.signY - d.signH / 2, yt = d.signY + d.signH / 2, w = d.signW / 2;
     const pos = [], nor = [], uv = [], idx = [];
-    const quad = (x, nx, zLeft, zRight, v0, v1) => {
-      const b = pos.length / 3;
+    const quad = (x, nx, zLeft, zRight, row) => {
+      const b = pos.length / 3, v0 = 1 - (row + 1) / 6, v1 = 1 - row / 6;
       // bottom left, bottom right, top right, top left, as the reader facing the sign sees them
       pos.push(x, yb, zLeft, x, yb, zRight, x, yt, zRight, x, yt, zLeft);
       for (let i = 0; i < 4; i++) nor.push(nx, 0, 0);
       uv.push(0, v0, 1, v0, 1, v1, 0, v1);
       idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
     };
-    quad(d.hallX1 - off, -1, -w, w, 0.5, 1); // EAST, read facing east (+x), where +z is on the right
-    quad(d.hallX0 + off, 1, w, -w, 0, 0.5); // WEST, read facing west, where −z is on the right
+    quad(d.hallX1 - off, -1, -w, w, way % 6); // read facing +x, where +z is on the right
+    quad(d.hallX0 + off, 1, w, -w, (way + 3) % 6); // read facing −x, where −z is on the right
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
@@ -758,23 +999,24 @@
   }
 
   /**
-   * Where the painting hangs: on the north wall of the vestibule, between the niche of the
-   * catalogue and the opening onto the stair, opposite the mirror, as large as that stretch
-   * of wall allows for a picture of the given proportions (width ÷ height).
+   * Where the painting hangs:  /**
+   * Where a hexagon's painting hangs: in the passage that leaves by its other door, on the
+   * right as one leaves (the north wall, +z), a third of the way along, as large as the wall
+   * allows for a picture of the given proportions (width ÷ height), and no more than 0.9 m high.
    */
   function paintingPlace(d, aspect) {
-    const x0 = d.closetX + d.closetW / 2 + 0.06, x1 = d.wellX - d.openW / 2 - 0.06; // inside the two door frames
+    const x = d.hallX0 + d.hallLen / 3, half = Math.min(x - d.hallX0 - 0.3, 1.1); // short of the doorway
     const frame = 0.045, margin = 0.035;
-    let w = x1 - x0 - 2 * (frame + margin), h = w / aspect;
+    let w = 2 * (half - frame - margin), h = w / aspect;
     if (h > 0.9) { h = 0.9; w = h * aspect; }
-    const x = (x0 + x1) / 2, y = 1.4;
+    const y = 1.4;
     // a picture lamp on two arms above the frame, its light falling on the canvas
     const lampY = y + h / 2 + frame + 0.07, lampZ = d.hallW / 2 - 0.145;
     return { x, y, w, h, frame, depth: 0.035, z: d.hallW / 2 - 0.016, lamp: { x, y: lampY, z: lampZ, halfW: Math.min(0.17, w / 2 - 0.05) } };
   }
 
   /**
-   * The canvas of the painting, facing south, in cell coordinates. Its texture's first row
+   * The canvas of a hexagon's painting, facing south, in the frame of its passage. Its texture's first row
    * is the painting's top row, and its first column the left one as the reader sees it.
    */
   function buildCanvas(d) {
@@ -804,16 +1046,19 @@
    * ------------------------------------------------------------------ */
 
   const LIGHTING_GLSL = `
-    uniform vec4 uLights[4];
-    uniform vec3 uLightColors[4];
-    uniform float uGain[4]; // per light, for lights that can be dimmed or shut off
-    uniform float uDown[4]; // per light: 1 for a lamp that shines down from under its shade, 0 for one that shines all round
+    #ifndef NLIGHTS
+      #define NLIGHTS 4
+    #endif
+    uniform vec4 uLights[NLIGHTS];
+    uniform vec3 uLightColors[NLIGHTS];
+    uniform float uGain[NLIGHTS]; // per light, for lights that can be dimmed or shut off
+    uniform float uDown[NLIGHTS]; // per light: 1 for a lamp that shines down from under its shade, 0 for one that shines all round
     uniform float uAmbient;
     uniform float uFalloff;
     uniform float uExposure;
     vec3 lampLight(vec3 p, vec3 n) {
       vec3 sum = vec3(uAmbient);
-      for (int i = 0; i < 4; i++) {
+      for (int i = 0; i < NLIGHTS; i++) {
         vec3 L = uLights[i].xyz - p;
         float d2 = max(dot(L, L), 0.01);
         float ndl = dot(n, L) * inversesqrt(d2);
@@ -870,7 +1115,7 @@
       // PATINA is 1 for plaster, 2 for wood, 3 for floor tiles.
       uniform vec4 uSeed; // where the texture starts (xy), how plaster is turned (z), a seed for the stains (w)
       uniform vec4 uPatina; // by kind: plaster (damp, tide line, stains, soot); wood (shade rgb, grime); tiles (wear, side, ink)
-      uniform vec4 uSeedEast, uPatinaEast; // the same, of the next hexagon east, which a vestibule turns into towards its east end
+      uniform vec4 uSeedEast, uPatinaEast; // the same, of the hexagon at a vestibule's far end, which it turns into towards that end
       uniform vec4 uPath; // the middle of the walkway round the shaft (x), where the hexagon gives onto its vestibule (y) and the vestibule onto the next hexagon (z)
       float hash3(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.yzx + 33.33); return fract((p.x + p.y) * p.z); }
       float vnoise(vec3 p) {
@@ -886,15 +1131,36 @@
       // Through its doorways, a hexagon's light gives way to the light of the vestibule beyond:
       // from where a doorway begins, its own lamps fade, and where the vestibule begins, the
       // vestibule's light holds alone. So floor and walls are lit alike either side of a threshold.
-      uniform vec4 uVesLights[4]; // a vestibule's lights, in the frame of the hexagon at its west end
+      uniform vec4 uVesLights[4]; // a vestibule's lights, in the frame of the hexagon of books it belongs to (the first two, those of the hexagons at its ends)
       uniform vec3 uVesColors[4];
-      uniform vec4 uVesGains; // how brightly the lights at a vestibule's two ends burn: the vestibule east of this hexagon (xy), the one west of it (zw)
+      uniform vec4 uPasLights[4]; // and a passage's (a hub's doors give onto the far ends of vestibules: theirs)
+      uniform vec3 uPasColors[4];
+      uniform vec2 uDoorLight; // the ambient light (x) and the falloff of the lamps (y) of vestibules and passages, whatever this room's
+      uniform vec4 uVesGains; // how brightly the lights at a vestibule's two ends burn: this hexagon's own vestibule (xy: its end, the hub's), and the other (zw: the far end, this one)
       uniform vec4 uDoors; // how far from the hexagon's middle the change begins (x) and ends (y); the distance from one hexagon to the next (z); half a doorway's width (w)
+      uniform vec4 uDoorDirs; // in a hexagon of books, the direction (x, z) of its door into its own vestibule (xy) and of the one into its passage (zw)
+      // The nearer doorway of a room: its direction (x, z), and whether it is the door into the room's own vestibule (z = 1)
+      vec3 nearDoor(vec3 p) {
+        #ifdef HUB
+          // a hub has a door every 60°, each giving onto the far end of a vestibule
+          float f = floor(atan(p.z, p.x) / 1.0471975512 + 0.5) * 1.0471975512;
+          return vec3(cos(f), sin(f), 0.0);
+        #else
+          return dot(p.xz, uDoorDirs.xy) >= dot(p.xz, uDoorDirs.zw) ? vec3(uDoorDirs.xy, 1.0) : vec3(uDoorDirs.zw, 0.0);
+        #endif
+      }
+      // A point of the room seen from that doorway: how far towards it (x), how far to its left (z), and whether it is the door into the room's own vestibule (w)
+      vec4 doorway(vec3 p) {
+        vec3 u = nearDoor(p);
+        return vec4(dot(p.xz, u.xy), p.y, dot(p.xz, vec2(-u.y, u.x)), u.z);
+      }
+      // The same point in the frame of the vestibule beyond that doorway (which is its own hexagon's, span metres beyond this room if this is the vestibule's far end)
+      vec3 beyond(vec4 q, float span) { return q.w > 0.5 ? q.xyz : vec3(span - q.x, q.y, -q.z); }
       vec3 vesLamp(vec4 l, vec3 c, vec3 p, vec3 n) {
         vec3 L = l.xyz - p;
         float d2 = max(dot(L, L), 0.01);
         float wrap = clamp((dot(n, L) * inversesqrt(d2) + 0.25) / 1.25, 0.0, 1.0);
-        return c * (l.w * wrap / (1.0 + d2 * uFalloff));
+        return c * (l.w * wrap / (1.0 + d2 * uDoorLight.y));
       }
     #endif
     #include <fog_pars_fragment>
@@ -905,6 +1171,9 @@
       return vec2(dot(p, t), p.y);
     }
     #ifdef PATINA
+      #if PATINA == 3
+        uniform vec4 uTileFrame; // how this part of the floor lies on the floor's plan: its turn (cosine, sine) and where its origin falls in the tiles' pattern
+      #endif
       #if PATINA == 1
         // plaster has no grain to keep upright, so each hexagon's is turned its own way
         vec3 plasterAt(vec2 uv, vec4 seed) {
@@ -920,13 +1189,22 @@
         // along a vestibule, from its own hexagon (0) to the next (1)
         float along = smoothstep(uPath.y, uPath.z, vLocal.x);
         // away from the doorways (1), where nothing that marks one hexagon alone comes up to the threshold (0)
-        float own = smoothstep(0.0, 0.35, min(abs(abs(vLocal.x) - uPath.y), abs(vLocal.x - uPath.z)));
+        #ifdef DOORS
+          float own = smoothstep(0.0, 0.35, abs(doorway(vLocal).x - uPath.y));
+        #else
+          float own = smoothstep(0.0, 0.35, min(abs(abs(vLocal.x) - uPath.y), abs(vLocal.x - uPath.z)));
+        #endif
         #if PATINA == 1
           vec3 base = plasterAt(uv, uSeed);
           // towards the east end of a vestibule, the plaster of the next hexagon, which it meets there
           float toEast = smoothstep(uPath.z - 1.0, uPath.z, vLocal.x);
           if (toEast > 0.0) base = mix(base, plasterAt(uvAt(vLocal - vec3(uPath.y + uPath.z, 0.0, 0.0), n), uSeedEast), toEast);
           base *= uTint;
+        #elif PATINA == 3
+          // the floor's tiles, laid across the whole floor: the same pattern wherever a hexagon,
+          // vestibule, passage or hub is, and however it is turned
+          vec2 fp = abs(n.y) > 0.6 ? vec2(uTileFrame.x * vLocal.x - uTileFrame.y * vLocal.z, uTileFrame.y * vLocal.x + uTileFrame.x * vLocal.z) + uTileFrame.zw : uv;
+          vec3 base = texture2D(map, fp * uScale).rgb * uTint;
         #else
           vec3 base = texture2D(map, uv * uScale + uSeed.xy).rgb * uTint;
         #endif
@@ -961,10 +1239,14 @@
           // hexagon's floor alone (the grain of its wear, spilt ink) stops short of the doorways. So
           // the floor runs on unbroken from each hexagon through its vestibules into the next.
           vec4 pat = mix(uPatina, uPatinaEast, along);
-          float ax = abs(vLocal.x);
           // worn where feet go: round the shaft, more on one side than the other, and out through the doors
           float circuit = exp(-pow((length(vLocal.xz) - uPath.x) / 0.32, 2.0)) * mix(1.0 - pat.y, pat.y, smoothstep(-0.5, 0.5, vLocal.z));
-          float hall = exp(-pow(vLocal.z / 0.42, 2.0)) * smoothstep(uPath.x, uPath.y, ax);
+          #ifdef DOORS
+            vec4 way = doorway(vLocal);
+            float hall = exp(-pow(way.z / 0.42, 2.0)) * smoothstep(uPath.x, uPath.y, way.x);
+          #else
+            float hall = exp(-pow(vLocal.z / 0.42, 2.0)) * smoothstep(uPath.x, uPath.y, abs(vLocal.x));
+          #endif
           float worn = pat.x * max(circuit, hall) * (0.6 + 0.4 * mix(0.5, fbm(q * 5.0), own));
           base = mix(base, vec3(dot(base, vec3(0.333))) * 1.1, 0.45 * worn); // the glaze worn off: paler, flatter
           base *= 1.0 - 0.45 * pat.z * own * smoothstep(0.7, 0.76, fbm(q * 2.3 + 11.0)); // spilt ink
@@ -973,15 +1255,23 @@
       vec3 light = lampLight(vLocal, n);
       #ifdef DOORS
         // towards a doorway, and only in front of it (not in the corners of the shelves either side)
-        float toward = smoothstep(uDoors.x, uDoors.y, abs(vLocal.x)) * (1.0 - smoothstep(uDoors.w + 0.05, uDoors.w + 0.3, abs(vLocal.z)));
+        vec4 at = doorway(vLocal);
+        float toward = smoothstep(uDoors.x, uDoors.y, at.x) * (1.0 - smoothstep(uDoors.w + 0.05, uDoors.w + 0.3, abs(at.z)));
         if (toward > 0.0) {
           // the vestibule beyond the nearer door, as it lights itself
-          vec3 p = vLocal;
-          vec2 g = uVesGains.xy;
-          if (vLocal.x < 0.0) { p.x += uDoors.z; g = uVesGains.zw; }
-          vec3 lv = vec3(uAmbient)
-            + vesLamp(uVesLights[0], uVesColors[0] * g.x, p, n) + vesLamp(uVesLights[1], uVesColors[1] * g.y, p, n)
-            + vesLamp(uVesLights[2], uVesColors[2], p, n) + vesLamp(uVesLights[3], uVesColors[3], p, n);
+          vec3 p = beyond(at, uDoors.z);
+          vec2 u = nearDoor(vLocal).xy;
+          vec3 nv = vec3(dot(n.xz, u), n.y, dot(n.xz, vec2(-u.y, u.x)));
+          if (at.w < 0.5) nv.xz = -nv.xz; // seen from its far end, a vestibule faces the other way
+          vec2 g = at.w > 0.5 ? uVesGains.xy : uVesGains.zw;
+          vec3 lv = vec3(uDoorLight.x);
+          if (at.w > 0.5) {
+            lv += vesLamp(uVesLights[0], uVesColors[0] * g.x, p, nv) + vesLamp(uVesLights[1], uVesColors[1] * g.y, p, nv)
+              + vesLamp(uVesLights[2], uVesColors[2], p, nv) + vesLamp(uVesLights[3], uVesColors[3], p, nv);
+          } else {
+            lv += vesLamp(uPasLights[0], uPasColors[0] * g.x, p, nv) + vesLamp(uPasLights[1], uPasColors[1] * g.y, p, nv)
+              + vesLamp(uPasLights[2], uPasColors[2], p, nv) + vesLamp(uPasLights[3], uPasColors[3], p, nv);
+          }
           light = mix(light, lv, toward);
         }
       #endif
@@ -1092,15 +1382,21 @@
   const SCREEN = new THREE.Color(0.62, 0.82, 0.78); // the catalogue's cool glow
 
   function lightingUniforms(lights, opts) {
+    const n = lights.length;
     return {
       uLights: { value: lights },
-      uLightColors: { value: [0, 1, 2, 3].map((i) => (opts.colors && opts.colors[i]) || LAMP.clone()) },
-      uGain: { value: [1, 1, 1, 1] },
-      uDown: { value: opts.down || [0, 0, 0, 0] },
+      uLightColors: { value: lights.map((_, i) => (opts.colors && opts.colors[i]) || LAMP.clone()) },
+      uGain: { value: lights.map(() => 1) },
+      uDown: { value: lights.map((_, i) => (opts.down && opts.down[i]) || 0) },
       uAmbient: { value: opts.ambient !== undefined ? opts.ambient : 0.05 },
       uFalloff: { value: opts.falloff !== undefined ? opts.falloff : 0.55 },
       uExposure: { value: opts.exposure !== undefined ? opts.exposure : 1.35 },
     };
+  }
+
+  /** The shaders light with four lights unless told otherwise. */
+  function lightDefines(lights) {
+    return lights.length === 4 ? {} : { NLIGHTS: lights.length };
   }
 
   function archMaterial(map, scale, tint, lights, opts) {
@@ -1111,7 +1407,7 @@
       uScale: { value: new THREE.Vector2(scale[0], scale[1]) },
       uTint: { value: new THREE.Color(tint) },
     });
-    const defines = {};
+    const defines = lightDefines(lights);
     if (opts.cellMatrix) { defines.USE_CELL_MATRIX = ''; uniforms.uCellMatrix = { value: new THREE.Matrix4() }; }
     if (opts.patina) {
       // no patina until a hexagon gives it one (World._look)
@@ -1121,14 +1417,21 @@
       uniforms.uSeedEast = { value: new THREE.Vector4(0, 0, 0, 0) };
       uniforms.uPatinaEast = { value: uniforms.uPatina.value.clone() };
       uniforms.uPath = { value: opts.path || new THREE.Vector4(0, 0, 0, 0) };
+      if (opts.patina === 'tiles') uniforms.uTileFrame = { value: new THREE.Vector4(1, 0, 0, 0) };
     }
     if (opts.doors) {
       // the light of the vestibules beyond a hexagon's doors, which its doorways turn into (World._applyLamps says how brightly their door lights burn)
       defines.DOORS = '';
       uniforms.uVesLights = { value: opts.doors.lights };
       uniforms.uVesColors = { value: [LAMP, LAMP, LAMP, SCREEN] };
+      uniforms.uPasLights = { value: opts.doors.passage };
+      uniforms.uDoorLight = { value: new THREE.Vector2(0.05, 0.55) }; // as vestibules and passages have (archMaterial's defaults)
+      uniforms.uPasColors = { value: opts.doors.hub ? [LAMP, LAMP, LAMP, SCREEN] : [LAMP, LAMP, LAMP, LAMP] };
       uniforms.uVesGains = { value: new THREE.Vector4(1, 1, 1, 1) };
       uniforms.uDoors = { value: new THREE.Vector4(opts.doors.from, opts.doors.to, opts.doors.span, opts.doors.halfWidth) };
+      uniforms.uDoorDirs = { value: new THREE.Vector4(...opts.doors.dirs) };
+      // a hub's doors all give onto the far ends of vestibules
+      if (opts.doors.hub) defines.HUB = '';
     }
     return new THREE.ShaderMaterial({ uniforms, defines, vertexShader: ARCH_VERT, fragmentShader: ARCH_FRAG, fog: true, side: opts.side || THREE.FrontSide, vertexColors: !!opts.vertexColors });
   }
@@ -1136,48 +1439,57 @@
   function signMaterial(map, lights, opts) {
     const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog]);
     Object.assign(uniforms, lightingUniforms(lights, opts || {}), { map: { value: map } });
-    return new THREE.ShaderMaterial({ uniforms, vertexShader: SIGN_VERT, fragmentShader: SIGN_FRAG, fog: true });
+    return new THREE.ShaderMaterial({ uniforms, defines: lightDefines(lights), vertexShader: SIGN_VERT, fragmentShader: SIGN_FRAG, fog: true });
   }
 
   function paintMaterial(map, lights, opts) {
     const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog]);
     Object.assign(uniforms, lightingUniforms(lights, opts || {}), { map: { value: map } });
-    return new THREE.ShaderMaterial({ uniforms, vertexShader: SIGN_VERT, fragmentShader: PAINT_FRAG, fog: true });
+    return new THREE.ShaderMaterial({ uniforms, defines: lightDefines(lights), vertexShader: SIGN_VERT, fragmentShader: PAINT_FRAG, fog: true });
   }
 
   function bookMaterial(map, lights, variants, opts) {
     const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog]);
     Object.assign(uniforms, lightingUniforms(lights, opts || {}), { map: { value: map }, uVariants: { value: variants } });
-    return new THREE.ShaderMaterial({ uniforms, vertexShader: BOOK_VERT, fragmentShader: BOOK_FRAG, fog: true });
+    return new THREE.ShaderMaterial({ uniforms, defines: lightDefines(lights), vertexShader: BOOK_VERT, fragmentShader: BOOK_FRAG, fog: true });
   }
 
   /** Light sources of each region, in cell coordinates (xyz) with intensity (w). */
   function lightSets(d) {
     const V = (x, y, z, w) => new THREE.Vector4(x, y, z, w);
+    // the stair hexagon at a vestibule's far end is brighter than a hexagon of books, so its
+    // light there is stronger, as it is when one stands in the stair hexagon's doorway
+    const HUB_END = 1.0;
     return {
       // the lamps above the bookcases (as many as there are bookcases)
       hexagon: [0, 1, 2, 3].map((i) => {
         const p = lampLights(d)[i];
         return p ? V(p.x, p.y, p.z, 0.8) : V(0, 0, 0, 0);
       }),
+      // a hub's lamps: above every other door, and above the stair's
+      hub: hubLights(d).map((p, i) => V(p.x, p.y, p.z, i < 3 ? 1.0 : 0.5)),
+      // the light of the hexagons at either end, and the catalogue's glow
       vestibule: [
         V(d.hallX0 - 0.25, 1.8, 0, 0.72),
-        V(d.hallX1 + 0.25, 1.8, 0, 0.72),
-        V(d.wellX, 1.3, d.wellZ, 0.18),
+        V(d.hallX1 + 0.25, 1.8, 0, HUB_END),
+        V(0, 0, 0, 0),
         V(d.screen.x, d.screen.y, d.hallW / 2 + 0.1, 0.32),
       ],
-      // with a painting, its lamp takes the place of the faint light from the stairwell
-      walls: d.painting ? [
+      // a passage between two clusters: the light of the hexagons at either end, and the lamps
+      // of its two paintings (the same, turned half round, from either end)
+      passage: [
         V(d.hallX0 - 0.25, 1.8, 0, 0.72),
         V(d.hallX1 + 0.25, 1.8, 0, 0.72),
-        V(d.painting.lamp.x, d.painting.lamp.y - 0.01, d.painting.lamp.z, 0.85),
-        V(d.screen.x, d.screen.y, d.hallW / 2 + 0.1, 0.32),
-      ] : null,
+        ...(d.painting ? [
+          V(d.painting.lamp.x, d.painting.lamp.y - 0.01, d.painting.lamp.z, 0.85),
+          V(d.Dx - d.painting.lamp.x, d.painting.lamp.y - 0.01, -d.painting.lamp.z, 0.85),
+        ] : [V(0, 0, 0, 0), V(0, 0, 0, 0)]),
+      ],
       // inside the niche: the screen, and the vestibule's light
       niche: [
         V(d.screen.x, d.screen.y, d.screen.z - 0.3, 0.75),
         V(d.hallX0 - 0.25, 1.8, 0, 0.72),
-        V(d.hallX1 + 0.25, 1.8, 0, 0.72),
+        V(d.hallX1 + 0.25, 1.8, 0, HUB_END),
         V(0, 0, 0, 0),
       ],
       // the night lamp, light from the vestibule through the door, a little fill
@@ -1191,11 +1503,11 @@
       door: [
         V(d.nightLamp[0], d.nightLamp[1] + 0.24, d.nightLamp[2], 1.15),
         V(d.hallX0 - 0.25, 1.8, 0, 0.72),
-        V(d.hallX1 + 0.25, 1.8, 0, 0.72),
+        V(d.hallX1 + 0.25, 1.8, 0, HUB_END),
         V((d.cellX0 + d.cellX1) / 2, d.cellH - 0.2, (d.cellZ0 + d.cellZ1) / 2, 0.13),
       ],
-      // light from the vestibules of this floor and the floors above and below, spilling into the
-      // stairwell, and a little fill halfway up, where it lights the bottom and the top of a floor's
+      // light from the hubs of this floor and the floors above and below, spilling into the
+      // stairwell through its doorways, and a little fill halfway up, where it lights the bottom and the top of a floor's
       // stretch of the stairwell alike, so that each floor's runs on into the next without a seam
       well: [
         V(d.wellX, 1.5, d.hallW / 2 - 0.15, 0.95),
@@ -1215,9 +1527,9 @@
     const d = dimensions(cfg);
     if (opts.painting) d.painting = paintingPlace(d, opts.painting.width / opts.painting.height);
     const L = lightSets(d);
-    if (!L.walls) L.walls = L.vestibule;
     const hex = buildHexagon(d);
-    const ves = buildVestibule(d);
+    const ves = buildVestibule(d, false), pas = buildVestibule(d, true);
+    const hub = buildHub(d), stair = buildStair(d);
     const cell = buildCell(d);
     // About 0.9 m to a repeat of the tiles' pattern (two tiles across), but exactly a whole number
     // of repeats from one hexagon to the next, so that the pattern runs on unbroken along a floor.
@@ -1225,9 +1537,12 @@
     const tileScale = [1 / tileRepeat, 1 / (tileRepeat * textures.tilesAspect)];
     // the walkway's middle, round the shaft, and where the hexagon gives onto its vestibule and the vestibule onto the next: for the worn path
     const path = new THREE.Vector4((d.shaftA + d.aIn) / 2, d.a, d.Dx - d.a, 0);
+    const hubPath = new THREE.Vector4((d.drumR + d.aIn) / 2, d.a, d.Dx - d.a, 0); // in a hub, the walkway round the drum
     // A hexagon's doorways, where its light turns into its vestibules' (on the floor, from a little
     // before the doorway, so that the change is gentler there)
-    const doors = (lights, from) => ({ lights, from, to: d.a, span: d.Dx, halfWidth: d.hallW / 2 });
+    const dirs = doorDirections(d);
+    // (a hexagon's doors give onto its vestibule and its passage, a hub's onto the far ends of vestibules)
+    const doors = (from, isHub) => ({ lights: L.vestibule, passage: isHub ? L.vestibule : L.passage, from, to: d.a, span: d.Dx, halfWidth: d.hallW / 2, dirs, hub: !!isHub });
     const screenLit = { colors: [null, null, null, SCREEN] };
     // along a floor, a whole number of repeats of the wood's grain from one hexagon to the next, so that skirting boards run on
     const woodScale = [Math.max(1, Math.round(d.Dx * 0.9)) / d.Dx, 2.2];
@@ -1236,18 +1551,28 @@
     // the lamps above the bookcases shine down
     const shaded = [1, 1, 1, 1];
     const materials = {
-      hexWood: archMaterial(textures.wood, woodScale, 0xb0845a, L.hexagon, { patina: 'wood', path, doors: doors(L.walls, d.aIn), down: shaded }),
-      hexPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.hexagon, { patina: 'plaster', path, doors: doors(L.walls, d.aIn), down: shaded }),
-      hexTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.hexagon, { patina: 'tiles', path, doors: doors(L.vestibule, d.aIn - 0.3), down: shaded }),
-      vesWood: archMaterial(textures.wood, woodScale, 0xb0845a, L.walls, Object.assign({ patina: 'wood', path }, screenLit)),
-      vesPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.walls, Object.assign({ patina: 'plaster', path }, screenLit)),
+      hexWood: archMaterial(textures.wood, woodScale, 0xb0845a, L.hexagon, { patina: 'wood', path, doors: doors(d.aIn), down: shaded }),
+      hexPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.hexagon, { patina: 'plaster', path, doors: doors(d.aIn), down: shaded }),
+      hexTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.hexagon, { patina: 'tiles', path, doors: doors(d.aIn - 0.3), down: shaded }),
+      vesWood: archMaterial(textures.wood, woodScale, 0xb0845a, L.vestibule, Object.assign({ patina: 'wood', path }, screenLit)),
+      vesPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.vestibule, Object.assign({ patina: 'plaster', path }, screenLit)),
       vesTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.vestibule, Object.assign({ patina: 'tiles', path }, screenLit)),
+      // the passages between clusters
+      pasWood: archMaterial(textures.wood, woodScale, 0xb0845a, L.passage, { patina: 'wood', path }),
+      pasPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.passage, { patina: 'plaster', path }),
+      pasTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.passage, { patina: 'tiles', path }),
+      // the hubs
+      hubWood: archMaterial(textures.wood, woodScale, 0xb0845a, L.hub, { patina: 'wood', path: hubPath, doors: doors(d.aIn, true), down: shaded, falloff: 0.38, ambient: 0.16 }),
+      hubPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.hub, { patina: 'plaster', path: hubPath, doors: doors(d.aIn, true), down: shaded, falloff: 0.38, ambient: 0.16 }),
+      // (the hub's floor turns into the vestibule's light from further in, its light being brighter)
+      hubTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.hub, { patina: 'tiles', path: hubPath, doors: doors(d.aIn - 0.9, true), down: shaded, falloff: 0.38, ambient: 0.16 }),
       niche: archMaterial(textures.plaster, [0.4, 0.4], 0xffffff, L.niche, { vertexColors: true, colors: [SCREEN], falloff: 1.4, ambient: 0.04 }),
       screen: new THREE.MeshBasicMaterial({ map: textures.screen, fog: true }),
       signs: signMaterial(textures.signs, L.vestibule, { colors: [null, null, null, SCREEN], ambient: 0.08 }),
+      pasSigns: signMaterial(textures.signs, L.passage, { ambient: 0.08 }),
       // the stairwell's walls, seen from inside it only: the flat one above the opening lies in the
-      // plane of the vestibule's wall, back to back with it, and the round one meets that plane at
-      // the opening's sides; seen from the vestibule too, each would flicker through its wall
+      // plane of the drum's flat wall, back to back with it, and the round one meets that plane at
+      // the opening's sides; seen from the hub too, each would flicker through its wall
       wellPlaster: archMaterial(textures.plaster, [0.4, perFloor(0.4)], 0xc4b597, L.well, { ambient: 0.08 }),
       wellStone: archMaterial(textures.stone, [0.7, perFloor(0.7)], 0xdccdb0, L.well, { side: THREE.DoubleSide, ambient: 0.08 }),
       cellWood: archMaterial(textures.wood, [0.9, 2.2], 0xffffff, L.cell, { vertexColors: true, falloff: 1.1, ambient: 0.05 }),
@@ -1268,7 +1593,9 @@
     const geometries = {
       hexWood: hex.wood, hexPlaster: hex.plaster, hexTiles: hex.tiles,
       vesWood: ves.wood, vesPlaster: ves.plaster, vesTiles: ves.tiles,
-      wellPlaster: ves.well, wellStone: ves.steps,
+      pasWood: pas.wood, pasPlaster: pas.plaster, pasTiles: pas.tiles,
+      hubWood: hub.wood, hubPlaster: hub.plaster, hubTiles: hub.tiles, hubGlow: hub.glow,
+      wellPlaster: stair.well, wellStone: stair.steps,
       lampGlow: buildLampGlow(d),
       lampWash: d.roomH > d.shelfTop + 0.2 ? buildLampWash(d) : null,
       pictureGlow: d.painting ? buildPictureGlow(d) : null,
@@ -1277,15 +1604,18 @@
       doorLeaf: buildDoorLeaf(d),
       niche: buildNiche(d),
       screen: new THREE.PlaneGeometry(d.screen.w, d.screen.h),
-      signs: buildSignFaces(d),
+      signs: [0, 1, 2, 3, 4, 5].map((way) => buildSignFaces(d, way)), // by the direction a vestibule heads in
       cellWood: cell.wood, cellSoft: cell.soft, shade: cell.shade, bulb: cell.bulb,
       sinkMirror: new THREE.PlaneGeometry(d.sinkMirror.w, d.sinkMirror.h),
     };
     // each painting has its own texture, so its own material
-    const paintingMaterial = d.painting ? (map) => paintMaterial(map, L.walls, { colors: [null, null, null, SCREEN] }) : null;
+    const paintingMaterial = d.painting ? (map) => paintMaterial(map, L.passage) : null;
     if (d.painting) geometries.canvas = buildCanvas(d);
-    return { dims: d, materials, geometries, lights: L, paintingMaterial, anisotropy: opts.anisotropy || 1 };
+    // the size of the tiles' pattern on the floor, in metres
+    const tilePeriod = [tileRepeat, tileRepeat * textures.tilesAspect];
+    return { dims: d, materials, geometries, lights: L, paintingMaterial, tilePeriod, anisotropy: opts.anisotropy || 1 };
   }
 
-  Babel.Architecture = { dimensions, createAssets, sideMatrix, Builder };
+  Babel.Architecture = { dimensions, createAssets, sideMatrix, Builder, intoFrame, frameAt, WAYS };
+  Babel.Honeycomb = Honeycomb;
 })();

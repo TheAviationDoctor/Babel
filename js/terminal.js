@@ -21,13 +21,16 @@
   const fmt = (n) => n.toLocaleString('en');
   const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
 
-  /** "3 hexagons east", "about 10^1,234 floors up" (HTML), or '' for zero. */
+  /** "3 clusters east", "about 10^1,234 floors up" (HTML), or '' for zero. */
   function stretch(lib, diff, one, many, pos, neg) {
     if (diff.sign === 0) return '';
     const m = lib.magnitude(diff.digits), dir = diff.sign > 0 ? pos : neg;
     if (m.exact !== null) return `${fmt(m.exact)} ${m.exact === 1 ? one : many} ${dir}`;
     return `about 10<sup>${fmt(Math.floor(m.log10))}</sup> ${many} ${dir}`;
   }
+
+  /** "a", "a and b", "a, b and c" */
+  function list(parts) { return parts.length < 3 ? parts.join(' and ') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`; }
 
   /** A count of hexagons or floors, exactly if it is small, else to two figures: "4.8 × 10^946,956" (HTML). */
   function amount(m) {
@@ -605,14 +608,14 @@
       return form;
     }
 
-    /** "Wall 2, shelf 3, volume 17, …, about 10^… hexagons east from here. Its floor is …" (HTML). */
+    /** "Wall 2, shelf 3, volume 17, …, about 10^… clusters east from here. Its floor is …" (HTML). */
     _whereHTML(loc, from) {
       const lib = this.lib, world = this.ctx.world, player = this.ctx.player;
       const { wall, shelf, volume } = lib.slotParts(loc.slot);
-      const dh = lib.hexagonDifference(world.hexagon(player.ch).digits, loc.hexagon);
+      const way = lib.hexagonSteps(world.hexagon(player.ch).digits, loc.hexagon);
       const df = lib.floorDifference(world.floor(player.cf).digits, loc.floor);
-      const parts = [stretch(lib, dh, 'hexagon', 'hexagons', 'east', 'west'), stretch(lib, df, 'floor', 'floors', 'up', 'down')].filter(Boolean);
-      const far = parts.length ? `${parts.join(' and ')} from here` : 'in this very hexagon';
+      const parts = [stretch(lib, way.columns, 'cluster', 'clusters', 'east', 'west'), stretch(lib, way.rows, 'row', 'rows', 'south', 'north'), stretch(lib, df, 'floor', 'floors', 'up', 'down')].filter(Boolean);
+      const far = parts.length ? `${list(parts)} from here` : way.petals[0] === way.petals[1] ? 'in this very hexagon' : 'in this very cluster, round its stair from here';
       const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       return `<strong>Wall ${wall + 1}, shelf ${shelf + 1}, volume ${volume + 1}${from ? ', ' + from : ''}</strong>, ${far}. ` +
         `It stands on floor <span class="addr">${esc(lib.addressText(loc.floor, 16))}</span>, in hexagon <span class="addr">${esc(lib.addressText(loc.hexagon, 16))}</span> of that floor.`;
@@ -804,22 +807,22 @@
 
     /* ---------------- paintings ---------------- */
 
-    /** "In the vestibule east of its hexagon, opposite the mirror, … from here. Its hexagon is on floor …" (HTML). */
+    /** "In the passage that leaves its hexagon for the next cluster, … from here. Its hexagon is on floor …" (HTML). */
     _hangsHTML(place) {
       const lib = this.lib, world = this.ctx.world, player = this.ctx.player;
-      const dh = lib.hexagonDifference(world.hexagon(player.ch).digits, place.hexagon);
+      const way = lib.hexagonSteps(world.hexagon(player.ch).digits, place.hexagon);
       const df = lib.floorDifference(world.floor(player.cf).digits, place.floor);
-      const parts = [stretch(lib, dh, 'hexagon', 'hexagons', 'east', 'west'), stretch(lib, df, 'floor', 'floors', 'up', 'down')].filter(Boolean);
-      const far = parts.length ? `${parts.join(' and ')} from here` : 'in the vestibule of this very hexagon';
+      const parts = [stretch(lib, way.columns, 'cluster', 'clusters', 'east', 'west'), stretch(lib, way.rows, 'row', 'rows', 'south', 'north'), stretch(lib, df, 'floor', 'floors', 'up', 'down')].filter(Boolean);
+      const far = parts.length ? `${list(parts)} from here` : way.petals[0] === way.petals[1] ? 'in the passage of this very hexagon' : 'in this very cluster, round its stair from here';
       const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      return `<strong>In the vestibule east of its hexagon</strong>, ${far}. ` +
+      return `<strong>In the passage that leaves its hexagon for the next cluster</strong>, ${far}. ` +
         `Its hexagon is on floor <span class="addr">${esc(lib.addressText(place.floor, 16))}</span>, hexagon <span class="addr">${esc(lib.addressText(place.hexagon, 16))}</span> of that floor.`;
     }
 
     _goPainting(place, title, link) { this.ctx.goToPainting(place.hexagon, place.floor, { title, link }); }
 
     _copyPlace(place) {
-      this.ctx.copyText(this.lib.hexagonAddressText(place.hexagon, place.floor), 'Copied the location of its hexagon. Paste it in the Jump tab to go there; the painting hangs in the vestibule east of that hexagon, opposite the mirror.');
+      this.ctx.copyText(this.lib.hexagonAddressText(place.hexagon, place.floor), 'Copied the location of its hexagon. Paste it in the Jump tab to go there; the painting hangs in the passage that leaves that hexagon for the next cluster, on the right.');
     }
 
     /** Shows the collection of paintings, loading its list the first time. */
@@ -829,7 +832,7 @@
       $('gallery-intro').textContent = 'Opening the gallery…';
       const paintings = await gallery.load();
       if (!this.lib.painting) {
-        $('gallery-intro').textContent = "With this Library's configuration, no painting can hang in only one hexagon, so its vestibules have none (see Paintings in README.md).";
+        $('gallery-intro').textContent = "With this Library's configuration, no painting can hang in only one hexagon, so its passages have none (see Paintings in README.md).";
         $('gallery-list').hidden = true;
         document.querySelector('#browse-paintings .gallery-tools').hidden = true;
         return;
@@ -894,7 +897,7 @@
       for (const li of $('gallery-list').children) li.setAttribute('aria-current', String(!!this.painting && li.dataset.key === this.painting.entry.id));
     }
 
-    /** Takes a painting of the collection down from its wall, then finds the vestibule it hangs in. */
+    /** Takes a painting of the collection down from its wall, then finds the passage it hangs in. */
     async findPainting(painting) {
       const ticket = (this._paintingTicket = (this._paintingTicket || 0) + 1);
       this.painting = null;
@@ -942,7 +945,7 @@
         return;
       }
       if (!this.lib.painting) {
-        status.textContent = "With this Library's configuration, no painting can hang in only one hexagon, so its vestibules have none (see Paintings in README.md).";
+        status.textContent = "With this Library's configuration, no painting can hang in only one hexagon, so its passages have none (see Paintings in README.md).";
         return;
       }
       status.textContent = `Reading ${file.name}…`;
@@ -957,7 +960,7 @@
       this._hangImage();
     }
 
-    /** Paints the picture in the Library's colours, cropped or fitted as chosen, and finds its vestibule. */
+    /** Paints the picture in the Library's colours, cropped or fitted as chosen, and finds its passage. */
     _hangImage() {
       const im = this.image;
       if (!im) return;
@@ -993,15 +996,17 @@
         const n = Number(v.replace(/[\s,_]/g, ''));
         return Number.isSafeInteger(n) ? n : null;
       };
-      const east = read('go-east'), up = read('go-up');
-      if (east === null || up === null) {
+      const east = read('go-east'), south = read('go-south'), up = read('go-up');
+      if (east === null || south === null || up === null) {
         $('go-offset-error').textContent = 'Use whole numbers, at most about nine quadrillion each way. To go further, paste an address below.';
         $('go-offset-error').hidden = false;
         return;
       }
       $('go-offset-error').hidden = true;
-      const p = this.ctx.player;
-      this.ctx.goToCell(p.ch + east, p.cf + up, null);
+      // the same hexagon of the cluster that many clusters and rows away
+      const p = this.ctx.player, lib = this.lib, w = this.ctx.world;
+      const hexagon = lib.offsetHexagon(w.hexagon(p.ch).digits, east, south);
+      this.ctx.goToAddress(hexagon, lib.offsetFloor(w.floor(p.cf).digits, up), null);
     }
 
     _goAddress() {
@@ -1030,25 +1035,27 @@
       const n = (m, one, many) => `${amount(m)} ${m.exact === 1 ? one : many}`;
       $('here-whereabouts').textContent = p.whereabouts().sentence;
       const pos = lib.position(g, f);
-      $('here-seam').innerHTML = `This hexagon lies ${n(pos.east, 'hexagon', 'hexagons')} east of the Western seam (${percent(pos.east.fraction)} of the way round)` +
+      $('here-seam').innerHTML = `This hexagon is one of the six round the stair of its cluster, which lies ${n(pos.east, 'cluster', 'clusters')} east of the Western seam (${percent(pos.east.fraction)} of the way along its row),` +
+        ` ${n(pos.south, 'row', 'rows')} south of the Northern seam (${percent(pos.south.fraction)} of the way across its floor)` +
         ` and ${n(pos.up, 'floor', 'floors')} above the Lower seam (${percent(pos.up.fraction)} of the way up).`;
 
       // the last jump through the catalogue, measured the shorter way round
       const j = this.ctx.lastJourney ? this.ctx.lastJourney() : null;
       const part = (d, one, many, pos, neg) => (d.sign === 0 ? '' : `${n(lib.magnitude(d.digits), one, many)} ${d.sign > 0 ? pos : neg}`);
-      const parts = j ? [part(j.dh, 'hexagon', 'hexagons', 'east', 'west'), part(j.df, 'floor', 'floors', 'up', 'down')].filter(Boolean) : [];
+      const parts = j ? [part(j.columns, 'cluster', 'clusters', 'east', 'west'), part(j.rows, 'row', 'rows', 'south', 'north'), part(j.df, 'floor', 'floors', 'up', 'down')].filter(Boolean) : [];
       // a short hop is too small to show on the map, and has no shorter way round to speak of
       const far = parts.length && (Math.abs(j.from.east - pos.east.fraction) > 0.02 || Math.abs(j.from.up - pos.up.fraction) > 0.02);
-      const huge = j && [j.dh, j.df].some((d) => d.sign !== 0 && lib.magnitude(d.digits).exact === null);
+      const huge = j && [j.columns, j.rows, j.df].some((d) => d.sign !== 0 && lib.magnitude(d.digits).exact === null);
       $('here-journey').hidden = !parts.length;
       if (parts.length) {
-        $('here-journey').innerHTML = ` Your last journey through the catalogue took you ${parts.join(' and ')}${huge ? ', the shorter way round' : ''}.` +
+        $('here-journey').innerHTML = ` Your last journey through the catalogue took you ${list(parts)}${huge ? ', the shorter way round' : ''}.` +
           (far ? ' The outlined hexagon on the map is where it began.' : '');
       }
 
-      // the map of the whole Library seen from the side, drawn to its proportions (within reason)
+      // the map of the whole Library seen from the side (from the south, the rows one behind another),
+      // drawn to its proportions (within reason): along a row, the clusters are Dx × √7 apart
       const d = this.ctx.dims;
-      const log10Ratio = lib.stats.log10Floors - lib.stats.log10HexagonsPerFloor + Math.log10(d.Hf / d.Dx);
+      const log10Ratio = lib.stats.log10Floors - lib.stats.log10ClustersPerRow + Math.log10(d.Hf / (d.Dx * Math.sqrt(7)));
       this._aspect = 1 / Math.min(8, Math.max(1 / 8, Math.pow(10, log10Ratio))); // width ÷ height
       const place = (el, at) => { el.style.left = `${100 * at.east}%`; el.style.bottom = `${100 * at.up}%`; };
       place($('seam-here'), { east: pos.east.fraction, up: pos.up.fraction });

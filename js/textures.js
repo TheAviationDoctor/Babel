@@ -239,18 +239,20 @@
   }
 
   /**
-   * The two signs over the vestibule's doorways, one above the other in a single
-   * texture: EAST in the top half, WEST in the bottom half. Gilt capitals on walnut.
+   * The signs over the vestibules' doorways, one above the other in a single texture: the
+   * names of the six ways of the honeycomb, EAST at the top, then round by the south.
+   * Gilt capitals on walnut.
    * Painted again once the typeface has loaded, if it was not ready at start-up.
    */
   function signs() {
-    const w = 1152, h = 512, c = canvas(w, h), g = c.getContext('2d');
+    const WAYS = ['EAST', 'SOUTH-EAST', 'SOUTH-WEST', 'WEST', 'NORTH-WEST', 'NORTH-EAST'];
+    const w = 1152, hh = 256, h = hh * WAYS.length, c = canvas(w, h), g = c.getContext('2d');
     const rand = rngFrom('signs');
-    const grain = valueNoise(w, h / 2, 3, rand, 4);
+    const grain = valueNoise(w, hh, 3, rand, 4);
     const FONT = '"Libre Bodoni", "Bodoni 72", Didot, Georgia, serif';
     const paint = () => {
-      for (const [k, word] of [[0, 'EAST'], [1, 'WEST']]) {
-        const y0 = k * (h / 2), hh = h / 2;
+      for (const [k, word] of WAYS.entries()) {
+        const y0 = k * hh;
         // walnut, with a little grain along the board
         const img = g.createImageData(w, hh);
         for (let y = 0; y < hh; y++) {
@@ -270,13 +272,17 @@
         g.strokeStyle = '#b8914d'; g.lineWidth = 4;
         g.strokeRect(30, y0 + 30, w - 60, hh - 60);
         // the word, widely spaced, as if carved and gilded
-        const size = 178;
-        g.font = `500 ${size}px ${FONT}`;
+        // (as large as the board allows: the longer names in smaller capitals)
+        let size = 178, track, letters = word.split(''), widths, total;
+        for (;;) {
+          g.font = `500 ${size}px ${FONT}`;
+          track = size * 0.26;
+          widths = letters.map((ch) => g.measureText(ch).width);
+          total = widths.reduce((a, b) => a + b, 0) + track * (letters.length - 1);
+          if (total <= w - 150 || size <= 60) break;
+          size -= 6;
+        }
         g.textBaseline = 'alphabetic';
-        const track = size * 0.26;
-        const letters = word.split('');
-        const widths = letters.map((ch) => g.measureText(ch).width);
-        const total = widths.reduce((a, b) => a + b, 0) + track * (letters.length - 1);
         const base = y0 + hh / 2 + size * 0.34;
         const gold = g.createLinearGradient(0, base - size * 0.7, 0, base);
         gold.addColorStop(0, '#f0d48e'); gold.addColorStop(0.55, '#d1a85c'); gold.addColorStop(1, '#9c7334');

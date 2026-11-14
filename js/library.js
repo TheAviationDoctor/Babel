@@ -434,6 +434,17 @@
     let carry = add;
     // with small multipliers everything stays within 32-bit integers, which is fast
     const small = mul * base < 0x40000000 && add < 0x40000000;
+    if (small && (base & (base - 1)) === 0) {
+      // a base of 2^b: shifts and masks, several times faster on numbers of a million digits
+      const bits = 31 - Math.clz32(base), mask = base - 1;
+      carry |= 0;
+      for (let i = 0; i < digits.length; i++) {
+        const x = (Math.imul(digits[i], mul) + carry) | 0;
+        carry = x >>> bits;
+        digits[i] = x & mask;
+      }
+      return carry;
+    }
     for (let i = 0; i < digits.length; i++) {
       const x = digits[i] * mul + carry;
       carry = small ? (x / base) | 0 : Math.floor(x / base);
@@ -442,9 +453,28 @@
     return carry;
   }
 
+  const divTables = new Map();
+
   /** digits := floor(digits / div), in place. Returns the remainder. */
   function divSmall(digits, div, base) {
     let rem = 0;
+    if (div <= 256 && base <= 256 && digits.length > 4096) {
+      // a long number: each step looked up (for the remainder so far and the next digit, the
+      // quotient's digit and the new remainder) instead of divided
+      const key = div * 1000 + base;
+      let T = divTables.get(key);
+      if (!T) {
+        T = new Uint16Array(div * base);
+        for (let x = 0; x < T.length; x++) { const q = Math.floor(x / div); T[x] = (q << 8) | (x - q * div); }
+        divTables.set(key, T);
+      }
+      for (let i = digits.length - 1; i >= 0; i--) {
+        const t = T[rem * base + digits[i]];
+        digits[i] = t >> 8;
+        rem = t & 255;
+      }
+      return rem;
+    }
     const small = div * base < 0x40000000;
     for (let i = digits.length - 1; i >= 0; i--) {
       const x = rem * base + digits[i];
@@ -507,6 +537,8 @@
     return 0;
   }
 
+  const RING = 6; // the hexagons of books round each hexagon of a stair
+
   function log10Pretty(log10) {
     // Formats 10^x with x rounded down to an integer, with thousands separators.
     return Math.floor(log10).toLocaleString('en');
@@ -517,8 +549,13 @@
    * ------------------------------------------------------------------ */
 
   class Library {
-    constructor(rawConfig) {
+    /**
+     * spacing, if given: how far apart, in metres, two clusters stand along a row (east), two
+     * rows (south) and two floors (up), so that the Library can be shaped as nearly a cube.
+     */
+    constructor(rawConfig, spacing) {
       const cfg = normalizeConfig(rawConfig);
+      this.spacing = spacing || null;
       this.raw = rawConfig;
       this.config = cfg;
       this.alphabet = cfg.alphabet;
@@ -573,30 +610,75 @@
       this.lastBookSlot = divSmall(top, this.S, N); // slot of the very last book in the Library
       this.lastPlace = top;
       this.placeDigits = Math.max(2, significantLength(top));
-      // Split each place into a floor number and a hexagon number (the hexagon's number along
-      // its floor): place = floor × L + hexagon, with L hexagons along every floor. L is chosen
-      // so that there are as many floors as hexagons along each, or twice as many when the
-      // number of hexagons is an odd power of 2: with an alphabet of 2^b symbols, L is 2 to the
-      // power of half the bits of the last place, rounded down. With any other alphabet, L is a
-      // power of N, splitting the place between two of its symbols.
-      // Either way L = N^hexagonShift × hexagonFactor, the factor being smaller than N.
-      if (this.bitsPerSymbol) {
-        const b = this.bitsPerSymbol, len = significantLength(top);
-        const hexBits = len === 0 ? 0 : (len - 1) * b + (32 - Math.clz32(top[len - 1]));
-        const a = Math.max(1, Math.floor(hexBits / 2));
-        this.hexagonShift = Math.floor(a / b);
-        this.hexagonFactor = 2 ** (a % b);
+      // The hexagons of books stand in clusters of seven: six of them round a seventh, which
+      // holds no books but the spiral stair, and opens onto all six (see js/architecture.js).
+      // So a place is split into a cluster and one of its six hexagons, and the clusters into
+      // floors: place = (floor × C + cluster) × 6 + petal, with C clusters on every floor, and
+      // a hexagon's number on its floor is cluster × 6 + petal. The clusters of a floor stand in
+      // rows of W, so that a cluster's number is row × W + column.
+      // W and C are chosen so that the Library is as nearly a cube as can be: spacing gives, in
+      // metres, how far apart two clusters stand along a row (east), two rows (south) and two
+      // floors (up), and the Library's width (W × east), depth (C ÷ W × south) and height (the
+      // floors × up) are made as nearly equal as whole powers of 2 allow (with an alphabet of
+      // 2^b symbols; with any other alphabet, whole powers of N). Without spacing, they are
+      // counted instead: as many floors as rows, and as many rows as clusters along each row.
+      // The floors have what is left over, which is not a whole power of 2, there being six
+      // hexagons to a cluster: the last floor is partly empty.
+      // Either way C = N^hexagonShift × hexagonFactor and W = N^columnShift × columnFactor, the factors being smaller than N.
+      const clusters = top.slice();
+      divSmall(clusters, RING, N);
+      const b = this.bitsPerSymbol || 1; // the unit the split is counted in: bits, or whole symbols
+      const unit = this.bitsPerSymbol ? 2 : N;
+      const logU = (x) => Math.log(x) / Math.log(unit);
+      // the number of clusters, as a power of the unit (fractional: it is not a whole power)
+      const T = logU(N) * this.M - logU(this.S) - logU(RING);
+      let c, a; // the units given to W, and to C
+      if (spacing) {
+        // c + log(east) ≈ (a − c) + log(south) ≈ (T − a) + log(up): try the whole numbers about
+        // the exact answer, and keep the one whose longest side is shortest relative to its shortest
+        const e = logU(spacing.east), s = logU(spacing.south), u = logU(spacing.up);
+        const third = (T + e + s + u) / 3;
+        const c0 = Math.round(third - e), a0 = c0 + Math.round(third - s);
+        let best = Infinity;
+        for (let dc = -3; dc <= 3; dc++) {
+          for (let da = -3; da <= 3; da++) {
+            const cc = Math.max(1, c0 + dc), aa = Math.max(cc, a0 + da);
+            if (aa > Math.floor(T)) continue;
+            const sides = [cc + e, aa - cc + s, T - aa + u];
+            const spread = Math.max(...sides) - Math.min(...sides);
+            if (spread < best - 1e-9) { best = spread; c = cc; a = aa; }
+          }
+        }
+        if (c === undefined) { c = 1; a = 1; }
       } else {
-        this.hexagonShift = Math.floor(this.placeDigits / 2);
-        this.hexagonFactor = 1;
+        const len = significantLength(clusters);
+        const units = this.bitsPerSymbol ? (len === 0 ? 0 : (len - 1) * b + (32 - Math.clz32(clusters[len - 1]))) : Math.max(2, len);
+        c = Math.max(1, Math.floor(units / 3));
+        a = c + Math.max(0, Math.floor((units - c) / 2));
       }
-      this.hexagonDigits = this.hexagonShift + (this.hexagonFactor > 1 ? 1 : 0);
-      // L, as digits (one digit longer than a hexagon number), and the last hexagon number, L − 1
-      this.hexagonCount = new Uint8Array(this.hexagonDigits + 1);
-      this.hexagonCount[this.hexagonShift] = this.hexagonFactor;
-      const lastHexagon = this.hexagonCount.slice();
+      this.hexagonShift = Math.floor(a / b);
+      this.hexagonFactor = 2 ** (this.bitsPerSymbol ? a % b : 0);
+      this.columnShift = Math.floor(c / b);
+      this.columnFactor = 2 ** (this.bitsPerSymbol ? c % b : 0);
+      // C, the clusters on a floor, as digits (one digit longer than a cluster's number)
+      this.clusterDigits = this.hexagonShift + (this.hexagonFactor > 1 ? 1 : 0);
+      this.clusterCount = new Uint8Array(this.clusterDigits + 1);
+      this.clusterCount[this.hexagonShift] = this.hexagonFactor;
+      // L = 6 C, the hexagons on a floor, as digits (one digit longer than a hexagon number), and the last hexagon number, L − 1
+      const L = new Uint8Array(this.clusterDigits + 2);
+      L.set(this.clusterCount);
+      mulSmallAdd(L, RING, 0, N);
+      const lastHexagon = L.slice();
       addSmall(lastHexagon, -1, N);
+      this.hexagonDigits = Math.max(1, significantLength(lastHexagon));
+      this.hexagonCount = L.slice(0, this.hexagonDigits + 1);
       this.hexagonMax = lastHexagon.slice(0, this.hexagonDigits);
+      // W, the clusters in a row, as digits (one digit longer than a column number), and the number of rows, C ÷ W
+      this.columnDigits = this.columnShift + (this.columnFactor > 1 ? 1 : 0);
+      this.columnCount = new Uint8Array(this.columnDigits + 1);
+      this.columnCount[this.columnShift] = this.columnFactor;
+      this.rowCount = this.rowAndColumn(this.clusterCount).row;
+      this.rowDigits = this.rowCount.length - 1;
       // the floor and hexagon numbers of the last place, and the number of floors (one digit longer than a floor number)
       const split = this._split(top, top.length);
       this.floorDigits = Math.max(1, significantLength(split.floor));
@@ -611,8 +693,11 @@
       this.stats = {
         log10Books: this.M * log10N,
         log10Hexagons: this.M * log10N - Math.log10(this.S),
-        log10HexagonsPerFloor: this.hexagonShift * log10N + Math.log10(this.hexagonFactor),
-        log10Floors: this.M * log10N - Math.log10(this.S) - this.hexagonShift * log10N - Math.log10(this.hexagonFactor),
+        log10HexagonsPerFloor: this.hexagonShift * log10N + Math.log10(this.hexagonFactor * RING),
+        log10ClustersPerFloor: this.hexagonShift * log10N + Math.log10(this.hexagonFactor),
+        log10ClustersPerRow: this.columnShift * log10N + Math.log10(this.columnFactor),
+        log10Rows: (this.hexagonShift - this.columnShift) * log10N + Math.log10(this.hexagonFactor / this.columnFactor),
+        log10Floors: this.M * log10N - Math.log10(this.S) - this.hexagonShift * log10N - Math.log10(this.hexagonFactor * RING),
         symbolsPerBook: this.M,
         booksPerHexagon: this.S,
         alphabetSize: N,
@@ -703,33 +788,37 @@
       return (wall * c.shelvesPerWall + shelf) * c.booksPerShelf + volume;
     }
 
-    /** A hexagon's place in the whole Library (placeDigits digits): floor × L + hexagon. */
+    /** A hexagon's place in the whole Library (placeDigits digits): (floor × C + cluster) × 6 + petal. */
     placeOf(hexagon, floor) {
-      const q = this.hexagonShift, h = new Uint8Array(this.placeDigits + 1);
-      h.set(hexagon.subarray(0, q));
-      if (this.hexagonFactor === 1) h.set(floor, q);
+      const N = this.N, q = this.hexagonShift, h = new Uint8Array(this.placeDigits + 1);
+      const cluster = hexagon.slice(), petal = divSmall(cluster, RING, N);
+      h.set(cluster.subarray(0, q));
+      if (this.hexagonFactor === 1) h.set(floor.subarray(0, Math.min(floor.length, h.length - q)), q);
       else {
-        // from digit q up, floor × 2^r plus the hexagon's top digit: a factor above 1 comes
+        // from digit q up, floor × 2^r plus the cluster's top digit: a factor above 1 comes
         // only with an alphabet of 2^b symbols, so this is a shift of bits
-        const b = this.bitsPerSymbol, r = Math.log2(this.hexagonFactor), mask = this.N - 1;
-        let carry = hexagon[q];
-        for (let i = 0; i < floor.length; i++) {
+        const b = this.bitsPerSymbol, r = Math.log2(this.hexagonFactor), mask = N - 1;
+        let carry = cluster[q] || 0;
+        for (let i = 0; i < floor.length && q + i < h.length; i++) {
           const x = (floor[i] << r) + carry;
           h[q + i] = x & mask;
           carry = x >>> b;
         }
         if (q + floor.length < h.length) h[q + floor.length] = carry;
       }
+      mulSmallAdd(h, RING, petal, N);
       return h.slice(0, this.placeDigits);
     }
 
     /** The hexagon and floor numbers of a place (digits, of which the first `length` count). */
     _split(h, length) {
-      const q = this.hexagonShift, hexagon = new Uint8Array(this.hexagonDigits);
-      hexagon.set(h.subarray(0, q));
-      const floor = h.slice(q, length);
+      const N = this.N, q = this.hexagonShift;
+      const g = h.slice(0, length), petal = divSmall(g, RING, N); // the cluster's place in the whole Library
+      const hexagon = new Uint8Array(this.hexagonDigits + 1);
+      hexagon.set(g.subarray(0, q));
+      const floor = g.slice(q, length);
       if (this.hexagonFactor > 1) {
-        // floor ÷ 2^r, the remainder being the hexagon's top digit (a shift of bits, as above)
+        // floor ÷ 2^r, the remainder being the cluster's top digit (a shift of bits, as above)
         const b = this.bitsPerSymbol, r = Math.log2(this.hexagonFactor), low = this.hexagonFactor - 1;
         let rem = 0;
         for (let i = floor.length - 1; i >= 0; i--) {
@@ -739,7 +828,8 @@
         }
         hexagon[q] = rem;
       }
-      return { hexagon, floor };
+      mulSmallAdd(hexagon, RING, petal, N); // the cluster's number on its floor, then the hexagon's
+      return { hexagon: hexagon.slice(0, this.hexagonDigits), floor };
     }
 
     /** True if the hexagon lies within the Library (only false at the very end of the last floor). */
@@ -780,9 +870,6 @@
     locateContent(content) {
       return this.locate(this.indexOfContent(content));
     }
-
-    /** hexagon + delta, modulo the number of hexagons per floor. Returns a new array. */
-    offsetHexagon(hexagon, delta) { return this._wrap(hexagon, delta, this.hexagonCount); }
 
     /** floor + delta, modulo the number of floors. Returns a new array. */
     offsetFloor(floor, delta) { return this._wrap(floor, delta, this.floorCount); }
@@ -856,7 +943,7 @@
     /* ---------------- Paintings ---------------- */
 
     /*
-     * Each hexagon has a painting in its vestibule: a picture of M pixels (width × height,
+     * Each hexagon has a painting in its passage: a picture of M pixels (width × height,
      * as near a square as M allows: 1,024 × 1,024 by default), each pixel one of N colours,
      * and every possible painting hangs in exactly one hexagon. There are N^M pictures of
      * that size and N^M / S hexagons, so a rule on whole rows keeps one picture in S: with
@@ -1116,8 +1203,29 @@
 
     /* ---------------- Cosmetics (not part of the bijection) ---------------- */
 
-    /** Hash of a hexagon number (cache it: it costs one pass over the number). */
-    hexagonKey(hexagon) { return hashBytes(hexagon, this.cosmeticKey[0], this.cosmeticKey[1]); }
+    /**
+     * Hash of a hexagon number (cache it: it costs a few passes over the number). It is made of
+     * the hashes of its cluster's column and row, so that the World, which knows them, need not
+     * go over the whole number for each hexagon of a cluster.
+     */
+    hexagonKey(hexagon) {
+      const c = this.clusterOf(hexagon);
+      return this.petalKey(this.clusterKey(this.columnKey(c.column), this.rowKey(c.row)), c.petal);
+    }
+
+    columnKey(column) { return hashBytes(column, this.cosmeticKey[0], this.cosmeticKey[1]); }
+
+    rowKey(row) { return hashBytes(row, (this.cosmeticKey[1] ^ 0x9e3779b9) >>> 0, (this.cosmeticKey[0] ^ 0x85ebca6b) >>> 0); }
+
+    /** Hash of a cluster, from the hashes of its column and its row. */
+    clusterKey(ck, rk) {
+      return [fmix32((ck[0] ^ Math.imul(rk[1], 0x9e3779b1)) >>> 0), fmix32((ck[1] + rk[0] + 0x632be5ab) >>> 0)];
+    }
+
+    /** Hash of one hexagon of a cluster: petal 0 to 5 for its hexagons of books, 6 for the hexagon of its stair. */
+    petalKey(clusterKey, petal) {
+      return [fmix32((clusterKey[0] ^ Math.imul(petal + 1, 0x85ebca77)) >>> 0), fmix32((clusterKey[1] + Math.imul(petal + 1, 0xc2b2ae3d)) >>> 0)];
+    }
 
     /** Hash of a floor address. */
     floorKey(floor) { return hashBytes(floor, this.cosmeticKey[2], this.cosmeticKey[3]); }
@@ -1133,6 +1241,9 @@
     hexagonFingerprint(hexagon, floor) {
       return this.fingerprintFromKeys(this.hexagonKey(hexagon), this.floorKey(floor));
     }
+
+    /** Whether a floor is the last one, the only one where hexagons may be missing. */
+    isTopFloor(floor) { return compareDigits(floor, this.floorMax) >= 0; }
 
     /** Number of books in a hexagon: S everywhere except at the very end of the Library. */
     booksInHexagon(hexagon, floor) {
@@ -1503,21 +1614,88 @@
       return { sign: isZero(d) ? 0 : 1, digits: d };
     }
 
-    /** Shortest signed number of hexagons from hexagon a to hexagon b along a floor (which wraps around). */
-    hexagonDifference(a, b) { return this._difference(a, b, this.hexagonCount); }
+    /**
+     * Where cluster number c stands on its floor: its row, and its column (its place along the
+     * row), with c = row × W + column. Returns { row, column } as digits: the row has c's digits
+     * beyond the column's.
+     */
+    rowAndColumn(c) {
+      const q = this.columnShift, column = new Uint8Array(this.columnDigits);
+      column.set(c.subarray(0, Math.min(q, c.length)));
+      const row = c.length > q ? c.slice(q) : new Uint8Array(1);
+      if (this.columnFactor > 1) column[q] = divSmall(row, this.columnFactor, this.N);
+      return { row, column };
+    }
+
+    /**
+     * Where hexagon number h stands on its floor: the row and the column of its cluster (digits),
+     * and which of the cluster's six hexagons of books it is (petal, 0 to 5), with
+     * h = (row × W + column) × 6 + petal.
+     */
+    clusterOf(h) {
+      const c = h.slice(), petal = divSmall(c, RING, this.N);
+      const { row, column } = this.rowAndColumn(c), fit = new Uint8Array(this.rowDigits);
+      fit.set(row.subarray(0, Math.min(row.length, fit.length)));
+      return { row: fit, column, petal };
+    }
+
+    /** The hexagon number of hexagon `petal` of the cluster in `row` and `column` (digits, as clusterOf gives them). */
+    hexagonAt(row, column, petal) {
+      const N = this.N, q = this.columnShift, h = new Uint8Array(this.hexagonDigits + 1);
+      h.set(column.subarray(0, Math.min(q, h.length)));
+      const high = new Uint8Array(Math.max(row.length, h.length - q) + 1);
+      high.set(row);
+      if (this.columnFactor > 1) mulSmallAdd(high, this.columnFactor, column[q], N);
+      h.set(high.subarray(0, h.length - q), q);
+      mulSmallAdd(h, RING, petal, N);
+      return h.slice(0, this.hexagonDigits);
+    }
+
+    /** The cluster `east` clusters east and `south` rows south of cluster c (west and north if negative): { row, column }. Both wrap round the floor. */
+    offsetCluster(c, east, south) {
+      return {
+        row: south ? this._wrap(c.row, south, this.rowCount) : c.row,
+        column: east ? this._wrap(c.column, east, this.columnCount) : c.column,
+      };
+    }
+
+    /** The same hexagon of the cluster `east` clusters east and `south` rows south of hexagon h's. */
+    offsetHexagon(h, east, south) {
+      const c = this.clusterOf(h), to = this.offsetCluster(c, east, south || 0);
+      return this.hexagonAt(to.row, to.column, c.petal);
+    }
+
+    /**
+     * The shortest way from hexagon a to hexagon b of a floor, in rows of clusters (south, or
+     * north if negative) and in clusters along a row (east, or west if negative), each the
+     * shorter way round the floor. Returns { rows, columns }, each { sign, digits }, and
+     * `petals`, the two hexagons' places in their clusters.
+     */
+    hexagonSteps(a, b) {
+      const ca = this.clusterOf(a), cb = this.clusterOf(b);
+      return {
+        rows: this._difference(ca.row, cb.row, this.rowCount),
+        columns: this._difference(ca.column, cb.column, this.columnCount),
+        petals: [ca.petal, cb.petal],
+      };
+    }
 
     /** Shortest signed number of floors from floor a to floor b (floors wrap around). */
     floorDifference(a, b) { return this._difference(a, b, this.floorCount); }
 
     /**
-     * Where a hexagon lies in the whole Library, measured from the seam: hexagon 0 of floor 0,
-     * where the numbers begin again (the Library has no edge; it closes on itself both ways).
-     * Returns { east, up }, each the size of the number (as magnitude() gives it) and the
-     * fraction of the way round, from 0 to 1.
+     * Where a hexagon lies in the whole Library, measured from the seams: hexagon 0 of floor 0,
+     * where the numbers begin again (the Library has no edge; it closes on itself every way).
+     * Returns { east, south, up }: its cluster's place along its row, its row, and its floor, each
+     * the size of the number (as magnitude() gives it) and the fraction of the way round, from 0
+     * to 1; and `petal`, which of its cluster's six hexagons of books it is.
      */
     position(hexagon, floor) {
+      const { row, column, petal } = this.clusterOf(hexagon);
       return {
-        east: Object.assign(this.magnitude(hexagon), { fraction: this._fraction(hexagon, this.hexagonCount) }),
+        petal,
+        east: Object.assign(this.magnitude(column), { fraction: this._fraction(column, this.columnCount) }),
+        south: Object.assign(this.magnitude(row), { fraction: this._fraction(row, this.rowCount) }),
         up: Object.assign(this.magnitude(floor), { fraction: this._fraction(floor, this.floorCount) }),
       };
     }

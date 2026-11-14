@@ -2,10 +2,15 @@
  * The visible Library: the hexagons around the reader, kept in a pool of "cells"
  * and re-dressed (book colours, spine designs) as the reader moves.
  *
- * Positions are relative: the cell the reader stands in is always at the origin,
- * so the Library can be walked for ever without losing numerical precision.
- * Absolute addresses (floor and hexagon numbers, each about half a million symbols
- * long) are computed from the waking hexagon plus the reader's offset.
+ * The hexagons stand on a honeycomb, in clusters of seven (see Honeycomb in
+ * js/architecture.js): six hexagons of books, each a "cell" with its vestibule and its
+ * passage, round a hub with the spiral stair. A place on the honeycomb is a "site", numbered
+ * from the waking hexagon (site 0), so that the sites round one are a sum away.
+ *
+ * Positions are relative: the site the reader stands in is always at the origin, so the
+ * Library can be walked for ever without losing numerical precision. Absolute addresses
+ * (floor and hexagon numbers, hundreds of thousands of symbols long) are worked out from
+ * the waking hexagon's and the reader's way from it, and only when they are needed.
  */
 (function () {
   'use strict';
@@ -32,7 +37,10 @@
   const TAU = Math.PI * 2;
 
   // the surfaces that age, and how
-  const PATINAS = [['hexWood', 'wood'], ['hexPlaster', 'plaster'], ['hexTiles', 'tiles'], ['vesWood', 'wood'], ['vesPlaster', 'plaster'], ['vesTiles', 'tiles']];
+  const PATINAS = [['hexWood', 'wood'], ['hexPlaster', 'plaster'], ['hexTiles', 'tiles'], ['vesWood', 'wood'], ['vesPlaster', 'plaster'], ['vesTiles', 'tiles'],
+    ['pasWood', 'wood'], ['pasPlaster', 'plaster'], ['pasTiles', 'tiles']];
+  const HUB_PATINAS = [['hubWood', 'wood'], ['hubPlaster', 'plaster'], ['hubTiles', 'tiles']];
+  const HUB = 6; // the kind of a site that is a hub; the others are petals 0 to 5
 
   /** A failing filament: steady most of the time, now and then a burst of quick dips. */
   function flicker(t, seed) {
@@ -51,16 +59,21 @@
       this.assets = assets;
       this.d = assets.dims;
       this.lib = library;
-      this.cells = new Map(); // key "dh,df" → cell
+      this.cells = new Map(); // key "site,df" → cell (a hexagon of books, its vestibule and its passage)
       this.pool = [];
-      this.hexagonCache = new Map();
+      this.hubs = new Map(); // key "site,df" → hub
+      this.hubPool = [];
+      this.siteCache = new Map(); // site → what stands there, and (once asked) its key and number
+      this.columnCache = new Map(); // clusters east of the waking one → { digits, key }
+      this.rowCache = new Map(); // rows south of it → { digits, key }
       this.floorCache = new Map();
       this.center = null;
       this.root = new THREE.Group();
       scene.add(this.root);
       this._bookLayout = this._layoutBooks();
       this.hover = null;
-      this.view = { nearFloors: 1, nearHexagons: 3, farFloors: 6, farHexagons: 1 };
+      // how far the Library is drawn: through how many doors on the reader's floor, and up and down the shaft of their hexagon
+      this.view = { depth: 2, farFloors: 6 };
       this.doors = new Map(); // "dh,df" → { target: 0 or 1, t: 0…1 } for doors that have been touched
       this.lamps = new Map(); // "dh,df" → { target: 0 or 1, t: 0…1 } for night lamps that have been switched
       this.time = 0; // for the lamps that flicker
@@ -183,26 +196,89 @@
 
     /** Sets the waking hexagon (absolute addresses) and clears everything cached. */
     setAnchor(hexagon, floor) {
-      this.anchor = { hexagon, floor };
+      const c = this.lib.clusterOf(hexagon);
+      // (the waking hexagon is petal `petal` of its cluster: it stands one step from its hub, that way)
+      this.anchor = { hexagon, floor, row: c.row, column: c.column, petal: c.petal, at: Babel.Honeycomb.DIRS[c.petal] };
       if (this.doors) this.doors.clear();
       if (this.lamps) this.lamps.clear();
       this.mark = null;
-      this.hexagonCache.clear();
+      this.siteCache.clear();
+      this.columnCache.clear();
+      this.rowCache.clear();
       this.floorCache.clear();
       for (const cell of this.cells.values()) this._release(cell);
       this.cells.clear();
+      for (const hub of this.hubs.values()) this._releaseHub(hub);
+      this.hubs.clear();
       this.center = null;
     }
 
     /** Replaces the Library (a new seed) — the geometry stays, the books change. */
     setLibrary(library) { this.lib = library; }
 
-    hexagon(dh) {
-      let e = this.hexagonCache.get(dh);
+    /* ---------------- sites ---------------- */
+
+    /**
+     * What stands at a site: { kind (petal 0 to 5, or 6 for a hub), east, south (its cluster,
+     * from the waking hexagon's), hub (the site of its cluster's hub; a hub's is itself) }.
+     */
+    site(s) {
+      let e = this.siteCache.get(s);
       if (!e) {
-        const digits = this.lib.offsetHexagon(this.anchor.hexagon, dh);
-        e = { digits, key: this.lib.hexagonKey(digits) };
-        this.hexagonCache.set(dh, e);
+        const H = Babel.Honeycomb, [dq, dr] = H.at(s), a = this.anchor.at;
+        const q = a[0] + dq, r = a[1] + dr, kind = H.kind(q, r); // counted from the waking cluster's hub
+        const hq = kind === HUB ? q : q - H.DIRS[kind][0], hr = kind === HUB ? r : r - H.DIRS[kind][1];
+        const [east, south] = H.cluster(hq, hr);
+        e = { site: s, kind, east, south, hub: H.id(hq - a[0], hr - a[1]), key: null };
+        this.siteCache.set(s, e);
+      }
+      return e;
+    }
+
+    /** Petal 0 to 5, or 6 for a hub. */
+    kind(s) { return this.site(s).kind; }
+
+    isHub(s) { return this.site(s).kind === HUB; }
+
+    /** The sites next to a site through its doors: a hub's six petals in order; a petal's hub, then the hexagon beyond its passage. */
+    neighbours(s) { return Babel.Honeycomb.doors(this.site(s).kind).map((n) => s + n.step); }
+
+    _column(east) {
+      let e = this.columnCache.get(east);
+      if (!e) {
+        const digits = east ? this.lib._wrap(this.anchor.column, east, this.lib.columnCount) : this.anchor.column;
+        e = { digits, key: this.lib.columnKey(digits) };
+        this.columnCache.set(east, e);
+      }
+      return e;
+    }
+
+    _row(south) {
+      let e = this.rowCache.get(south);
+      if (!e) {
+        const digits = south ? this.lib._wrap(this.anchor.row, south, this.lib.rowCount) : this.anchor.row;
+        e = { digits, key: this.lib.rowKey(digits) };
+        this.rowCache.set(south, e);
+      }
+      return e;
+    }
+
+    /**
+     * A site's key (a hash of where it is on its floor), and, for a hexagon of books, its number
+     * (`digits`), worked out when first asked for: it costs a few passes over a very long number.
+     */
+    hexagon(s) {
+      const e = this.site(s);
+      if (!e.key) {
+        const lib = this.lib, col = this._column(e.east), row = this._row(e.south);
+        e.key = lib.petalKey(lib.clusterKey(col.key, row.key), e.kind);
+        let digits = s === 0 ? this.anchor.hexagon : null;
+        Object.defineProperty(e, 'digits', {
+          get() {
+            if (!digits && e.kind !== HUB) digits = lib.hexagonAt(row.digits, col.digits, e.kind);
+            return digits;
+          },
+        });
       }
       return e;
     }
@@ -211,7 +287,7 @@
       let e = this.floorCache.get(df);
       if (!e) {
         const digits = this.lib.offsetFloor(this.anchor.floor, df);
-        e = { digits, key: this.lib.floorKey(digits) };
+        e = { digits, key: this.lib.floorKey(digits), top: this.lib.isTopFloor(digits) };
         this.floorCache.set(df, e);
       }
       return e;
@@ -237,7 +313,7 @@
         const side = sides[wall];
         const i = d.shelves - 1 - shelf; // shelf 0 is the top one; i counts compartments from the floor
         const y = d.base + i * d.pitch + d.board + d.bookH / 2;
-        const x = d.rowLen / 2 - (volume + 0.5) * d.bookT;
+        const x = d.bookX(volume);
         const z = d.aIn + 0.03 + d.bookD / 2;
         const local = new THREE.Matrix4().makeTranslation(x, y, z);
         const m = side.m.clone().multiply(local);
@@ -258,28 +334,37 @@
         if (c.uniforms.uPath) c.uniforms.uPath.value = m.uniforms.uPath.value;
         return c;
       };
-      const look = { mats: {}, hex: [], ves: [], lamps: [] };
-      for (const k of ['hexWood', 'hexPlaster', 'hexTiles', 'vesWood', 'vesPlaster', 'vesTiles', 'wellPlaster', 'wellStone']) {
-        const ages = PATINAS.some(([name]) => name === k), mat = ages ? mine(M[k]) : M[k];
-        group.add(new THREE.Mesh(G[k], mat));
-        if (ages) { look.mats[k] = mat; (k.startsWith('hex') ? look.hex : look.ves).push(mat); }
+      const look = { mats: {}, hex: [], ves: [], pas: [], lamps: [] };
+      // the passage to the next cluster leaves by the hexagon's other door: it is built like a
+      // vestibule (along +x), and turned to that door
+      const passage = new THREE.Group();
+      passage.rotation.y = -d.passageTurn;
+      group.add(passage);
+      const room = group;
+      for (const [k] of PATINAS) {
+        const mat = mine(M[k]), part = k.slice(0, 3);
+        (part === 'pas' ? passage : group).add(new THREE.Mesh(G[k], mat));
+        look.mats[k] = mat;
+        look[part].push(mat);
       }
+      const pasSigns = new THREE.Mesh(G.signs[0], M.pasSigns);
+      passage.add(pasSigns);
+      if (G.pictureGlow) passage.add(new THREE.Mesh(G.pictureGlow, M.lamp)); // and above its paintings
       // the lamps above the bookcases, in the order of their lights: each one's glowing underside
       // and the light it throws on the wall round it, both turned to its wall
       for (const j of d.shelvedSides) {
         const turn = Math.PI / 2 - (j * Math.PI) / 3;
         const under = new THREE.Mesh(G.lampGlow, M.lamp.clone());
         under.rotation.y = turn;
-        group.add(under);
+        room.add(under);
         let wash = null;
         if (G.lampWash) {
           wash = new THREE.Mesh(G.lampWash, M.lampWash.clone());
           wash.rotation.y = turn;
-          group.add(wash);
+          room.add(wash);
         }
         look.lamps.push({ under, wash });
       }
-      if (G.pictureGlow) group.add(new THREE.Mesh(G.pictureGlow, M.lamp));
       const mirror = new THREE.Mesh(G.mirror, M.mirrorDark);
       mirror.position.set(d.mirrorX, d.mirrorY0 + d.mirrorH / 2, -d.hallW / 2 + 0.041);
       group.add(mirror);
@@ -317,14 +402,18 @@
       group.add(niche);
 
       // the signs over the two doorways of the vestibule
-      const signs = new THREE.Mesh(G.signs, M.signs);
+      const signs = new THREE.Mesh(G.signs[0], M.signs);
       group.add(signs);
 
-      // the painting opposite the mirror
-      let canvas = null;
+      // the paintings in the passage: this hexagon's, and, turned half round about the passage's
+      // middle, the painting of the hexagon at its other end
+      let canvas = null, farCanvas = null;
       if (this.paintings) {
         canvas = new THREE.Mesh(G.canvas, this.paintings.blank);
-        group.add(canvas);
+        farCanvas = new THREE.Mesh(G.canvas, this.paintings.blank);
+        farCanvas.position.set(d.Dx, 0, 0);
+        farCanvas.rotation.y = Math.PI;
+        passage.add(canvas, farCanvas);
       }
 
       // the cell itself, drawn only near the reader
@@ -358,8 +447,61 @@
       look.hex.push(booksLit);
       const books = new THREE.InstancedMesh(geo, booksLit, S);
       books.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      group.add(books);
-      return { group, books, tint, variant, tints: new Float32Array(S * 3), dh: 0, df: 0, door, interior, niche, signs, light, canvas, look, looks: null };
+      room.add(books);
+      return { group, passage, pasSigns, books, tint, variant, tints: new Float32Array(S * 3), dh: 0, df: 0, kind: 0, door, interior, niche, signs, light, canvas, farCanvas, look, looks: null };
+    }
+
+    /** A hub: its walls, floor and lamps, and the stair in its drum. */
+    _createHub() {
+      const A = this.assets, G = A.geometries, M = A.materials, d = this.d;
+      const group = new THREE.Group(), mats = {};
+      for (const [k] of HUB_PATINAS) {
+        const mat = M[k].clone();
+        mat.uniforms.map.value = M[k].uniforms.map.value; // share the texture
+        mat.uniforms.uPath.value = M[k].uniforms.uPath.value;
+        mats[k] = mat;
+        group.add(new THREE.Mesh(G[k], mat));
+      }
+      group.add(new THREE.Mesh(G.hubGlow, M.lamp));
+      // the stair is built about (wellX, wellZ): set that point on the hub's middle
+      const stair = new THREE.Group();
+      stair.position.set(-d.wellX, 0, -d.wellZ);
+      stair.add(new THREE.Mesh(G.wellPlaster, M.wellPlaster));
+      stair.add(new THREE.Mesh(G.wellStone, M.wellStone));
+      group.add(stair);
+      return { group, mats, site: 0, df: 0 };
+    }
+
+    /**
+     * Lays a part of the floor's tiles on the floor's plan: the part belongs to site s, whose frame
+     * is turned by `turn`, so that the pattern runs on unbroken from every part of a floor into
+     * the next, and is the same wherever one stands (it starts where the floor's key says).
+     */
+    _tileFrame(un, s, df, turn) {
+      const H = Babel.Honeycomb, d = this.d, [px, pz] = this.assets.tilePeriod, fk = this.floor(df).key;
+      const [q, r] = H.at(s), [x, z] = H.plan(q, r);
+      const mod = (v, p) => ((v % p) + p) % p;
+      un.uTileFrame.value.set(Math.cos(turn), Math.sin(turn), mod(x * d.Dx + (fk[0] / 4294967296) * px, px), mod(z * d.Dx + (fk[1] / 4294967296) * pz, pz));
+    }
+
+    _releaseHub(hub) {
+      this.root.remove(hub.group);
+      this.hubPool.push(hub);
+    }
+
+    /** Gives a hub the look of its place: how time has marked its walls and floor. Its lamps burn steadily. */
+    _dressHub(hub, site, df) {
+      hub.site = site; hub.df = df;
+      const me = this._look(site, df), fk = this.floor(df).key;
+      for (const [k, kind] of HUB_PATINAS) {
+        const un = hub.mats[k].uniforms;
+        un.uSeed.value.fromArray(me.seed);
+        if (kind === 'tiles' || kind === 'wood') un.uSeed.value.set(fk[0] / 4294967296, fk[1] / 4294967296, 0, me.seed[3]);
+        if (kind === 'tiles') this._tileFrame(un, site, df, 0);
+        un.uSeedEast.value.copy(un.uSeed.value);
+        un.uPatina.value.fromArray(me[kind]);
+        un.uPatinaEast.value.fromArray(me[kind]);
+      }
     }
 
     _acquire() { return this.pool.pop() || this._createCell(); }
@@ -372,9 +514,15 @@
     /** Dresses a cell for hexagon (dh, df): which books exist, and how each one looks. */
     _dress(cell, dh, df) {
       cell.dh = dh; cell.df = df;
+      // which of its cluster's hexagons it is: the signs over its doorways name the ways they lead
+      const kind = this.kind(dh);
+      cell.kind = kind;
+      cell.signs.geometry = this.assets.geometries.signs[(kind + 3) % 6]; // its vestibule heads for the hub
+      cell.pasSigns.geometry = this.assets.geometries.signs[(kind + 1) % 6]; // its passage, one door round
       const lib = this.lib;
       const g = this.hexagon(dh), f = this.floor(df);
-      const count = lib.booksInHexagon(g.digits, f.digits);
+      // (every hexagon is full but, on the last floor, the last one, and those after it are missing)
+      const count = f.top ? lib.booksInHexagon(g.digits, f.digits) : lib.S;
       const fp = lib.fingerprintFromKeys(g.key, f.key);
       cell.fingerprint = fp;
       cell.count = count;
@@ -428,7 +576,7 @@
     _look(dh, df) {
       const fp = this.fingerprint(dh, df), U = BabelCore.util;
       const rng = U.sfc32(fp[0] ^ 0x51ed270b, fp[1], 0x2545f491, 0x9e3779b9), u = () => U.unit(rng);
-      const n = this.d.shelvedSides.length;
+      const hub = this.isHub(dh), n = hub ? 4 : this.d.shelvedSides.length;
       const lamp = () => ({ gain: 0.84 + 0.26 * u(), warmth: 2 * u() - 1, flicker: 0, dark: false });
       const lamps = [lamp(), lamp()];
       const fault = u(), which = Math.min(n - 1, Math.floor(u() * n));
@@ -443,48 +591,57 @@
       // (the lamps after the first two are drawn last, so that the rest of the look is as it was with two)
       while (lamps.length < n) lamps.push(lamp());
       lamps.length = n;
-      if (fault < 1 / 150) { lamps[which].dark = true; lamps[which].gain = 0; }
+      if (hub) for (const l of lamps) { l.gain = 1; l.warmth = 0; } // a hub's lamps are all alike, and none fails
+      else if (fault < 1 / 150) { lamps[which].dark = true; lamps[which].gain = 0; }
       else if (fault < 1 / 150 + 1 / 30) lamps[which].flicker = 1 + 97 * u();
       return look;
     }
 
-    /** Gives a cell the look of its hexagon (and its vestibule the light of the next hexagon's lamps too). */
+    /** Gives a cell the look of its hexagon; its vestibule turns into its hub's look, and its passage into the look of the hexagon beyond. */
     _applyLook(cell) {
-      const me = this._look(cell.dh, cell.df), east = this._look(cell.dh + 1, cell.df), west = this._look(cell.dh - 1, cell.df);
-      // the next hexagons' lamps light the vestibules either side, and so this hexagon's doorways
-      cell.looks = { me, east, west, flickers: [me, east, west].some((k) => k.lamps.some((l) => l.flicker)) };
-      // the tiles and the skirting boards run on unbroken along a floor, from hexagon to vestibule
-      // to hexagon, so their pattern starts where the floor's does, not where the hexagon's
+      const [hubSite, outSite] = this.neighbours(cell.dh);
+      const me = this._look(cell.dh, cell.df), hub = this._look(hubSite, cell.df), out = this._look(outSite, cell.df);
+      // the hexagon beyond the passage lights its far end, and so this hexagon's doorway onto it
+      cell.looks = { me, hub, out, flickers: [me, out].some((k) => k.lamps.some((l) => l.flicker)) };
+      // the tiles and the skirting boards run on along a floor, from hexagon to vestibule to
+      // hexagon, so their pattern starts where the floor's does, not where the hexagon's
       const fk = this.floor(cell.df).key;
       for (const [k, kind] of PATINAS) {
-        const un = cell.look.mats[k].uniforms;
+        const un = cell.look.mats[k].uniforms, far = k.startsWith('pas') ? out : hub;
         un.uSeed.value.fromArray(me.seed);
         if (kind === 'tiles' || kind === 'wood') un.uSeed.value.set(fk[0] / 4294967296, fk[1] / 4294967296, 0, me.seed[3]);
-        un.uSeedEast.value.fromArray(east.seed);
+        if (kind === 'tiles') this._tileFrame(un, cell.dh, cell.df, Babel.Honeycomb.turn(cell.kind) + (k.startsWith('pas') ? this.d.passageTurn : 0));
+        un.uSeedEast.value.fromArray(far.seed);
         un.uPatina.value.fromArray(me[kind]);
-        un.uPatinaEast.value.fromArray(east[kind]);
+        un.uPatinaEast.value.fromArray(far[kind]);
       }
       this._applyLamps(cell);
     }
 
     /**
-     * Lights a hexagon by its own lamps, and its vestibule by them at its west end and by the
-     * next hexagon's at its east end; the hexagon's doorways turn into the vestibules beyond, lit so.
+     * Lights a hexagon by its own lamps, its vestibule by them at its near end and by the hub's
+     * at its far end, and its passage by them and by the lamps of the hexagon beyond; the
+     * hexagon's doorways turn into the vestibule and the passage, lit so.
      */
     _applyLamps(cell) {
-      const { me, east, west } = cell.looks, t = this.time;
+      const { me, hub, out } = cell.looks, t = this.time;
       const burn = (l) => (l.dark ? 0 : l.gain * (l.flicker ? flicker(t, l.flicker) : 1));
       const mean = (k) => k.lamps.reduce((s, l) => s + burn(l), 0) / k.lamps.length;
-      const here = me.lamps.map(burn), mHere = here.reduce((s, v) => s + v, 0) / here.length, mEast = mean(east), mWest = mean(west);
+      const here = me.lamps.map(burn), mHere = here.reduce((s, v) => s + v, 0) / here.length, mHub = mean(hub), mOut = mean(out);
       for (const m of cell.look.hex) {
         const u = m.uniforms, g = u.uGain.value, c = u.uLightColors.value;
         here.forEach((v, i) => { g[i] = v; c[i].setRGB(1, 0.78 + 0.045 * me.lamps[i].warmth, 0.52 + 0.07 * me.lamps[i].warmth); });
-        if (u.uVesGains) u.uVesGains.value.set(mHere, mEast, mWest, mHere);
+        if (u.uVesGains) u.uVesGains.value.set(mHere, mHub, mOut, mHere);
       }
       for (const m of cell.look.ves) {
         const g = m.uniforms.uGain.value;
         g[0] = mHere;
-        g[1] = mEast;
+        g[1] = mHub;
+      }
+      for (const m of cell.look.pas) {
+        const g = m.uniforms.uGain.value;
+        g[0] = mHere;
+        g[1] = mOut;
       }
       cell.look.lamps.forEach(({ under, wash }, i) => {
         const v = here[i], w = me.lamps[i].warmth;
@@ -496,71 +653,143 @@
       });
     }
 
-    _wanted(ph, pf) {
-      const v = this.view, out = [];
-      for (let df = pf - v.farFloors; df <= pf + v.farFloors; df++) {
-        const near = Math.abs(df - pf) <= v.nearFloors;
-        const span = near ? v.nearHexagons : v.farHexagons;
-        for (let dh = ph - span; dh <= ph + span; dh++) out.push([dh, df]);
+    /**
+     * What to draw for a reader at site `ps` of floor `pf`, whose hexagon (the one they are in,
+     * or nearest) is `home`: the sites within a few doors on their floor; on the floors next
+     * above and below, the nearest of those; and their own hexagon, up and down its shaft.
+     * Returns { cells, hubs }: lists of [site, floor, how many doors away, order], nearest first.
+     */
+    _wanted(ps, pf, home) {
+      const v = this.view, depth = new Map([[ps, 0]]);
+      let edge = [ps];
+      for (let n = 1; n <= v.depth; n++) {
+        const next = [];
+        for (const s of edge) for (const t of this.neighbours(s)) if (!depth.has(t)) { depth.set(t, n); next.push(t); }
+        edge = next;
       }
-      return out;
+      if (!depth.has(home)) depth.set(home, 1);
+      const cells = [], hubs = [];
+      for (const [s, n] of depth) {
+        const hub = this.isHub(s);
+        for (let df = pf - 2; df <= pf + 2; df++) {
+          const up = Math.abs(df - pf), order = n + 3 * up;
+          if (hub) { if (up === 0 || (n <= 1 && up <= 2)) hubs.push([s, df, n, order]); }
+          else if (up === 0 || (up === 1 && (n <= 1 || s === home))) cells.push([s, df, n, order]);
+        }
+      }
+      for (let df = pf - v.farFloors; df <= pf + v.farFloors; df++) {
+        if (Math.abs(df - pf) > 1) cells.push([home, df, depth.get(home), 3 + Math.abs(df - pf)]);
+      }
+      cells.sort((a, b) => a[3] - b[3]);
+      return { cells, hubs, depth };
     }
 
-    /** Moves the visible window to centre on the reader's cell. */
-    update(ph, pf) {
-      const d = this.d;
-      const changed = !this.center || this.center[0] !== ph || this.center[1] !== pf;
-      if (!changed) return;
-      this.center = [ph, pf];
-      const wanted = this._wanted(ph, pf);
-      const keep = new Set(wanted.map(([g, f]) => g + ',' + f));
+    /**
+     * Moves the visible window to centre on the reader's site (`home`: their hexagon, if the
+     * site is a hub). New hexagons are dressed a few at a time, nearest first, so that walking
+     * on does not stop to shelve them all at once.
+     */
+    update(ps, pf, home) {
+      const d = this.d, H = Babel.Honeycomb;
+      if (home === undefined) home = this.isHub(ps) ? this.neighbours(ps)[0] : ps;
+      const changed = !this.center || this.center[0] !== ps || this.center[1] !== pf || this.center[2] !== home;
+      if (!changed && !this.pending) return;
+      this.center = [ps, pf, home];
+      const wanted = this._wanted(ps, pf, home);
+      const keep = new Set(wanted.cells.map(([s, f]) => s + ',' + f));
       for (const [key, cell] of this.cells) {
         if (!keep.has(key)) { this._release(cell); this.cells.delete(key); }
       }
-      for (const [dh, df] of wanted) {
-        const key = dh + ',' + df;
+      const keepHubs = new Set(wanted.hubs.map(([s, f]) => s + ',' + f));
+      for (const [key, hub] of this.hubs) {
+        if (!keepHubs.has(key)) { this._releaseHub(hub); this.hubs.delete(key); }
+      }
+      // where a site stands from the reader's, on the plan
+      const [pq, pr] = H.at(ps);
+      const place = (group, s, df) => {
+        const [q, r] = H.at(s), [x, z] = H.plan(q - pq, r - pr);
+        group.position.set(x * d.Dx, (df - pf) * d.Hf, z * d.Dx);
+      };
+      for (const [s, df] of wanted.hubs) {
+        const key = s + ',' + df;
+        let hub = this.hubs.get(key);
+        if (!hub) {
+          hub = this.hubPool.pop() || this._createHub();
+          this._dressHub(hub, s, df);
+          this.hubs.set(key, hub);
+          this.root.add(hub.group);
+        }
+        place(hub.group, s, df);
+      }
+      // arriving somewhere, everything is dressed at once; walking, a few hexagons a frame
+      let budget = this.cells.size ? 2 : Infinity;
+      this.pending = false;
+      for (const [s, df, n] of wanted.cells) {
+        const key = s + ',' + df;
         let cell = this.cells.get(key);
         if (!cell) {
+          if (budget <= 0) { this.pending = true; continue; }
+          budget--;
           cell = this._acquire();
-          this._dress(cell, dh, df);
+          this._dress(cell, s, df);
           this.cells.set(key, cell);
           this.root.add(cell.group);
         }
-        cell.group.position.set((dh - ph) * d.Dx, (df - pf) * d.Hf, 0);
+        place(cell.group, s, df);
+        cell.group.rotation.y = -H.turn(cell.kind); // its vestibule points at its hub
+        const up = Math.abs(df - pf);
         // cells can only be seen from close by, through their door
-        cell.interior.visible = Math.abs(df - pf) <= 1 && Math.abs(dh - ph) <= 3;
-        cell.door.visible = Math.abs(df - pf) <= 1;
-        cell.niche.visible = Math.abs(df - pf) <= 1;
-        cell.signs.visible = Math.abs(df - pf) <= 1;
-        if (cell.canvas) cell.canvas.visible = Math.abs(df - pf) <= 1;
+        cell.interior.visible = up <= 1 && n <= 2;
+        cell.door.visible = up <= 1;
+        cell.niche.visible = up <= 1;
+        cell.signs.visible = up <= 1;
+        if (cell.canvas) cell.canvas.visible = cell.farCanvas.visible = up <= 1;
+      }
+      // A passage belongs to both the hexagons it joins: it is drawn by the one that is petal 0, 1
+      // or 2 of its cluster, or by the other if that one is not drawn.
+      for (const cell of this.cells.values()) {
+        cell.passage.visible = cell.kind < 3 || !this.cells.has(this.neighbours(cell.dh)[1] + ',' + cell.df);
       }
       if (this.paintings) {
-        // the paintings of the vestibules either side of the reader's hexagon and the next one
-        // east, then the two beyond, made ahead of the reader
+        // the paintings of the hexagons nearest the reader, their own hexagon's first, made ahead of them
         const f = this.floor(pf);
-        this.paintings.want([0, -1, 1, 2, -2].map((o) => {
-          const g = this.hexagon(ph + o);
+        const near = wanted.cells.filter(([s, df, n]) => df === pf && n <= 2).sort((a, b) => (b[0] === home) - (a[0] === home) || a[2] - b[2]).slice(0, 6);
+        this._paintingSites = new Set(near.map(([s]) => s));
+        this.paintings.want(near.map(([s]) => {
+          const g = this.hexagon(s);
           return { key: this.paintings.key(g, f), hexagon: g.digits, floor: f.digits };
         }));
         this._showPaintings();
       }
-      this._trimCaches(ph, pf);
+      this._trimCaches(ps, pf);
       this.clearHover();
     }
 
-    /** Hangs each painting that is ready in the vestibules near the reader; the others show the far colour. */
+    /** Hangs each painting that is ready in the passages near the reader; the others show the far colour. */
     _showPaintings() {
       if (!this.center) return;
-      const [ph, pf] = this.center, P = this.paintings;
+      const pf = this.center[1], P = this.paintings, near = this._paintingSites || new Set();
+      const hang = (canvas, s, df) => {
+        canvas.material = df === pf && near.has(s) ? P.material(P.key(this.hexagon(s), this.floor(df))) : P.blank;
+      };
       for (const cell of this.cells.values()) {
-        const near = cell.df === pf && cell.dh >= ph - 1 && cell.dh <= ph + 1;
-        cell.canvas.material = near ? P.material(P.key(this.hexagon(cell.dh), this.floor(cell.df))) : P.blank;
+        hang(cell.canvas, cell.dh, cell.df);
+        hang(cell.farCanvas, this.neighbours(cell.dh)[1], cell.df); // the hexagon beyond the passage
       }
     }
 
-    _trimCaches(ph, pf) {
-      for (const k of this.hexagonCache.keys()) if (Math.abs(k - ph) > 12) this.hexagonCache.delete(k);
+    /** Forgets what was worked out for places the reader has left far behind. */
+    _trimCaches(ps, pf) {
       for (const k of this.floorCache.keys()) if (Math.abs(k - pf) > 12) this.floorCache.delete(k);
+      if (this.siteCache.size < 600) return;
+      const H = Babel.Honeycomb, [pq, pr] = H.at(ps), here = this.site(ps);
+      for (const [s, e] of this.siteCache) {
+        const [q, r] = H.at(s), dq = q - pq, dr = r - pr;
+        if (Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr)) > 9) this.siteCache.delete(s);
+        void e;
+      }
+      for (const k of this.columnCache.keys()) if (Math.abs(k - here.east) > 6) this.columnCache.delete(k);
+      for (const k of this.rowCache.keys()) if (Math.abs(k - here.south) > 6) this.rowCache.delete(k);
     }
 
     cell(dh, df) { return this.cells.get(dh + ',' + df) || null; }

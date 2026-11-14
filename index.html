@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=Libre+Bodoni:ital,wght@0,400;0,500;1,400&display=swap">
-<link rel="stylesheet" href="css/style.css?v=2026-11-09.20">
+<link rel="stylesheet" href="css/style.css?v=2026-11-14.6">
 </head>
 <body>
 <canvas id="view" aria-label="The Library, seen from the eyes of a librarian"></canvas>
@@ -124,7 +124,7 @@
 
       <div id="find-painting-panel" class="subpanel" role="tabpanel" aria-labelledby="sub-image" hidden>
         <section class="intro">
-          <p id="image-note" class="status">Upload a picture (ideally in square ratio, and either GIF, JPEG, or PNG format) to find the vestibule where it hangs as a painting of the Library. The picture is only read by this page, and never leaves your computer.</p>
+          <p id="image-note" class="status">Upload a picture (ideally in square ratio, and either GIF, JPEG, or PNG format) to find the passage where it hangs as a painting of the Library. The picture is only read by this page, and never leaves your computer.</p>
           <div class="row image-tools">
             <button id="image-upload" type="button" class="primary">Upload image</button>
             <input id="image-upload-input" type="file" accept=".gif,.jpg,.jpeg,.png,image/gif,image/jpeg,image/png" hidden>
@@ -219,13 +219,14 @@
 
     <div id="panel-go" class="panel" role="tabpanel" aria-labelledby="tab-go" hidden>
       <section class="go">
-        <h3>East or west, and up or down</h3>
+        <h3>East or west, south or north, and up or down</h3>
         <form id="go-offset" class="row offset" autocomplete="off">
-          <label><input id="go-east" type="text" inputmode="numeric" value="0"> hexagons east</label>
+          <label><input id="go-east" type="text" inputmode="numeric" value="0"> clusters east</label>
+          <label><input id="go-south" type="text" inputmode="numeric" value="0"> rows south</label>
           <label><input id="go-up" type="text" inputmode="numeric" value="0"> floors up</label>
           <button type="submit" class="primary">Jump</button>
         </form>
-        <p class="note">Negative numbers go west, or down.</p>
+        <p class="note">Negative numbers go west, north, or down.</p>
         <p id="go-offset-error" class="error" hidden></p>
       </section>
       <section class="go">
@@ -279,24 +280,24 @@
   whenever any of them changes: browsers and GitHub Pages keep copies of files for a while,
   and a new page read with an old script would not start.
 -->
-<script src="lib/three.min.js?v=2026-11-09.20"></script>
-<script src="lib/Reflector.js?v=2026-11-09.20"></script>
-<script src="config.js?v=2026-11-09.20"></script>
-<script src="js/library.js?v=2026-11-09.20"></script>
-<script src="js/textures.js?v=2026-11-09.20"></script>
-<script src="js/architecture.js?v=2026-11-09.20"></script>
-<script src="js/paintings.js?v=2026-11-09.20"></script>
-<script src="js/world.js?v=2026-11-09.20"></script>
-<script src="js/figure.js?v=2026-11-09.20"></script>
-<script src="js/ghost.js?v=2026-11-09.20"></script>
-<script src="js/player.js?v=2026-11-09.20"></script>
-<script src="js/terminal.js?v=2026-11-09.20"></script>
-<script src="js/quotes.js?v=2026-11-09.20"></script>
-<script src="js/dream.js?v=2026-11-09.20"></script>
-<script src="js/music.js?v=2026-11-09.20"></script>
-<script src="js/paper.js?v=2026-11-09.20"></script>
-<script src="js/words.js?v=2026-11-09.20"></script>
-<script src="js/main.js?v=2026-11-09.20"></script>
+<script src="lib/three.min.js?v=2026-11-14.6"></script>
+<script src="lib/Reflector.js?v=2026-11-14.6"></script>
+<script src="config.js?v=2026-11-14.6"></script>
+<script src="js/library.js?v=2026-11-14.6"></script>
+<script src="js/textures.js?v=2026-11-14.6"></script>
+<script src="js/architecture.js?v=2026-11-14.6"></script>
+<script src="js/paintings.js?v=2026-11-14.6"></script>
+<script src="js/world.js?v=2026-11-14.6"></script>
+<script src="js/figure.js?v=2026-11-14.6"></script>
+<script src="js/ghost.js?v=2026-11-14.6"></script>
+<script src="js/player.js?v=2026-11-14.6"></script>
+<script src="js/terminal.js?v=2026-11-14.6"></script>
+<script src="js/quotes.js?v=2026-11-14.6"></script>
+<script src="js/dream.js?v=2026-11-14.6"></script>
+<script src="js/music.js?v=2026-11-14.6"></script>
+<script src="js/paper.js?v=2026-11-14.6"></script>
+<script src="js/words.js?v=2026-11-14.6"></script>
+<script src="js/main.js?v=2026-11-14.6"></script>
 <script>
   // If the Library has not started a few seconds after the page has loaded (a script missing,
   // or not matching the others), say so rather than leave the screen black.

@@ -46,7 +46,9 @@
     raw = window.BABEL_CONFIG;
     if (!raw) return showError('The configuration file config.js was not found, or it does not define window.BABEL_CONFIG.');
     try {
-      lib = new BabelCore.Library(raw);
+      // the Library is shaped as nearly a cube, so it is told how far apart its clusters and floors stand
+      const dm = Babel.Architecture.dimensions(BabelCore.normalizeConfig(raw)), across = dm.Dx * Math.sqrt(7);
+      lib = new BabelCore.Library(raw, { east: across, south: (across * Math.sqrt(3)) / 2, up: dm.Hf });
     } catch (e) {
       return showError(e.message);
     }
@@ -73,7 +75,9 @@
     player = new Babel.Player(assets.dims, camera, renderer.domElement);
     player.sensitivity = lib.config.lookSensitivity || 1;
     player.onTap = () => { if (mode === 'walking') interact(); };
-    player.doorOpen = (off) => world.isDoorOpen(player.ch + off, player.cf);
+    player.doorOpen = (site) => world.isDoorOpen(site, player.cf);
+    player.kindOf = (site) => world.kind(site);
+    player.whereOf = (site) => world.site(site);
 
     // Each hexagon's music. Browsers let a page make no sound until the reader clicks, taps or
     // presses a key, so it begins then. Turned off with M, it stays off on the next visit.
@@ -166,14 +170,14 @@
     if (terminal) terminal.reset();
     player.origin = 'woke';
     player.placeAtStart();
-    world.update(0, 0);
+    world.update(player.site, player.cf, player.ch);
   }
 
-  /** Goes to hexagon (dh, df) relative to the anchor; with `face`, stands before that book. */
+  /** Goes to the hexagon of books at site dh, on floor df from the waking one; with `face`, stands before that book. */
   function goToCell(dh, df, face) {
     if (face) player.faceBook(dh, df, face.wall, face.shelf, face.volume);
     else player.placeAtStart(dh, df);
-    world.update(player.ch, player.cf);
+    world.update(player.site, player.cf, player.ch);
     startWalking();
   }
 
@@ -186,14 +190,14 @@
     goToCell(0, 0, face);
   }
 
-  /** Goes to the vestibule east of a hexagon, anywhere, and stands before its painting. */
+  /** Goes to the passage of a hexagon, anywhere, and stands before its painting. */
   function goToPainting(hexagon, floor, opts) {
     opts = opts || {};
     world.setAnchor(hexagon, floor);
     terminal.reset();
     player.origin = 'arrived';
     player.facePainting(0, 0);
-    world.update(player.ch, player.cf);
+    world.update(player.site, player.cf, player.ch);
     startWalking();
     if (opts.title) toast(`Before you hangs ${opts.title}.`, 6000);
   }
@@ -355,10 +359,10 @@
     const from = here();
     move();
     const to = here();
-    const dh = lib.hexagonDifference(from.hexagon, to.hexagon), df = lib.floorDifference(from.floor, to.floor);
-    if (dh.sign === 0 && df.sign === 0) return;
+    const { rows, columns } = lib.hexagonSteps(from.hexagon, to.hexagon), df = lib.floorDifference(from.floor, to.floor);
+    if (rows.sign === 0 && columns.sign === 0 && df.sign === 0) return;
     const was = lib.position(from.hexagon, from.floor);
-    lastJourney = { dh, df, from: { east: was.east.fraction, up: was.up.fraction } };
+    lastJourney = { rows, columns, df, from: { east: was.east.fraction, south: was.south.fraction, up: was.up.fraction } };
   }
 
   /* ---------------- modes ---------------- */
@@ -401,27 +405,27 @@
   function interact() {
     if (!gaze) return;
     if (gaze.kind === 'door') {
-      const dh = player.ch + gaze.cellOffset, df = player.cf;
+      const dh = gaze.site, df = player.cf;
       const state = world.doorState(dh, df);
       const closing = state && state.target === 1;
-      if (closing && player.inDoorway(gaze.cellOffset)) { toast('Step out of the doorway first.'); return; }
+      if (closing && player.inDoorway(gaze.site)) { toast('Step out of the doorway first.'); return; }
       world.toggleDoor(dh, df);
       gazeKey = '';
       return;
     }
     if (gaze.kind === 'terminal') { terminal.open(); return; }
     if (gaze.kind === 'lamp') {
-      world.toggleLamp(player.ch + gaze.cellOffset, player.cf);
+      world.toggleLamp(gaze.site, player.cf);
       gazeKey = '';
       return;
     }
-    if (gaze.kind === 'bed') { fallAsleep(player.ch + gaze.cellOffset, player.cf); return; }
+    if (gaze.kind === 'bed') { fallAsleep(gaze.site, player.cf); return; }
     openBook(gaze);
   }
 
   /** Opens the book the reader is looking at on the shelves. */
   function openBook(target) {
-    const dh = player.ch + target.off, df = player.cf;
+    const dh = target.site, df = player.cf;
     const mark = world.mark && world.isMarked(dh, df, target.slot) ? world.mark : null;
     openBookAt({
       location: world.location(dh, df, target.slot), slot: target.slot, returnTo: 'walking',
@@ -716,7 +720,7 @@
     return [b[0], b[1], c[0], c[1]];
   }
 
-  /** Lies down on the bed of the cell beside hexagon dh of floor df. */
+  /** Lies down on the bed of the cell of the hexagon at site dh of floor df. */
   function fallAsleep(dh, df) {
     if (sleep || mode !== 'walking') return;
     if (!dream) {
@@ -950,11 +954,10 @@
   /** How well lit the reader is (1 in the hexagons), for their reflection in the mirrors. */
   function lightOnReader() {
     const d = assets.dims;
-    for (const off of [0, -1]) {
-      const hx = player.x - off * d.Dx;
-      if (hx > d.cellX0 - 0.1 && hx < d.cellX1 + 0.1 && player.z < -d.hallW / 2 && player.z > d.cellZ1 - 0.1) {
-        const dh = player.ch + off, df = player.cf;
-        const b = world.lampBrightness(dh, df), t = world.doorOpenness(dh, df);
+    for (const c of player.cells()) {
+      const [hx, hz] = player.inFrame(c.frame);
+      if (hx > d.cellX0 - 0.1 && hx < d.cellX1 + 0.1 && hz < -d.hallW / 2 && hz > d.cellZ1 - 0.1) {
+        const b = world.lampBrightness(c.site, player.cf), t = world.doorOpenness(c.site, player.cf);
         return b + (1 - b) * (0.03 + 0.2 * t * t * (3 - 2 * t));
       }
     }
@@ -968,11 +971,11 @@
     last = now;
     adaptQuality(rawDt);
     player.update(dt);
-    world.update(player.ch, player.cf);
+    world.update(player.site, player.cf, player.ch);
     world.tick(dt);
     // the music of the hexagons the reader is among, each as near as they are
     if (music.ctx && music.ctx.state === 'running') {
-      music.update(Babel.Music.hearing(player.x, player.y, player.ch, player.cf, assets.dims).map((s) => {
+      music.update(Babel.Music.hearing(player.hearing(), player.y, player.cf, assets.dims).map((s) => {
         const fp = world.fingerprint(s.dh, s.df);
         return { key: fp.join(','), fp, weight: s.weight };
       }));
@@ -983,16 +986,39 @@
 
     if (mode === 'walking') updateGaze();
 
-    // the nearest mirror on this floor, and the figure it reflects
-    const d = assets.dims;
-    const mx = Math.abs(player.x - d.mirrorX) < Math.abs(player.x - (d.mirrorX - d.Dx)) ? d.mirrorX : d.mirrorX - d.Dx;
-    reflector.position.set(mx, d.mirrorY0 + d.mirrorH / 2, -d.hallW / 2 + 0.043);
+    // the nearest mirror on this floor, and the figure it reflects: each vestibule's mirror
+    // stands in the frame of its hexagon's cell
+    const d = assets.dims, cells = player.cells();
+    const nearest = (x, z) => {
+      let best = null, least = Infinity;
+      for (const c of cells) {
+        const [hx, hz] = player.inFrame(c.frame), far = Math.hypot(hx - x, hz - z);
+        if (far < least) { least = far; best = c; }
+      }
+      return best;
+    };
+    const placeIn = (obj, f, x, y, z, turn) => {
+      // a point of a cell's frame, in the reader's
+      obj.position.set(f.x + x * f.c - z * f.s, y, f.z + x * f.s + z * f.c);
+      obj.rotation.y = turn - f.turn;
+    };
+    // The mirror that reflects is the nearest one in view; while none is, it reflects nothing.
+    // When it moves to another mirror, its reflection comes up out of the dark glass.
+    const shown = mirrorInView(cells);
+    reflector.visible = !!shown;
+    if (shown) {
+      if (shown.site !== mirrorShown) { mirrorShown = shown.site; mirrorFade = 0; }
+      mirrorFade = Math.min(1, mirrorFade + dt / 0.45);
+      const e = mirrorFade * mirrorFade * (3 - 2 * mirrorFade);
+      reflector.material.uniforms.color.value.copy(MIRROR_DARK).lerp(MIRROR_LIT, e);
+      placeIn(reflector, shown.frame, d.mirrorX, d.mirrorY0 + d.mirrorH / 2, -d.hallW / 2 + 0.043, 0);
+    } else mirrorShown = null;
     // the sink mirror of the nearest cell, while the reader is in it or at its open door
-    const off = Math.abs(player.x - d.sinkMirror.x) < Math.abs(player.x - (d.sinkMirror.x - d.Dx)) ? 0 : -1;
-    const sx = d.sinkMirror.x + off * d.Dx;
-    const cellShown = world.doorOpenness(player.ch + off, player.cf) > 0.05 || player.z < d.cellZ0;
-    sinkReflector.visible = cellShown && Math.abs(player.y) < 1 && Math.abs(player.x - sx) < 3 && player.z < 0;
-    sinkReflector.position.set(sx, d.sinkMirror.y0 + d.sinkMirror.h / 2, d.cellZ0 - 0.014);
+    const sinkCell = nearest(d.sinkMirror.x, d.cellZ0);
+    const [px, pz] = player.inFrame(sinkCell.frame);
+    const cellShown = world.doorOpenness(sinkCell.site, player.cf) > 0.05 || pz < d.cellZ0;
+    sinkReflector.visible = cellShown && Math.abs(player.y) < 1 && Math.abs(px - d.sinkMirror.x) < 3 && pz < 0;
+    placeIn(sinkReflector, sinkCell.frame, d.sinkMirror.x, d.sinkMirror.y0 + d.sinkMirror.h / 2, d.cellZ0 - 0.014, Math.PI);
     Babel.Figure.pose(figure, player, dt);
     ghost.update(dt, player, camera, mode === 'walking' && !sleep);
 
@@ -1006,20 +1032,54 @@
   }
   let frameCount = 0;
 
+  const MIRROR_DARK = new THREE.Color(0x1c1a17), MIRROR_LIT = new THREE.Color(0x8d877b);
+  let mirrorShown = null, mirrorFade = 0;
+  const mirrorFrustum = new THREE.Frustum(), mirrorView = new THREE.Matrix4(), mirrorSphere = new THREE.Sphere(new THREE.Vector3(), 0.95);
+
+  /**
+   * Of the vestibules' mirrors around the reader, the nearest that the camera can see: in front of
+   * it, in the field of view, and not hidden by the vestibule's walls (seen from a hexagon or a
+   * hub, through the doorway at that end).
+   */
+  function mirrorInView(cells) {
+    const d = assets.dims, mx = d.mirrorX, mz = -d.hallW / 2, my = d.mirrorY0 + d.mirrorH / 2;
+    camera.updateMatrixWorld();
+    mirrorView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    mirrorFrustum.setFromProjectionMatrix(mirrorView);
+    let best = null, least = Infinity;
+    for (const c of cells) {
+      const f = c.frame, [hx, hz] = player.inFrame(f);
+      if (hz < mz + 0.05) continue; // behind the wall the mirror hangs on
+      let hidden = false;
+      for (const xe of [d.hallX0, d.hallX1]) {
+        if ((hx - xe) * (mx - xe) >= 0) continue; // this end of the vestibule is not between them
+        const ze = hz + ((xe - hx) / (mx - hx)) * (mz - hz);
+        if (Math.abs(ze) > d.hallW / 2) hidden = true;
+      }
+      if (hidden) continue;
+      mirrorSphere.center.set(f.x + mx * f.c - mz * f.s, my, f.z + mx * f.s + mz * f.c);
+      if (!mirrorFrustum.intersectsSphere(mirrorSphere)) continue;
+      const far = Math.hypot(hx - mx, hz - mz);
+      if (far < least) { least = far; best = c; }
+    }
+    return best;
+  }
+
   function updateGaze() {
     const book = player.pick(lib);
-    const door = player.pickDoor((off) => world.doorOpenness(player.ch + off, player.cf));
+    const openness = (site) => world.doorOpenness(site, player.cf);
+    const door = player.pickDoor(openness);
     const term = player.pickTerminal();
-    const lamp = player.pickLamp((off) => world.doorOpenness(player.ch + off, player.cf));
-    const bed = player.pickBed((off) => world.doorOpenness(player.ch + off, player.cf));
+    const lamp = player.pickLamp(openness);
+    const bed = player.pickBed(openness);
     const nearest = (hit, ...others) => hit && others.every((o) => !o || hit.t < o.t);
     if (nearest(bed, book, door, lamp, term)) {
-      const dh = player.ch + bed.cellOffset, df = player.cf;
+      const dh = bed.site, df = player.cf;
       const key = `bed,${dh},${df}`;
       if (key === gazeKey) return;
       gazeKey = key;
       world.clearHover();
-      gaze = { kind: 'bed', cellOffset: bed.cellOffset };
+      gaze = { kind: 'bed', site: bed.site };
       $('gaze-title').hidden = true;
       $('gaze-where').textContent = 'A narrow bed';
       $('gaze-hint').textContent = `${isTouch ? 'Tap' : 'Press E or click'} to sleep`;
@@ -1027,13 +1087,13 @@
       return;
     }
     if (lamp && (!book || lamp.t < book.t) && (!door || lamp.t < door.t)) {
-      const dh = player.ch + lamp.cellOffset, df = player.cf;
+      const dh = lamp.site, df = player.cf;
       const on = world.isLampOn(dh, df);
       const key = `lamp,${dh},${df},${on}`;
       if (key === gazeKey) return;
       gazeKey = key;
       world.clearHover();
-      gaze = { kind: 'lamp', cellOffset: lamp.cellOffset };
+      gaze = { kind: 'lamp', site: lamp.site };
       $('gaze-title').hidden = true;
       $('gaze-where').textContent = on ? 'A night lamp, lit' : 'A night lamp, out';
       $('gaze-hint').textContent = `${isTouch ? 'Tap' : 'Press E or click'} to turn it ${on ? 'off' : 'on'}`;
@@ -1041,11 +1101,11 @@
       return;
     }
     if (term && (!book || term.t < book.t) && (!door || term.t < door.t)) {
-      const key = `terminal,${player.ch + term.cellOffset},${player.cf}`;
+      const key = `terminal,${term.site},${player.cf}`;
       if (key === gazeKey) return;
       gazeKey = key;
       world.clearHover();
-      gaze = { kind: 'terminal', cellOffset: term.cellOffset };
+      gaze = { kind: 'terminal', site: term.site };
       $('gaze-title').hidden = false;
       $('gaze-title').textContent = 'The catalogue';
       $('gaze-where').textContent = 'Find a text or a book, or go to any hexagon';
@@ -1054,14 +1114,14 @@
       return;
     }
     if (door && (!book || door.t < book.t)) {
-      const dh = player.ch + door.cellOffset, df = player.cf;
+      const dh = door.site, df = player.cf;
       const state = world.doorState(dh, df);
       const opening = !(state && state.target === 1);
       const key = `door,${dh},${df},${opening}`;
       if (key === gazeKey) return;
       gazeKey = key;
       world.clearHover();
-      gaze = { kind: 'door', cellOffset: door.cellOffset };
+      gaze = { kind: 'door', site: door.site };
       $('gaze-title').hidden = true;
       $('gaze-where').textContent = opening ? 'A door, shut' : 'A door, open';
       $('gaze-hint').textContent = `${isTouch ? 'Tap' : 'Press E or click'} to ${opening ? 'open' : 'close'} it`;
@@ -1069,12 +1129,12 @@
       return;
     }
     const target = book;
-    const key = target ? `${player.ch + target.off},${player.cf},${target.slot}` : '';
+    const key = target ? `${target.site},${player.cf},${target.slot}` : '';
     if (key === gazeKey) return;
     gazeKey = key;
     gaze = target ? Object.assign({ kind: 'book' }, target) : null;
     if (!target) { world.clearHover(); $('gaze').hidden = true; return; }
-    const dh = player.ch + target.off, df = player.cf;
+    const dh = target.site, df = player.cf;
     world.setHover(dh, df, target.slot);
     const cell = world.cell(dh, df);
     if (!cell || target.slot >= cell.count) { $('gaze').hidden = true; gaze = null; return; }

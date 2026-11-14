@@ -401,17 +401,16 @@
     /**
      * Which hexagons the reader hears from where they stand, and how much of each: the one they
      * are in, fading into the next along the vestibule between them, and on the stair into the
-     * floor above or below. (x, y): the reader in their cell (ch, cf); d: the Library's dimensions.
+     * floor above or below. h: where the reader is between two sites (Player.hearing); y: their
+     * height above floor cf; d: the Library's dimensions.
      */
-    static hearing(x, y, ch, cf, d) {
-      const X0 = d.a - 0.8, X1 = d.Dx - d.a + 0.8; // from just inside one doorway to just inside the next
-      let h = ch, tx;
-      if (x >= 0) tx = smooth(X0, X1, x); else { h = ch - 1; tx = smooth(X0, X1, x + d.Dx); }
+    static hearing(h, y, cf, d) {
+      const tx = smooth(d.a - 0.8, d.Dx - d.a + 0.8, h.along); // from just inside one doorway to just inside the next
       let f = cf, ty;
       if (y >= 0) ty = smooth(0, d.Hf, y); else { f = cf - 1; ty = smooth(0, d.Hf, y + d.Hf); }
       return [
-        { dh: h, df: f, weight: (1 - tx) * (1 - ty) }, { dh: h + 1, df: f, weight: tx * (1 - ty) },
-        { dh: h, df: f + 1, weight: (1 - tx) * ty }, { dh: h + 1, df: f + 1, weight: tx * ty },
+        { dh: h.here, df: f, weight: (1 - tx) * (1 - ty) }, { dh: h.there, df: f, weight: tx * (1 - ty) },
+        { dh: h.here, df: f + 1, weight: (1 - tx) * ty }, { dh: h.there, df: f + 1, weight: tx * ty },
       ];
     }
   }

@@ -1,8 +1,8 @@
 /*
- * The paintings of the vestibules. Each hexagon's painting is a picture the Library works
+ * The paintings of the passages. Each hexagon's painting is a picture the Library works
  * out from the hexagon's place (see "Paintings" in js/library.js), drawn here in the
  * palette's colours. A painting takes a few milliseconds to work out and a few megabytes to
- * draw, so only the vestibules beside the reader's hexagon show theirs, made a step at a
+ * draw, so only the passages beside the reader's hexagon show theirs, made a step at a
  * time over a few frames. The others show the palette's average colour, which is how a
  * painting of nearly random pixels looks from a little way off.
  */

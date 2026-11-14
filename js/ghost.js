@@ -116,15 +116,18 @@
         return { k, x, z, yaw: Math.atan2(x, z), pitch: -0.42 }; // facing the middle of the shaft (the figure faces −z), looking down
       }
       const k = -(floors || (Math.random() < 0.75 ? 1 : 2));
+      const turn = player.roomTurn ? player.roomTurn() : 0;
       let j = at;
       if (j === undefined) {
         // the bookcase across the shaft, or now and then one beside it
-        const sides = d.shelvedSides.filter((s) => apart((s * Math.PI) / 3, across) < 1.9);
+        // (each hexagon stands turned to face its hub, as on every floor)
+        const side = (s) => (s * Math.PI) / 3 + turn;
+        const sides = d.shelvedSides.filter((s) => apart(side(s), across) < 1.9);
         if (!sides.length) return null;
-        sides.sort((p, q) => apart((p * Math.PI) / 3, across) - apart((q * Math.PI) / 3, across));
+        sides.sort((p, q) => apart(side(p), across) - apart(side(q), across));
         j = sides[Math.random() < 0.6 ? 0 : Math.floor(Math.random() * sides.length)];
       }
-      const phi = (j * Math.PI) / 3, nx = Math.cos(phi), nz = Math.sin(phi);
+      const phi = (j * Math.PI) / 3 + turn, nx = Math.cos(phi), nz = Math.sin(phi);
       const reach = Math.max(0, d.shelfLen / 2 - 0.35);
       return {
         k, side: j, nx, nz, reach,
@@ -157,7 +160,7 @@
         const p = this._place(player, tries === 1 && !forced && this.below ? 1 : floors, at);
         if (!p) break;
         this.here = Object.assign(p, {
-          ch: player.ch, cf: player.cf, age: 0, seen: 0, unseen: 0, looked: false, fade: 1,
+          ch: player.ch, site: player.site, cf: player.cf, age: 0, seen: 0, unseen: 0, looked: false, fade: 1,
           sway: Math.random() * 10, rest: 4 + Math.random() * 8, goal: null,
         });
         this.here.goal = this.here.along;
@@ -231,7 +234,7 @@
     /** Each frame: comes, stays, turns to the reader or browses, fades, or goes. `walking`: the reader is in the Library, not in a book or the catalogue. */
     update(dt, player, camera, walking) {
       const d = this.d;
-      const inHexagon = hexDist(player.x, player.z) < d.aIn && Math.abs(player.y) < 0.3;
+      const inHexagon = player.inRoom !== false && hexDist(player.x, player.z) < d.aIn && Math.abs(player.y) < 0.3; // in a hexagon of books, not a hub
       if (!this.here) {
         if (!walking || !inHexagon) return;
         this.wait -= dt;
@@ -241,7 +244,7 @@
       }
       const h = this.here, f = this.figure, hr = f.userData.head.rotation;
       // gone as soon as the reader makes for another floor or another hexagon
-      if (player.ch !== h.ch || player.cf !== h.cf || !walking) { this.leave(); return; }
+      if (player.ch !== h.ch || player.site !== h.site || player.cf !== h.cf || !walking) { this.leave(); return; }
       h.age += dt;
       h.sway += dt;
       const seen = this.inSight(player, camera);

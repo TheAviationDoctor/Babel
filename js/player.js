@@ -1,9 +1,14 @@
 /*
  * The reader: first-person movement, the spiral stair, and the gaze that picks a book.
  *
- * Position is kept relative to the current cell (ch, cf): x along the floor (east),
- * y height above this floor, z across. Crossing half a cell east or west, or half
- * a storey up or down, moves the reader into the neighbouring cell.
+ * Position is kept relative to the site the reader is in (see Honeycomb in
+ * js/architecture.js): `site`, a hexagon of books or a hub, on floor `cf`; x east and z
+ * south from the site's middle, y height above this floor. Crossing the middle of a
+ * vestibule, or half a storey up or down, moves the reader into the next site. `ch` is
+ * the reader's hexagon of books: the site itself, or in a hub the nearest of the six round it.
+ *
+ * Walls, doors and books are tested in the frame of the cell they belong to (a hexagon of
+ * books at its origin, its vestibule along +x), each cell being turned to face its hub.
  */
 (function () {
   'use strict';
@@ -26,6 +31,17 @@
     return tmin;
   }
 
+  /** A ray (origin o, direction dir) in the frame `f` (see Architecture.frameAt). */
+  function rayInto(f, o, dir) {
+    const X = o.x - f.x, Z = o.z - f.z;
+    return { ox: X * f.c + Z * f.s, oy: o.y, oz: -X * f.s + Z * f.c, dx: dir.x * f.c + dir.z * f.s, dy: dir.y, dz: -dir.x * f.s + dir.z * f.c };
+  }
+
+  /** The yaw that looks along direction phi (radians from +x towards +z). */
+  function yawOf(phi) { return -Math.PI / 2 - phi; }
+
+  const HUB = 6;
+
   function hexDist(x, z) {
     return Math.max(Math.abs(x), Math.abs(x / 2 + (z * SQ3) / 2), Math.abs(x / 2 - (z * SQ3) / 2));
   }
@@ -36,7 +52,7 @@
       this.camera = camera;
       this.dom = dom;
       this.radius = 0.24;
-      this.ch = 0; this.cf = 0;
+      this.site = 0; this.kind = 0; this.ch = 0; this.cf = 0;
       this.x = 0; this.y = 0; this.z = 0;
       this.yaw = 0; this.pitch = 0;
       this.speed = 1.55; // metres a second, walking (hurrying, 1.9 times as fast)
@@ -48,17 +64,92 @@
       this.touch = { move: null, look: null };
       this.reach = 2.1;
       this._ray = { o: new THREE.Vector3(), d: new THREE.Vector3() };
+      // what stands at a site (petal 0 to 5, or 6 for a hub): main.js asks the World
+      this.kindOf = () => 0;
+      // what lies round a site of each kind, from its middle: the cells whose walls the reader may
+      // meet there (each with its frame), the hubs, and the sites next door
+      const A = Babel.Architecture, H = Babel.Honeycomb, D = dims.Dx;
+      const cellAt = (step, v, petal) => {
+        const [x, z] = H.plan(v[0], v[1]);
+        return { step, petal, frame: A.frameAt(x * D, z * D, H.turn(petal)) };
+      };
+      this._around = [0, 1, 2, 3, 4, 5, 6].map((kind) => {
+        const doors = H.doors(kind).map((n) => {
+          const v = H.DIRS[n.dir], [x, z] = H.plan(v[0], v[1]);
+          return { step: n.step, kind: n.kind, x: x * D, z: z * D, v };
+        });
+        if (kind === HUB) return { doors, hubs: [{ step: 0, x: 0, z: 0 }], cells: doors.map((n) => cellAt(n.step, n.v, n.kind)) };
+        return { doors, hubs: [{ step: doors[0].step, x: doors[0].x, z: doors[0].z }], cells: [cellAt(0, [0, 0], kind), cellAt(doors[1].step, doors[1].v, doors[1].kind)] };
+      });
+      this._pc = Math.cos(dims.passageTurn); this._ps = Math.sin(dims.passageTurn);
       this._bindInput();
+    }
+
+    /* ---------------- frames ---------------- */
+
+    /** What lies round the reader's site: { cells: [{ step, petal, frame }], hubs: [{ step, x, z }], doors: [{ step, kind, x, z }] }. */
+    around() { return this._around[this.kind]; }
+
+    /** The cells round the reader, each with its site: [{ site, petal, frame }]. */
+    cells() { return this.around().cells.map((c) => ({ site: this.site + c.step, petal: c.petal, frame: c.frame })); }
+
+    /** The reader's place (or the point (x, z) of their site) in a cell's frame. */
+    inFrame(frame, x, z) { return Babel.Architecture.intoFrame(frame, x === undefined ? this.x : x, z === undefined ? this.z : z); }
+
+    /** Whether the reader's site is a hexagon of books, and how it is turned (radians from +x towards +z): its vestibule heads that way. */
+    get inRoom() { return this.kind !== HUB; }
+
+    roomTurn() { return this.kind === HUB ? 0 : Babel.Honeycomb.turn(this.kind); }
+
+    /** The camera's ray, in a frame. */
+    _gaze(frame) {
+      this.camera.updateMatrixWorld();
+      const dir = this._ray.d;
+      this.camera.getWorldDirection(dir);
+      return rayInto(frame, this.camera.position, dir);
+    }
+
+    /**
+     * Where the reader is between their site and the next one, for the music: { here, there (the
+     * site they are nearest to going into), along (metres from this site's middle towards it) }.
+     */
+    hearing() {
+      let best = null, far = -Infinity;
+      for (const n of this.around().doors) {
+        const along = (this.x * n.x + this.z * n.z) / this.d.Dx;
+        if (along > far) { far = along; best = n; }
+      }
+      return { here: this.site, there: this.site + best.step, along: far };
+    }
+
+    /** Sets the reader in a site, and works out the rest (what the site is, and the reader's hexagon). */
+    _arrive(site, cf) {
+      this.site = site; this.cf = cf || 0;
+      this.kind = this.kindOf(site);
+      this._home();
+    }
+
+    /** The reader's hexagon of books: their site, or in a hub the hexagon they are nearest (keeping to the last, when it is nearly as near). */
+    _home() {
+      if (this.kind !== HUB) { this.ch = this.site; return; }
+      let best = null, far = -Infinity, kept = -Infinity;
+      for (const n of this.around().doors) {
+        const along = this.x * n.x + this.z * n.z;
+        if (along > far) { far = along; best = n; }
+        if (this.site + n.step === this.ch) kept = along;
+      }
+      if (kept < far - 3) this.ch = this.site + best.step;
     }
 
     /** Places the reader on the walkway of hexagon (ch, cf) (by default the anchor), looking across the shaft. */
     placeAtStart(ch, cf) {
       const d = this.d;
-      const mid = (d.shaftA + d.aIn) / 2;
-      this.x = -mid * 0.95; this.y = 0; this.z = 0.0;
-      this.yaw = -Math.PI / 2 + 0.55; // looking east across the shaft, towards a wall of books
+      this._arrive(ch || 0, cf);
+      // on the far side of the shaft from the door to the hub, looking across it towards a wall of books
+      const mid = (d.shaftA + d.aIn) / 2, t = this.roomTurn();
+      this.x = -mid * 0.95 * Math.cos(t); this.y = 0; this.z = -mid * 0.95 * Math.sin(t);
+      this.yaw = yawOf(t - 0.55);
       this.pitch = -0.08;
-      this.ch = ch || 0; this.cf = cf || 0;
     }
 
     /* ---------------- input ---------------- */
@@ -138,34 +229,46 @@
 
     /** Ground height at (x, z) for a reader currently at height y, or null where one cannot stand. */
     ground(x, z, y) {
-      const d = this.d, r = this.radius;
+      const d = this.d, r = this.radius, A = this.around(), I = Babel.Architecture.intoFrame;
       const onFloor = Math.abs(y) < 0.35;
       if (onFloor) {
-        for (const off of [0, d.Dx, -d.Dx]) {
-          const hd = hexDist(x - off, z);
+        for (const c of A.cells) {
+          const [hx, hz] = I(c.frame, x, z);
+          // the hexagon, round its shaft
+          const hd = hexDist(hx, hz);
           if (hd <= d.aIn - r && hd >= d.shaftA + 0.07 + r) return 0;
+          // its vestibule, including the passages through the walls at either end
+          if (hx >= d.aIn - r - 0.05 && hx <= d.Dx - d.aIn + r + 0.05 && Math.abs(hz) <= d.hallW / 2 - r) return 0;
+          // the cell behind the vestibule's south door
+          if (this._inCell(hx, hz, this.site + c.step)) return 0;
+          // its passage to the next cluster, which leaves by its other door
+          const px = hx * this._pc + hz * this._ps, pz = -hx * this._ps + hz * this._pc;
+          if (px >= d.aIn - r - 0.05 && px <= d.Dx - d.aIn + r + 0.05 && Math.abs(pz) <= d.hallW / 2 - r) return 0;
         }
       }
-      for (const off of [0, -d.Dx]) {
-        const hx = x - off;
-        if (onFloor) {
-          // vestibule, including the passages through the hexagon walls
-          if (hx >= d.aIn - r - 0.05 && hx <= d.Dx - d.aIn + r + 0.05 && Math.abs(z) <= d.hallW / 2 - r) return 0;
-          // the doorway onto the stair landing
-          if (Math.abs(hx - d.wellX) <= d.openW / 2 - r && z >= d.hallW / 2 - r - 0.01 && z <= d.hallW / 2 + 0.5) return 0;
-          // the cell behind the south door
-          if (this._inCell(hx, z, off === 0 ? 0 : -1)) return 0;
-        }
-        const w = this._stair(hx, z, y);
-        if (w !== null) return w;
+      for (const h of A.hubs) {
+        const g = this._hub(x - h.x, z - h.z, y, onFloor);
+        if (g !== null) return g;
       }
       return null;
     }
 
-    /** Whether a reader of this radius fits at (hx, z) in or at the door of a cell. */
-    _inCell(hx, z, cellOffset) {
+    /** Ground height in a hub, at (ux, uz) from its middle: its floor round the drum, the drum's doorway, and the stair inside. */
+    _hub(ux, uz, y, onFloor) {
       const d = this.d, r = this.radius;
-      const open = this.doorOpen ? this.doorOpen(cellOffset) : false;
+      if (onFloor) {
+        // round the drum, or before the flat wall of its doorway
+        if (hexDist(ux, uz) <= d.aIn - r && (Math.hypot(ux, uz) >= d.drumR + r || uz <= d.drumZ - r)) return 0;
+        // the doorway onto the stair's landing
+        if (Math.abs(ux) <= d.openW / 2 - r && uz >= d.drumZ - r - 0.01 && uz <= d.drumZ + 0.5) return 0;
+      }
+      return this._stair(ux + d.wellX, uz + d.wellZ, y);
+    }
+
+    /** Whether a reader of this radius fits at (hx, z) in or at the door of a cell. */
+    _inCell(hx, z, site) {
+      const d = this.d, r = this.radius;
+      const open = this.doorOpen ? this.doorOpen(site) : false;
       // the doorway, only while the door stands open
       if (open && Math.abs(hx - d.closetX) <= d.closetW / 2 - r && z <= -d.hallW / 2 + r + 0.02 && z >= d.cellZ0 - r - 0.02) return true;
       if (hx < d.cellX0 + r || hx > d.cellX1 - r || z > d.cellZ0 - r || z < d.cellZ1 + r) return false;
@@ -177,36 +280,35 @@
       return true;
     }
 
-    /** True if the reader stands where a closing door would sweep. */
-    inDoorway(cellOffset) {
-      const d = this.d, hx = this.x - cellOffset * d.Dx;
-      const dx = hx - d.doorPivot[0], dz = this.z - d.doorPivot[1];
-      return Math.abs(this.y) < 0.35 && Math.hypot(dx, dz) < d.closetW + this.radius + 0.05 && hx > d.hingeX - this.radius && hx < d.hingeX + d.closetW + this.radius && this.z < -d.hallW / 2 + this.radius + 0.05;
+    /** True if the reader stands where the door of that site's cell would sweep as it closes. */
+    inDoorway(site) {
+      const d = this.d, c = this.cells().find((k) => k.site === site);
+      if (!c) return false;
+      const [hx, hz] = this.inFrame(c.frame);
+      const dx = hx - d.doorPivot[0], dz = hz - d.doorPivot[1];
+      return Math.abs(this.y) < 0.35 && Math.hypot(dx, dz) < d.closetW + this.radius + 0.05 && hx > d.hingeX - this.radius && hx < d.hingeX + d.closetW + this.radius && hz < -d.hallW / 2 + this.radius + 0.05;
     }
 
-    /** The cell door the reader is looking at, if within reach: { cellOffset, t }. */
+    /** The cell door the reader is looking at, if within reach: { site, t }. `openness(site)`: how far open each is. */
     pickDoor(openness) {
       const d = this.d;
       if (Math.abs(this.y) > 0.05) return null;
-      this.camera.updateMatrixWorld();
-      const o = this.camera.position, dir = this._ray.d;
-      this.camera.getWorldDirection(dir);
       let best = null;
-      for (const off of [0, -1]) {
-        const ox = o.x - off * d.Dx;
-        const t0 = openness(off);
+      for (const c of this.cells()) {
+        const g = this._gaze(c.frame);
+        const t0 = openness(c.site);
         const px = d.doorPivot[0], pz = d.doorPivot[1], w = d.closetW;
         const box = t0 < 0.5
           ? [d.hingeX, 0, pz - 0.035, d.hingeX + w, d.closetH, pz + 0.04]
           : [px - 0.04, 0, pz - w, px + 0.04, d.closetH, pz + 0.02];
-        const t = rayBox(ox, o.y, o.z, dir.x, dir.y, dir.z, box);
-        if (t !== null && t < this.reach && (!best || t < best.t)) best = { cellOffset: off, t };
+        const t = rayBox(g.ox, g.oy, g.oz, g.dx, g.dy, g.dz, box);
+        if (t !== null && t < this.reach && (!best || t < best.t)) best = { site: c.site, t };
       }
       return best;
     }
 
     /**
-     * The night lamp the reader is looking at, if within reach: { cellOffset, t }. It can
+     * The night lamp the reader is looking at, if within reach: { site, t }. It can
      * be seen from inside its cell, or from outside through the doorway while the door is open.
      */
     pickLamp(openness) {
@@ -214,53 +316,47 @@
       return this._pickInCell([L[0] - 0.14, L[1], L[2] - 0.14, L[0] + 0.14, L[1] + 0.38, L[2] + 0.14], openness);
     }
 
-    /** The bed of the nearest cell, if the reader is looking at it within reach: { cellOffset, t }. */
+    /** The bed of the nearest cell, if the reader is looking at it within reach: { site, t }. */
     pickBed(openness) {
       const B = this.d.bed;
       return this._pickInCell([B.x0, 0, B.z0, B.x1, 0.62, B.z1], openness);
     }
 
     /**
-     * Something in a cell (a box [x0, y0, z0, x1, y1, z1] in the coordinates of the cell
-     * beside hexagon 0), seen from inside the cell or through its open door.
+     * Something in a cell (a box [x0, y0, z0, x1, y1, z1] in its hexagon's frame), seen
+     * from inside the cell or through its open door.
      */
     _pickInCell(box, openness) {
       const d = this.d;
       if (Math.abs(this.y) > 0.05) return null;
-      this.camera.updateMatrixWorld();
-      const o = this.camera.position, dir = this._ray.d;
-      this.camera.getWorldDirection(dir);
       let best = null;
-      for (const off of [0, -1]) {
-        const ox = o.x - off * d.Dx;
-        const t = rayBox(ox, o.y, o.z, dir.x, dir.y, dir.z, box);
+      for (const c of this.cells()) {
+        const g = this._gaze(c.frame);
+        const t = rayBox(g.ox, g.oy, g.oz, g.dx, g.dy, g.dz, box);
         if (t === null || t >= this.reach || (best && t >= best.t)) continue;
-        const inside = ox > d.cellX0 && ox < d.cellX1 && o.z < d.cellZ0 && o.z > d.cellZ1;
+        const inside = g.ox > d.cellX0 && g.ox < d.cellX1 && g.oz < d.cellZ0 && g.oz > d.cellZ1;
         if (!inside) {
-          if (openness(off) < 0.5 || dir.z >= -1e-6) continue;
-          const tw = (d.cellZ0 - o.z) / dir.z; // where the gaze passes through the cell's wall
-          const wx = ox + dir.x * tw, wy = o.y + dir.y * tw;
+          if (openness(c.site) < 0.5 || g.dz >= -1e-6) continue;
+          const tw = (d.cellZ0 - g.oz) / g.dz; // where the gaze passes through the cell's wall
+          const wx = g.ox + g.dx * tw, wy = g.oy + g.dy * tw;
           if (tw < 0 || tw > t || wx < d.hingeX || wx > d.hingeX + d.closetW || wy > d.closetH) continue;
         }
-        best = { cellOffset: off, t };
+        best = { site: c.site, t };
       }
       return best;
     }
 
-    /** The catalogue the reader is looking at, if within reach: { cellOffset, t }. */
+    /** The catalogue the reader is looking at, if within reach: { site, t }. */
     pickTerminal() {
       const d = this.d;
       if (Math.abs(this.y) > 0.05) return null;
-      this.camera.updateMatrixWorld();
-      const o = this.camera.position, dir = this._ray.d;
-      this.camera.getWorldDirection(dir);
       let best = null;
       const hw = d.hallW / 2;
-      for (const off of [0, -1]) {
-        const ox = o.x - off * d.Dx;
-        const box = [d.closetX - d.closetW / 2, 0, hw - 0.02, d.closetX + d.closetW / 2, d.closetH, hw + d.nicheDepth];
-        const t = rayBox(ox, o.y, o.z, dir.x, dir.y, dir.z, box);
-        if (t !== null && t < this.reach && (!best || t < best.t)) best = { cellOffset: off, t };
+      for (const c of this.cells()) {
+        const g = this._gaze(c.frame);
+        const box = [d.nicheX - d.closetW / 2, 0, hw - 0.02, d.nicheX + d.closetW / 2, d.closetH, hw + d.nicheDepth];
+        const t = rayBox(g.ox, g.oy, g.oz, g.dx, g.dy, g.dz, box);
+        if (t !== null && t < this.reach && (!best || t < best.t)) best = { site: c.site, t };
       }
       return best;
     }
@@ -270,9 +366,10 @@
      */
     faceBook(ch, cf, wall, shelf, volume) {
       const d = this.d;
-      const j = d.shelvedSides[wall], phi = (j * Math.PI) / 3;
+      this._arrive(ch, cf);
+      const j = d.shelvedSides[wall], phi = (j * Math.PI) / 3 + this.roomTurn();
       const nx = Math.cos(phi), nz = Math.sin(phi), tx = Math.sin(phi), tz = -Math.cos(phi);
-      let xc = d.rowLen / 2 - (volume + 0.5) * d.bookT;
+      let xc = d.bookX(volume);
       const r = Math.max(d.aIn - 0.6, d.shaftA + 0.07 + this.radius + 0.03);
       // books near a corner are seen from a little way along the wall
       let x = 0, z = 0;
@@ -281,9 +378,9 @@
         if (this.ground(x, z, 0) === 0) break;
         xc *= 0.85;
       }
-      this.ch = ch; this.cf = cf; this.x = x; this.y = 0; this.z = z;
-      const bookX = nx * (d.aIn + 0.03) + tx * (d.rowLen / 2 - (volume + 0.5) * d.bookT);
-      const bookZ = nz * (d.aIn + 0.03) + tz * (d.rowLen / 2 - (volume + 0.5) * d.bookT);
+      this.x = x; this.y = 0; this.z = z;
+      const bookX = nx * (d.aIn + 0.03) + tx * d.bookX(volume);
+      const bookZ = nz * (d.aIn + 0.03) + tz * d.bookX(volume);
       const bookY = d.base + (d.shelves - 1 - shelf) * d.pitch + d.board + d.bookH / 2;
       const dx = bookX - x, dz = bookZ - z;
       this.yaw = Math.atan2(-dx, -dz);
@@ -291,14 +388,18 @@
       this._applyCamera(0, 0);
     }
 
-    /** Places the reader in the vestibule east of hexagon (ch, cf), a step from its painting, looking at it. */
+    /** Places the reader in the passage of hexagon (ch, cf), a step from its painting, looking at it. */
     facePainting(ch, cf) {
       const d = this.d, p = d.painting;
       if (!p) { this.placeAtStart(ch, cf); return; }
-      const back = Math.min(0.95, d.hallW - 0.25 - this.radius); // across the vestibule, short of the wall with the mirror
-      this.ch = ch; this.cf = cf; this.x = p.x; this.y = 0; this.z = p.z - back;
-      this.yaw = Math.PI; // facing north
+      this._arrive(ch, cf);
+      const back = Math.min(1.3, d.hallW - 0.25 - this.radius); // across the passage
+      // in the passage's frame, the painting hangs on its north wall (+z), on the right as one leaves the hexagon
+      const t = this.roomTurn() + d.passageTurn, c = Math.cos(t), s = Math.sin(t), hx = p.x, hz = p.z - back;
+      this.x = hx * c - hz * s; this.y = 0; this.z = hx * s + hz * c;
+      this.yaw = yawOf(t + Math.PI / 2);
       this.pitch = Math.atan2(p.y - d.eye, back);
+      this._rebase();
       this._applyCamera(0, 0);
     }
 
@@ -362,8 +463,16 @@
 
     _rebase() {
       const d = this.d;
-      if (this.x > d.Dx / 2) { this.x -= d.Dx; this.ch += 1; }
-      else if (this.x < -d.Dx / 2) { this.x += d.Dx; this.ch -= 1; }
+      // into the next site, once past the middle of the vestibule that leads to it
+      for (const n of this.around().doors) {
+        if ((this.x * n.x + this.z * n.z) / d.Dx > d.Dx / 2) {
+          this.x -= n.x; this.z -= n.z;
+          this.site += n.step;
+          this.kind = this.kindOf(this.site);
+          break;
+        }
+      }
+      this._home();
       if (this.y > d.Hf / 2) { this.y -= d.Hf; this.cf += 1; }
       else if (this.y < -d.Hf / 2) { this.y += d.Hf; this.cf -= 1; }
     }
@@ -377,16 +486,13 @@
 
     /* ---------------- gaze ---------------- */
 
-    /** Which book the reader is looking at, if any: { off, wall, shelf, volume, slot, t }. */
+    /** Which book the reader is looking at, if any: { site, wall, shelf, volume, slot, t }. */
     pick(lib) {
       const d = this.d;
       if (Math.abs(this.y) > 0.05) return null;
-      this.camera.updateMatrixWorld();
-      const o = this.camera.position, dir = this._ray.d;
-      this.camera.getWorldDirection(dir);
       let best = null;
-      for (const off of [0, 1, -1]) {
-        const ox = o.x - off * d.Dx, oz = o.z;
+      for (const c of this.cells()) {
+        const g = this._gaze(c.frame), ox = g.ox, oz = g.oz, dir = { x: g.dx, y: g.dy, z: g.dz };
         if (hexDist(ox, oz) > d.aIn + 0.5) continue;
         for (let w = 0; w < d.walls; w++) {
           const j = d.shelvedSides[w], phi = (j * Math.PI) / 3;
@@ -396,31 +502,34 @@
           const plane = d.aIn + 0.03;
           const t = (plane - (nx * ox + nz * oz)) / denom;
           if (t <= 0 || t > this.reach || (best && t >= best.t)) continue;
-          const px = ox + dir.x * t, py = o.y + dir.y * t, pz = oz + dir.z * t;
+          const px = ox + dir.x * t, py = g.oy + dir.y * t, pz = oz + dir.z * t;
           const xc = px * Math.sin(phi) - pz * Math.cos(phi); // canonical x along the wall
-          if (Math.abs(xc) > d.rowLen / 2) continue;
+          const volume = d.volumeAt(xc);
+          if (volume < 0) continue;
           const i = Math.floor((py - d.base) / d.pitch);
           if (i < 0 || i >= d.shelves) continue;
           const yb = d.base + i * d.pitch + d.board;
           if (py < yb || py > yb + d.bookH) continue;
-          const volume = Math.min(d.books - 1, Math.floor((d.rowLen / 2 - xc) / d.bookT));
           const shelf = d.shelves - 1 - i;
-          best = { off, wall: w, shelf, volume, slot: lib.slotOf(w, shelf, volume), t };
+          best = { site: c.site, wall: w, shelf, volume, slot: lib.slotOf(w, shelf, volume), t };
         }
       }
       return best;
     }
 
-    /** Plain-words description of where the reader is relative to the waking hexagon. */
+    /** Plain-words description of where the reader is relative to the waking hexagon. `whereOf(site)`: its cluster, counted from the waking one. */
     whereabouts() {
-      const g = this.ch, f = this.cf;
+      const at = this.whereOf ? this.whereOf(this.ch) : { east: 0, south: 0 }, f = this.cf;
       const n = (k, one, many) => `${Math.abs(k).toLocaleString('en')} ${Math.abs(k) === 1 ? one : many}`;
       const parts = [];
-      if (g) parts.push(`${n(g, 'hexagon', 'hexagons')} ${g > 0 ? 'east' : 'west'}`);
+      if (at.east) parts.push(`${n(at.east, 'cluster', 'clusters')} ${at.east > 0 ? 'east' : 'west'}`);
+      if (at.south) parts.push(`${n(at.south, 'row', 'rows')} ${at.south > 0 ? 'south' : 'north'}`);
       if (f) parts.push(`${n(f, 'floor', 'floors')} ${f > 0 ? 'up' : 'down'}`);
       const verb = this.origin || 'woke';
-      return parts.length ? { short: `${parts.join(' and ')} from where you ${verb}`, sentence: `You are ${parts.join(' and ')} from where you ${verb}.` }
-        : { short: `The hexagon where you ${verb}`, sentence: `You are in the hexagon where you ${verb}.` };
+      const list = parts.length < 3 ? parts.join(' and ') : `${parts[0]}, ${parts[1]} and ${parts[2]}`;
+      if (parts.length) return { short: `${list} from where you ${verb}`, sentence: `You are ${list} from where you ${verb}.` };
+      if (this.ch !== 0) return { short: `The cluster where you ${verb}`, sentence: `You are in the cluster of hexagons where you ${verb}, in another of its hexagons.` };
+      return { short: `The hexagon where you ${verb}`, sentence: `You are in the hexagon where you ${verb}.` };
     }
   }
 
