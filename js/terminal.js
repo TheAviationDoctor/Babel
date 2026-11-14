@@ -608,7 +608,7 @@
       return form;
     }
 
-    /** "Wall 2, shelf 3, volume 17, …, about 10^… clusters east from here. Its floor is …" (HTML). */
+    /** "Bookcase F, row 3, volume 1, …, about 10^… clusters east from here. Its floor is …" (HTML). */
     _whereHTML(loc, from) {
       const lib = this.lib, world = this.ctx.world, player = this.ctx.player;
       const { wall, shelf, volume } = lib.slotParts(loc.slot);
@@ -617,7 +617,7 @@
       const parts = [stretch(lib, way.columns, 'cluster', 'clusters', 'east', 'west'), stretch(lib, way.rows, 'row', 'rows', 'south', 'north'), stretch(lib, df, 'floor', 'floors', 'up', 'down')].filter(Boolean);
       const far = parts.length ? `${list(parts)} from here` : way.petals[0] === way.petals[1] ? 'in this very hexagon' : 'in this very cluster, round its stair from here';
       const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      return `<strong>Wall ${wall + 1}, shelf ${shelf + 1}, volume ${volume + 1}${from ? ', ' + from : ''}</strong>, ${far}. ` +
+      return `<strong>${Babel.Architecture.shelfMark(this.ctx.dims, wall, shelf, volume).text}${from ? ', ' + from : ''}</strong>, ${far}. ` +
         `It stands on floor <span class="addr">${esc(lib.addressText(loc.floor, 16))}</span>, in hexagon <span class="addr">${esc(lib.addressText(loc.hexagon, 16))}</span> of that floor.`;
     }
 
@@ -797,7 +797,7 @@
         });
         copy.addEventListener('click', () => {
           const loc = r.location, { wall, shelf, volume } = this.lib.slotParts(loc.slot);
-          this.ctx.copyText(this.lib.hexagonAddressText(loc.hexagon, loc.floor), `Copied the location of its hexagon. Paste it in the Jump tab to go there; the book is on wall ${wall + 1}, shelf ${shelf + 1}, volume ${volume + 1}.`);
+          this.ctx.copyText(this.lib.hexagonAddressText(loc.hexagon, loc.floor), `Copied the location of its hexagon. Paste it in the Jump tab to go there; the book is ${Babel.Architecture.shelfMark(this.ctx.dims, wall, shelf, volume).text.replace(/^B/, 'b')}.`);
         });
         row.append(go, copy, link);
         li.append(p, row);

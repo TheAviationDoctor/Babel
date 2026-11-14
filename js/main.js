@@ -183,6 +183,8 @@
 
   /** Goes to a hexagon anywhere, given its floor and hexagon numbers. */
   function goToAddress(hexagon, floor, face, mark) {
+    // a book of the collection, reached from the catalogue or by a link, goes by its own title
+    if (mark && mark.title) bookTitles.set(bookKey(lib.hexagonFingerprint(hexagon, floor), mark.slot), mark.title);
     world.setAnchor(hexagon, floor);
     terminal.reset();
     player.origin = 'arrived';
@@ -190,10 +192,19 @@
     goToCell(0, 0, face);
   }
 
+  /**
+   * The titles of the books of the collection found during this visit, by their hexagons'
+   * fingerprints and their slots; every other book goes by the letters on its spine.
+   */
+  const bookTitles = new Map();
+  const bookKey = (fp, slot) => `${fp[0]},${fp[1]},${slot}`;
+  const bookTitle = (fp, slot) => bookTitles.get(bookKey(fp, slot)) || lib.spineTitle(fp, slot);
+
   /** Goes to the passage of a hexagon, anywhere, and stands before its painting. */
   function goToPainting(hexagon, floor, opts) {
     opts = opts || {};
     world.setAnchor(hexagon, floor);
+    world.namePainting(0, 0, opts.title); // a painting of the collection has its own name
     terminal.reset();
     player.origin = 'arrived';
     player.facePainting(0, 0);
@@ -444,7 +455,7 @@
     const c = lib.config;
     reading = {
       content, returnTo: o.returnTo || 'walking', page: 0,
-      title: lib.spineTitle(fp, o.slot),
+      title: bookTitle(fp, o.slot),
       link: o.link || null,
       paper: Babel.Paper.look(fp, o.slot, c.pagesPerBook), // how the years have marked its leaves
       written: BabelWords.written(lib, content), // a text laid in it by the Catalogue or a link: its words are meant
@@ -458,7 +469,7 @@
     spread.style.setProperty('--columns', c.charactersPerLine);
     $('copy-book-link').hidden = !reading.link;
     $('book-title').textContent = reading.title;
-    $('book-where').textContent = `Wall ${wall + 1}, shelf ${shelf + 1}, volume ${volume + 1}`;
+    $('book-where').textContent = Babel.Architecture.shelfMark(assets.dims, wall, shelf, volume).text;
     $('page-count').textContent = `of ${fmt(c.pagesPerBook)}`;
     $('page-input').max = c.pagesPerBook;
     $('close-book').textContent = reading.returnTo === 'terminal' ? 'Back to the catalogue' : 'Put the book back';
@@ -1139,9 +1150,9 @@
     const cell = world.cell(dh, df);
     if (!cell || target.slot >= cell.count) { $('gaze').hidden = true; gaze = null; return; }
     $('gaze-title').hidden = false;
-    $('gaze-title').textContent = lib.spineTitle(cell.fingerprint, target.slot);
-    const sought = world.isMarked(dh, df, target.slot) ? `The book you sought${world.mark.title ? ` (${world.mark.title})` : ''}: ` : '';
-    $('gaze-where').textContent = `${sought}Wall ${target.wall + 1}, shelf ${target.shelf + 1}, volume ${target.volume + 1}`;
+    $('gaze-title').textContent = bookTitle(cell.fingerprint, target.slot);
+    const sought = world.isMarked(dh, df, target.slot) ? 'The book you sought: ' : '';
+    $('gaze-where').textContent = sought + Babel.Architecture.shelfMark(assets.dims, target.wall, target.shelf, target.volume).text;
     $('gaze-hint').textContent = isTouch ? 'Tap to read' : 'Press E or click to read';
     $('gaze').hidden = false;
   }

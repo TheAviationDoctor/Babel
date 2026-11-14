@@ -1281,6 +1281,11 @@
     }
 
 
+    /** The name on the plate under a hexagon's painting: like a spine's letters, it says nothing of the picture. */
+    paintingTitle(fingerprint) {
+      return this.spineTitle([fmix32((fingerprint[0] ^ 0x5bd1e995) >>> 0), fmix32((fingerprint[1] + 0x27d4eb2f) >>> 0)], this.S);
+    }
+
     /* ---------------- Searching ---------------- */
 
     /**

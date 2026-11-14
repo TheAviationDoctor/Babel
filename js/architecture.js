@@ -61,6 +61,7 @@
     // where along its bookcase (from its middle, towards +x) a volume stands, and which volume stands
     // at a place (−1 at a pilaster or past the ends)
     const bayMid = (b) => d.shelfLen / 2 - d.bayLen / 2 - b * (d.bayLen + d.pilasterW);
+    d.bayMid = bayMid;
     d.bookX = (volume) => {
       const b = Math.floor(volume / d.perBay), i = volume - b * d.perBay;
       return bayMid(b) + (d.perBay * d.bookT) / 2 - (i + 0.5) * d.bookT;
@@ -703,11 +704,9 @@
     plaster.poly([[x0, d.doorH, -hw], [x0, d.doorH, hw], [x0, H, hw], [x0, H, -hw]], [1, 0, 0]);
     plaster.poly([[x1, d.doorH, -hw], [x1, d.doorH, hw], [x1, H, hw], [x1, H, -hw]], [-1, 0, 0]);
     // the lintels over the two doorways, and the boards of their signs
-    const ld = d.lintelDepth, sd = d.signDepth, sw = d.signW / 2 + 0.012, sh = d.signH / 2 + 0.012, sy = d.signY;
+    const ld = d.lintelDepth;
     wood.box(x0, d.doorH, -hw, x0 + ld, d.doorH + d.lintelH, hw, 'XyY');
     wood.box(x1 - ld, d.doorH, -hw, x1, d.doorH + d.lintelH, hw, 'xyY');
-    wood.box(x0 + ld, sy - sh, -sw, x0 + ld + sd, sy + sh, sw, 'XyYzZ');
-    wood.box(x1 - ld - sd, sy - sh, -sw, x1 - ld, sy + sh, sw, 'xyYzZ');
     const dx0 = d.hingeX, dx1 = d.hingeX + d.closetW, dH = d.closetH, cz0 = d.cellZ0;
     const nx0 = d.nicheX - d.closetW / 2, nx1 = d.nicheX + d.closetW / 2;
     if (plain) {
@@ -977,7 +976,7 @@
    * over its far doorway the name of the way it heads, over its near one the name of the way back.
    */
   function buildSignFaces(d, way) {
-    const off = d.lintelDepth + d.signDepth + 0.0015;
+    const off = d.lintelDepth + 0.002; // a cartouche fixed to the lintel
     const yb = d.signY - d.signH / 2, yt = d.signY + d.signH / 2, w = d.signW / 2;
     const pos = [], nor = [], uv = [], idx = [];
     const quad = (x, nx, zLeft, zRight, row) => {
@@ -1028,6 +1027,105 @@
     g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 0, 1, 1, 1, 1, 0], 2));
     g.setIndex([0, 1, 2, 0, 2, 3]);
     return g;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Name plates
+   * ------------------------------------------------------------------ */
+
+  /** The names of a hexagon's bookcases, clockwise round the room: A, B, … Z, AA, AB, … */
+  function caseName(i) {
+    let s = '';
+    for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s;
+    return s;
+  }
+
+  /**
+   * Where a book stands, as the plates name it: its bookcase (A, B, … clockwise round the room),
+   * its row (1 at the top) and its place in the row (1 at the left). wall, shelf and volume are
+   * the Library's own numbering (0-based): the shelves of a wall, the books along a shelf.
+   */
+  function shelfMark(d, wall, shelf, volume) {
+    const b = Math.floor(volume / d.perBay);
+    const mark = { bookcase: caseName(wall * d.bays + b), row: shelf + 1, volume: volume - b * d.perBay + 1 };
+    mark.text = `Bookcase ${mark.bookcase}, row ${mark.row}, volume ${mark.volume}`;
+    return mark;
+  }
+
+  /**
+   * Flat plates facing −z (as the plane of a wall seen from the room), each { m: matrix or null,
+   * x, y, z: its middle, w, h, uv: [u0, v0, u1, v1] }, in one geometry. Facing the plate, its left
+   * is +x.
+   */
+  function plateGeometry(plates) {
+    const pos = [], nor = [], uv = [], idx = [], v = new THREE.Vector3();
+    for (const p of plates) {
+      const [u0, v0, u1, v1] = p.uv, b = pos.length / 3, n = new THREE.Vector3(0, 0, -1);
+      if (p.m) n.transformDirection(p.m);
+      // bottom left, bottom right, top right, top left, as the reader facing the plate sees them
+      for (const [x, y, s, t] of [[p.x + p.w / 2, p.y - p.h / 2, u0, v0], [p.x - p.w / 2, p.y - p.h / 2, u1, v0], [p.x - p.w / 2, p.y + p.h / 2, u1, v1], [p.x + p.w / 2, p.y + p.h / 2, u0, v1]]) {
+        v.set(x, y, p.z);
+        if (p.m) v.applyMatrix4(p.m);
+        pos.push(v.x, v.y, v.z); nor.push(n.x, n.y, n.z); uv.push(s, t);
+      }
+      idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx);
+    return g;
+  }
+
+  /**
+   * The labels of a hexagon's plates: its bookcases (bays), A, B, … clockwise round the room,
+   * then its rows of books, 1 at the top.
+   */
+  function plateLabels(d) {
+    const cases = [];
+    for (let i = 0; i < d.walls * d.bays; i++) cases.push(caseName(i));
+    const rows = [];
+    for (let i = 0; i < d.shelves; i++) rows.push(String(i + 1));
+    return cases.concat(rows);
+  }
+
+  /**
+   * A hexagon's plates, in its frame: the name of each bookcase in the middle of the cornice above
+   * it, and the number of each row of books on the panelling at the left of each wall, level with
+   * the middle of the row. Walls
+   * are taken clockwise round the room and, facing a wall, its bookcases from left to right
+   * (from +x along it).
+   */
+  function buildPlates(d, atlas) {
+    const rect = (i) => {
+      const c = i % atlas.cols, r = Math.floor(i / atlas.cols);
+      return [c / atlas.cols, 1 - (r + 1) / atlas.rows, (c + 1) / atlas.cols, 1 - r / atlas.rows];
+    };
+    const plates = [], front = d.aIn, top = d.base + d.shelves * d.pitch + d.board;
+    const caseH = Math.min(0.08, d.cornice - 0.03), caseW = caseH * 2; // (the atlas's cells are twice as wide as high)
+    for (let w = 0; w < d.walls; w++) {
+      const m = sideMatrix(d.shelvedSides[w]);
+      for (let b = 0; b < d.bays; b++) {
+        const mid = d.bayMid(b), edge = mid + d.bayLen / 2; // the bookcase's left edge, facing it
+        plates.push({ m, x: mid, y: (top + d.shelfTop) / 2, z: front - 0.035 - 0.003, w: caseW, h: caseH, uv: rect(w * d.bays + b) });
+        // the rows are numbered once on each wall, in the middle of the panelling at its left
+        if (b > 0) continue;
+        const x = edge + d.postW + d.panel / 2, z = front - 0.003;
+        const rw = Math.min(0.12, d.panel - 0.06), rh = rw / 2;
+        for (let i = 0; i < d.shelves; i++) {
+          const k = d.shelves - 1 - i; // row i counts from the top; k, from the floor
+          plates.push({ m, x, y: d.base + k * d.pitch + d.board + d.bookH / 2, z, w: rw, h: rh, uv: rect(d.walls * d.bays + i) });
+        }
+      }
+    }
+    return plateGeometry(plates);
+  }
+
+  /** The plate under a hexagon's painting, in the frame of its passage (the texture is the plate's alone). */
+  function buildPaintingPlate(d) {
+    const p = d.painting, w = Math.min(0.56, p.w * 0.65), h = w / (1024 / 144);
+    return plateGeometry([{ m: null, x: p.x, y: p.y - p.h / 2 - p.frame - 0.06 - h / 2, z: d.hallW / 2 - 0.005, w, h, uv: [0, 0, 1, 1] }]);
   }
 
   /** Book geometry with a part attribute: 2 = spine, 1 = boards, 0 = page edges. */
@@ -1348,6 +1446,7 @@
 
   const SIGN_FRAG = `
     uniform sampler2D map;
+    uniform float uGilt;
     varying vec3 vLocal;
     varying vec3 vN;
     varying vec2 vUv;
@@ -1355,9 +1454,11 @@
     #include <fog_pars_fragment>
     void main() {
       vec3 n = normalize(vN);
-      vec3 base = texture2D(map, vUv).rgb;
+      vec4 tex = texture2D(map, vUv);
+      if (tex.a < 0.5) discard; // outside the cartouche
+      vec3 base = tex.rgb;
       float gilt = smoothstep(0.22, 0.36, base.r - base.b); // gold leaf catches more of the light
-      vec3 c = expose(base * lampLight(vLocal, n) * (1.0 + 2.6 * gilt));
+      vec3 c = expose(base * lampLight(vLocal, n) * (1.0 + uGilt * gilt));
       gl_FragColor = vec4(c + dither(gl_FragCoord.xy) / 255.0, 1.0);
       #include <fog_fragment>
     }
@@ -1447,7 +1548,7 @@
 
   function signMaterial(map, lights, opts) {
     const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog]);
-    Object.assign(uniforms, lightingUniforms(lights, opts || {}), { map: { value: map } });
+    Object.assign(uniforms, lightingUniforms(lights, opts || {}), { map: { value: map }, uGilt: { value: opts && opts.gilt !== undefined ? opts.gilt : 2.6 } });
     return new THREE.ShaderMaterial({ uniforms, defines: lightDefines(lights), vertexShader: SIGN_VERT, fragmentShader: SIGN_FRAG, fog: true });
   }
 
@@ -1601,6 +1702,8 @@
         side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4,
       }),
     };
+    const plateAtlas = Babel.Textures.plateAtlas(plateLabels(d));
+    materials.plates = signMaterial(plateAtlas.texture, L.hexagon, { down: shaded, ambient: 0.08 });
     const geometries = {
       hexWood: hex.wood, hexPlaster: hex.plaster, hexTiles: hex.tiles,
       vesWood: ves.wood, vesPlaster: ves.plaster, vesTiles: ves.tiles,
@@ -1608,6 +1711,8 @@
       hubWood: hub.wood, hubPlaster: hub.plaster, hubTiles: hub.tiles, hubGlow: hub.glow,
       wellPlaster: stair.well, wellStone: stair.steps,
       lampGlow: buildLampGlow(d),
+      plates: buildPlates(d, plateAtlas),
+      paintingPlate: d.painting ? buildPaintingPlate(d) : null,
       lampWash: d.roomH > d.shelfTop + 0.2 ? buildLampWash(d) : null,
       pictureGlow: d.painting ? buildPictureGlow(d) : null,
       book: buildBook(d),
@@ -1619,16 +1724,18 @@
       cellWood: cell.wood, cellSoft: cell.soft, shade: cell.shade, bulb: cell.bulb,
       sinkMirror: new THREE.PlaneGeometry(d.sinkMirror.w, d.sinkMirror.h),
     };
-    // each painting has its own texture, so its own material
     // a picture lamp's light is aimed at its painting, which it lights more than the walls round it
     const canvasLights = L.passage.map((v, i) => (i >= 2 ? v.clone().setW(0.85) : v));
+    // the plate under a painting has a texture of its own, its name being the painting's
+    const plateMaterial = d.painting ? (map) => signMaterial(map, canvasLights, { down: PAS_DOWN, ambient: 0.08 }) : null;
+    // each painting has its own texture, so its own material
     const paintingMaterial = d.painting ? (map) => paintMaterial(map, canvasLights, { down: PAS_DOWN }) : null;
     if (d.painting) geometries.canvas = buildCanvas(d);
     // the size of the tiles' pattern on the floor, in metres
     const tilePeriod = [tileRepeat, tileRepeat * textures.tilesAspect];
-    return { dims: d, materials, geometries, lights: L, paintingMaterial, tilePeriod, anisotropy: opts.anisotropy || 1 };
+    return { dims: d, materials, geometries, lights: L, paintingMaterial, plateMaterial, tilePeriod, anisotropy: opts.anisotropy || 1 };
   }
 
-  Babel.Architecture = { dimensions, createAssets, sideMatrix, Builder, intoFrame, frameAt, WAYS };
+  Babel.Architecture = { dimensions, createAssets, sideMatrix, Builder, intoFrame, frameAt, WAYS, caseName, shelfMark };
   Babel.Honeycomb = Honeycomb;
 })();

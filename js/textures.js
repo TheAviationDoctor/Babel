@@ -238,73 +238,171 @@
     return t;
   }
 
+  /* ---------------- lettering: the signs and the name plates ---------------- */
+
+  // Every name in the Library (the signs over the doorways, the plates of the bookcases, of their
+  // rows and of the paintings) is cut into a cartouche of dark walnut and gilded: a board with
+  // hollowed corners and a rounded ear at either end, a gilt rule inside its edge, and the
+  // letters in gold leaf. The board's outside is transparent: the wood it is fixed to shows there.
+  const LETTER_FONT = '"Libre Bodoni", "Bodoni 72", Didot, Georgia, serif';
+  const toRepaint = new Set();
+  let fontAsked = false;
+  /** Paints the lettering again once the typeface has loaded, if it was not ready the first time. */
+  function whenFontLoads(paint) {
+    toRepaint.add(paint);
+    if (fontAsked) return;
+    fontAsked = true;
+    try {
+      document.fonts.load(`500 64px ${LETTER_FONT}`).then(() => { for (const f of toRepaint) f(); }).catch(() => {});
+    } catch (e) { /* the fallback serif stays */ }
+  }
+
+  /** The outline of a cartouche filling w × h at (x, y), or a line `t` inside it. */
+  function cartouchePath(g, x, y, w, h, t) {
+    const e = h * 0.16, r = h * 0.24; // the ears, and the hollowed corners
+    const X0 = x + e, X1 = x + w - e, Y0 = y, Y1 = y + h, M = y + h / 2;
+    const R = r + t, k = Math.sqrt(R * R - t * t), E = e - t, q = E > t ? Math.sqrt(E * E - t * t) : 0;
+    const A = Math.atan2;
+    g.beginPath();
+    g.moveTo(X0 + k, Y0 + t);
+    g.lineTo(X1 - k, Y0 + t);
+    g.arc(X1, Y0, R, A(t, -k), A(k, -t), true);
+    g.lineTo(X1 - t, M - q);
+    if (q > 0) g.arc(X1, M, E, A(-q, -t), A(q, -t), false);
+    g.lineTo(X1 - t, Y1 - k);
+    g.arc(X1, Y1, R, A(-k, -t), A(-t, -k), true);
+    g.lineTo(X0 + k, Y1 - t);
+    g.arc(X0, Y1, R, A(-t, k), A(-k, t), true);
+    g.lineTo(X0 + t, M + q);
+    if (q > 0) g.arc(X0, M, E, A(q, t), A(-q, t), false);
+    g.lineTo(X0 + t, Y0 + k);
+    g.arc(X0, Y0, R, A(k, t), A(t, k), true);
+    g.closePath();
+  }
+
   /**
-   * The signs over the vestibules' doorways, one above the other in a single texture: the
-   * names of the six ways of the honeycomb, EAST at the top, then round by the south.
-   * Gilt capitals on walnut.
-   * Painted again once the typeface has loaded, if it was not ready at start-up.
+   * A cartouche filling w × h pixels at (x, y) of the canvas (cleared there first), with `text`
+   * gilded in it, letter-spaced by `track` times its size, as large as the board allows.
    */
-  function signs() {
-    const WAYS = ['EAST', 'SOUTH-EAST', 'SOUTH-WEST', 'WEST', 'NORTH-WEST', 'NORTH-EAST'];
-    const w = 1152, hh = 256, h = hh * WAYS.length, c = canvas(w, h), g = c.getContext('2d');
-    const rand = rngFrom('signs');
-    const grain = valueNoise(w, hh, 3, rand, 4);
-    const FONT = '"Libre Bodoni", "Bodoni 72", Didot, Georgia, serif';
-    const paint = () => {
-      for (const [k, word] of WAYS.entries()) {
-        const y0 = k * hh;
-        // walnut, with a little grain along the board
-        const img = g.createImageData(w, hh);
-        for (let y = 0; y < hh; y++) {
-          for (let x = 0; x < w; x++) {
-            const i = y * w + x;
-            const ring = 0.5 + 0.5 * Math.sin((y / hh) * 9 * Math.PI + grain[i] * 7);
-            const l = 0.7 + 0.18 * Math.pow(ring, 3) + 0.12 * (grain[(i * 7) % grain.length] - 0.5);
-            img.data[i * 4] = 62 * l; img.data[i * 4 + 1] = 38 * l; img.data[i * 4 + 2] = 22 * l; img.data[i * 4 + 3] = 255;
-          }
-        }
-        g.putImageData(img, 0, y0);
-        // a bevelled edge, and a fine gilt rule inside it
-        g.strokeStyle = 'rgba(255, 228, 180, 0.12)'; g.lineWidth = 6;
-        g.strokeRect(5, y0 + 5, w - 10, hh - 10);
-        g.strokeStyle = 'rgba(0, 0, 0, 0.45)'; g.lineWidth = 4;
-        g.strokeRect(12, y0 + 12, w - 24, hh - 24);
-        g.strokeStyle = '#b8914d'; g.lineWidth = 4;
-        g.strokeRect(30, y0 + 30, w - 60, hh - 60);
-        // the word, widely spaced, as if carved and gilded
-        // (as large as the board allows: the longer names in smaller capitals)
-        let size = 178, track, letters = word.split(''), widths, total;
-        for (;;) {
-          g.font = `500 ${size}px ${FONT}`;
-          track = size * 0.26;
-          widths = letters.map((ch) => g.measureText(ch).width);
-          total = widths.reduce((a, b) => a + b, 0) + track * (letters.length - 1);
-          if (total <= w - 150 || size <= 60) break;
-          size -= 6;
-        }
-        g.textBaseline = 'alphabetic';
-        const base = y0 + hh / 2 + size * 0.34;
-        const gold = g.createLinearGradient(0, base - size * 0.7, 0, base);
-        gold.addColorStop(0, '#f0d48e'); gold.addColorStop(0.55, '#d1a85c'); gold.addColorStop(1, '#9c7334');
-        let x = (w - total) / 2;
-        letters.forEach((ch, i) => {
-          g.fillStyle = 'rgba(0, 0, 0, 0.55)';
-          g.fillText(ch, x + 3, base + 4); // the cut, in shadow
-          g.fillStyle = gold;
-          g.fillText(ch, x, base);
-          x += widths[i] + track;
-        });
-      }
-    };
-    paint();
+  function paintCartouche(g, x, y, w, h, text, rand, track) {
+    g.clearRect(x, y, w, h);
+    g.save();
+    cartouchePath(g, x, y, w, h, 0);
+    g.clip();
+    // walnut, with a little grain along the board
+    const wood = g.createLinearGradient(x, y, x, y + h);
+    wood.addColorStop(0, '#46291a'); wood.addColorStop(0.5, '#3b2316'); wood.addColorStop(1, '#2c190f');
+    g.fillStyle = wood;
+    g.fillRect(x, y, w, h);
+    for (let i = 0; i < h * 0.9; i++) {
+      g.fillStyle = rand() < 0.5 ? 'rgba(120, 80, 50, 0.10)' : 'rgba(10, 5, 2, 0.12)';
+      g.fillRect(x, y + rand() * h, w, 1 + rand() * Math.max(1, h / 60));
+    }
+    // a bevelled edge: lit above, in shadow below
+    const b = Math.max(1.5, h * 0.035);
+    g.lineWidth = 2 * b;
+    g.strokeStyle = 'rgba(255, 226, 180, 0.13)';
+    g.save(); g.translate(0, b * 0.6); cartouchePath(g, x, y, w, h, 0); g.restore(); g.stroke();
+    g.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+    cartouchePath(g, x, y, w, h, 0); g.stroke();
+    g.restore();
+    // a gilt rule inside the edge
+    g.strokeStyle = '#b8914d'; g.lineWidth = Math.max(1.2, h * 0.02);
+    cartouchePath(g, x, y, w, h, h * 0.11);
+    g.stroke();
+    // the letters, cut and gilded
+    const letters = Array.from(text), room = w - h * 0.95;
+    let size = Math.round(h * 0.56), gap, widths, total;
+    for (;;) {
+      g.font = `500 ${size}px ${LETTER_FONT}`;
+      gap = size * track;
+      widths = letters.map((ch) => g.measureText(ch).width);
+      total = widths.reduce((a, c) => a + c, 0) + gap * (letters.length - 1);
+      if (total <= room || size <= h * 0.26) break;
+      size -= Math.max(1, Math.round(h / 100));
+    }
+    if (total > room) { // too long even small: squeezed to fit
+      const k = room / total;
+      widths = widths.map((v) => v * k); gap *= k; total = room;
+    }
+    g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+    const base = y + h / 2 + size * 0.34;
+    const gold = g.createLinearGradient(0, base - size * 0.7, 0, base);
+    gold.addColorStop(0, '#f0d48e'); gold.addColorStop(0.55, '#d1a85c'); gold.addColorStop(1, '#9c7334');
+    let cx = x + (w - total) / 2;
+    const off = Math.max(1, size * 0.02);
+    letters.forEach((ch, i) => {
+      g.save();
+      g.translate(cx, base);
+      if (total === room) g.scale(widths[i] / Math.max(1e-6, g.measureText(ch).width) || 1, 1);
+      g.fillStyle = 'rgba(0, 0, 0, 0.55)';
+      g.fillText(ch, off * 1.5, off * 2); // the cut, in shadow
+      g.fillStyle = gold;
+      g.fillText(ch, 0, 0);
+      g.restore();
+      cx += widths[i] + gap;
+    });
+  }
+
+  function letteringTexture(c) {
     const t = toTexture(c, false);
     t.generateMipmaps = true;
     t.minFilter = THREE.LinearMipmapLinearFilter;
     t.anisotropy = 8;
-    try {
-      document.fonts.load(`500 178px ${FONT}`).then(() => { paint(); t.needsUpdate = true; }).catch(() => {});
-    } catch (e) { /* the fallback serif stays */ }
     return t;
+  }
+
+  /**
+   * The signs over the vestibules' doorways, one above the other in a single texture: the
+   * names of the six ways of the honeycomb, EAST at the top, then round by the south.
+   */
+  function signs() {
+    const WAYS = ['EAST', 'SOUTH-EAST', 'SOUTH-WEST', 'WEST', 'NORTH-WEST', 'NORTH-EAST'];
+    const w = 1152, hh = 256, c = canvas(w, hh * WAYS.length), g = c.getContext('2d');
+    const t = letteringTexture(c);
+    const paint = () => {
+      const rand = rngFrom('signs');
+      WAYS.forEach((word, k) => paintCartouche(g, 0, k * hh, w, hh, word, rand, 0.26));
+      t.needsUpdate = true;
+    };
+    paint();
+    whenFontLoads(paint);
+    return t;
+  }
+
+  /**
+   * The plates of a hexagon's bookcases and rows, all in one texture: cell i of a grid of
+   * `cols` columns holds labels[i]. Returns { texture, cols, rows }.
+   */
+  function plateAtlas(labels) {
+    const cw = 256, ch = 128, cols = 8, rows = Math.max(1, Math.ceil(labels.length / cols));
+    const c = canvas(cw * cols, ch * rows), g = c.getContext('2d');
+    const t = letteringTexture(c);
+    const paint = () => {
+      const rand = rngFrom('plates');
+      labels.forEach((text, i) => paintCartouche(g, (i % cols) * cw, Math.floor(i / cols) * ch, cw, ch, text, rand, 0.2));
+      t.needsUpdate = true;
+    };
+    paint();
+    whenFontLoads(paint);
+    return { texture: t, cols, rows };
+  }
+
+  /** A plate whose text can change: the name of a painting. Returns { texture, show(text) }. */
+  function titlePlate() {
+    const w = 1024, h = 144, c = canvas(w, h), g = c.getContext('2d');
+    const t = letteringTexture(c);
+    let shown = null;
+    const paint = () => {
+      if (shown === null) return;
+      paintCartouche(g, 0, 0, w, h, shown, rngFrom('plate/' + shown), 0.12);
+      t.needsUpdate = true;
+    };
+    whenFontLoads(paint);
+    return {
+      texture: t,
+      show(text) { if (text !== shown) { shown = text; paint(); } },
+    };
   }
 
   /** Soft radial glow for the lamps. */
@@ -360,6 +458,8 @@
 
   Babel.Textures = {
     SPINE_VARIANTS,
+    plateAtlas,
+    titlePlate,
     create() {
       const tiles = hexTiles();
       return {

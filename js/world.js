@@ -79,6 +79,7 @@
       this.time = 0; // for the lamps that flicker
       // the painting in each vestibule, if the Library has paintings
       this.paintings = assets.paintingMaterial && library.painting ? new Babel.Paintings(library, assets) : null;
+      this.paintingTitles = new Map(); // the names of paintings sought in the catalogue, by their hexagons' keys
     }
 
     /* ---------------- doors of the cells ---------------- */
@@ -365,6 +366,8 @@
         }
         look.lamps.push({ under, wash });
       }
+      // the plates of the bookcases and of their rows
+      room.add(new THREE.Mesh(G.plates, M.plates));
       const mirror = new THREE.Mesh(G.mirror, M.mirrorDark);
       mirror.position.set(d.mirrorX, d.mirrorY0 + d.mirrorH / 2, -d.hallW / 2 + 0.041);
       group.add(mirror);
@@ -407,13 +410,25 @@
 
       // the paintings in the passage: this hexagon's, and, turned half round about the passage's
       // middle, the painting of the hexagon at its other end
-      let canvas = null, farCanvas = null;
+      let canvas = null, farCanvas = null, plate = null, farPlate = null;
       if (this.paintings) {
         canvas = new THREE.Mesh(G.canvas, this.paintings.blank);
         farCanvas = new THREE.Mesh(G.canvas, this.paintings.blank);
         farCanvas.position.set(d.Dx, 0, 0);
         farCanvas.rotation.y = Math.PI;
         passage.add(canvas, farCanvas);
+        // and the plates under them, with their names
+        const named = () => {
+          const t = Babel.Textures.titlePlate();
+          const m = new THREE.Mesh(G.paintingPlate, this.assets.plateMaterial(t.texture));
+          m.userData.plate = t;
+          return m;
+        };
+        plate = named();
+        farPlate = named();
+        farPlate.position.set(d.Dx, 0, 0);
+        farPlate.rotation.y = Math.PI;
+        passage.add(plate, farPlate);
       }
 
       // the cell itself, drawn only near the reader
@@ -448,7 +463,7 @@
       const books = new THREE.InstancedMesh(geo, booksLit, S);
       books.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       room.add(books);
-      return { group, passage, pasSigns, books, tint, variant, tints: new Float32Array(S * 3), dh: 0, df: 0, kind: 0, door, interior, niche, signs, light, canvas, farCanvas, look, looks: null };
+      return { group, passage, pasSigns, books, tint, variant, tints: new Float32Array(S * 3), dh: 0, df: 0, kind: 0, door, interior, niche, signs, light, canvas, farCanvas, plate, farPlate, look, looks: null };
     }
 
     /** A hub: its walls, floor and lamps, and the stair in its drum. */
@@ -765,16 +780,29 @@
       this.clearHover();
     }
 
+    /** Names the painting of site s of floor df (as the catalogue knows it), on the plate under it. */
+    namePainting(s, df, title) {
+      if (!this.paintings || !title) return;
+      this.paintingTitles.set(this.paintings.key(this.hexagon(s), this.floor(df)), title); // (shown at the next update)
+    }
+
     /** Hangs each painting that is ready in the passages near the reader; the others show the far colour. */
     _showPaintings() {
       if (!this.center) return;
       const pf = this.center[1], P = this.paintings, near = this._paintingSites || new Set();
-      const hang = (canvas, s, df) => {
-        canvas.material = df === pf && near.has(s) ? P.material(P.key(this.hexagon(s), this.floor(df))) : P.blank;
+      const hang = (canvas, plate, s, df) => {
+        const key = P.key(this.hexagon(s), this.floor(df));
+        canvas.material = df === pf && near.has(s) ? P.material(key) : P.blank;
+        // its name: the one it was sought by in the catalogue, or else the one its hexagon gives it
+        // (worked out again only when the plate is moved to another painting, or a painting is named)
+        const named = key + '#' + this.paintingTitles.size;
+        if (plate.userData.named === named) return;
+        plate.userData.named = named;
+        plate.userData.plate.show(this.paintingTitles.get(key) || this.lib.paintingTitle(this.fingerprint(s, df)));
       };
       for (const cell of this.cells.values()) {
-        hang(cell.canvas, cell.dh, cell.df);
-        hang(cell.farCanvas, this.neighbours(cell.dh)[1], cell.df); // the hexagon beyond the passage
+        hang(cell.canvas, cell.plate, cell.dh, cell.df);
+        hang(cell.farCanvas, cell.farPlate, this.neighbours(cell.dh)[1], cell.df); // the hexagon beyond the passage
       }
     }
 
