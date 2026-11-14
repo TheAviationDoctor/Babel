@@ -1135,6 +1135,8 @@
       uniform vec3 uVesColors[4];
       uniform vec4 uPasLights[4]; // and a passage's (a hub's doors give onto the far ends of vestibules: theirs)
       uniform vec3 uPasColors[4];
+      uniform vec4 uVesDown; // which of their lights shine down from under a shade (see uDown)
+      uniform vec4 uPasDown;
       uniform vec2 uDoorLight; // the ambient light (x) and the falloff of the lamps (y) of vestibules and passages, whatever this room's
       uniform vec4 uVesGains; // how brightly the lights at a vestibule's two ends burn: this hexagon's own vestibule (xy: its end, the hub's), and the other (zw: the far end, this one)
       uniform vec4 uDoors; // how far from the hexagon's middle the change begins (x) and ends (y); the distance from one hexagon to the next (z); half a doorway's width (w)
@@ -1156,11 +1158,12 @@
       }
       // The same point in the frame of the vestibule beyond that doorway (which is its own hexagon's, span metres beyond this room if this is the vestibule's far end)
       vec3 beyond(vec4 q, float span) { return q.w > 0.5 ? q.xyz : vec3(span - q.x, q.y, -q.z); }
-      vec3 vesLamp(vec4 l, vec3 c, vec3 p, vec3 n) {
+      vec3 vesLamp(vec4 l, vec3 c, vec3 p, vec3 n, float shade) {
         vec3 L = l.xyz - p;
         float d2 = max(dot(L, L), 0.01);
         float wrap = clamp((dot(n, L) * inversesqrt(d2) + 0.25) / 1.25, 0.0, 1.0);
-        return c * (l.w * wrap / (1.0 + d2 * uDoorLight.y));
+        float down = mix(1.0, 0.3 + 0.7 * smoothstep(-0.15, 0.35, L.y * inversesqrt(d2)), shade); // as lampLight
+        return c * (l.w * wrap * down / (1.0 + d2 * uDoorLight.y));
       }
     #endif
     #include <fog_pars_fragment>
@@ -1266,11 +1269,11 @@
           vec2 g = at.w > 0.5 ? uVesGains.xy : uVesGains.zw;
           vec3 lv = vec3(uDoorLight.x);
           if (at.w > 0.5) {
-            lv += vesLamp(uVesLights[0], uVesColors[0] * g.x, p, nv) + vesLamp(uVesLights[1], uVesColors[1] * g.y, p, nv)
-              + vesLamp(uVesLights[2], uVesColors[2], p, nv) + vesLamp(uVesLights[3], uVesColors[3], p, nv);
+            lv += vesLamp(uVesLights[0], uVesColors[0] * g.x, p, nv, uVesDown.x) + vesLamp(uVesLights[1], uVesColors[1] * g.y, p, nv, uVesDown.y)
+              + vesLamp(uVesLights[2], uVesColors[2], p, nv, uVesDown.z) + vesLamp(uVesLights[3], uVesColors[3], p, nv, uVesDown.w);
           } else {
-            lv += vesLamp(uPasLights[0], uPasColors[0] * g.x, p, nv) + vesLamp(uPasLights[1], uPasColors[1] * g.y, p, nv)
-              + vesLamp(uPasLights[2], uPasColors[2], p, nv) + vesLamp(uPasLights[3], uPasColors[3], p, nv);
+            lv += vesLamp(uPasLights[0], uPasColors[0] * g.x, p, nv, uPasDown.x) + vesLamp(uPasLights[1], uPasColors[1] * g.y, p, nv, uPasDown.y)
+              + vesLamp(uPasLights[2], uPasColors[2], p, nv, uPasDown.z) + vesLamp(uPasLights[3], uPasColors[3], p, nv, uPasDown.w);
           }
           light = mix(light, lv, toward);
         }
@@ -1379,6 +1382,10 @@
   `;
 
   const LAMP = new THREE.Color(1.0, 0.78, 0.52); // the lamps' warm light
+  // The light of the shaded lamps of the hexagons at a vestibule's or passage's ends, and of the
+  // picture lamps, falls downwards, as a hexagon's own lamps' does: little reaches the ceiling.
+  // Only the catalogue's glow, in a vestibule, shines all round.
+  const VES_DOWN = [1, 1, 1, 0], PAS_DOWN = [1, 1, 1, 1];
   const SCREEN = new THREE.Color(0.62, 0.82, 0.78); // the catalogue's cool glow
 
   function lightingUniforms(lights, opts) {
@@ -1425,7 +1432,9 @@
       uniforms.uVesLights = { value: opts.doors.lights };
       uniforms.uVesColors = { value: [LAMP, LAMP, LAMP, SCREEN] };
       uniforms.uPasLights = { value: opts.doors.passage };
-      uniforms.uDoorLight = { value: new THREE.Vector2(0.05, 0.55) }; // as vestibules and passages have (archMaterial's defaults)
+      uniforms.uDoorLight = { value: new THREE.Vector2(0.05, 0.55) };
+      uniforms.uVesDown = { value: new THREE.Vector4(...VES_DOWN) };
+      uniforms.uPasDown = { value: new THREE.Vector4(...(opts.doors.hub ? VES_DOWN : PAS_DOWN)) }; // as vestibules and passages have (archMaterial's defaults)
       uniforms.uPasColors = { value: opts.doors.hub ? [LAMP, LAMP, LAMP, SCREEN] : [LAMP, LAMP, LAMP, LAMP] };
       uniforms.uVesGains = { value: new THREE.Vector4(1, 1, 1, 1) };
       uniforms.uDoors = { value: new THREE.Vector4(opts.doors.from, opts.doors.to, opts.doors.span, opts.doors.halfWidth) };
@@ -1460,6 +1469,8 @@
     // the stair hexagon at a vestibule's far end is brighter than a hexagon of books, so its
     // light there is stronger, as it is when one stands in the stair hexagon's doorway
     const HUB_END = 1.0;
+    // a picture lamp lights its painting, and little more: a passage is no brighter than a hexagon
+    const PICTURE = 0.45;
     return {
       // the lamps above the bookcases (as many as there are bookcases)
       hexagon: [0, 1, 2, 3].map((i) => {
@@ -1481,8 +1492,8 @@
         V(d.hallX0 - 0.25, 1.8, 0, 0.72),
         V(d.hallX1 + 0.25, 1.8, 0, 0.72),
         ...(d.painting ? [
-          V(d.painting.lamp.x, d.painting.lamp.y - 0.01, d.painting.lamp.z, 0.85),
-          V(d.Dx - d.painting.lamp.x, d.painting.lamp.y - 0.01, -d.painting.lamp.z, 0.85),
+          V(d.painting.lamp.x, d.painting.lamp.y - 0.01, d.painting.lamp.z, PICTURE),
+          V(d.Dx - d.painting.lamp.x, d.painting.lamp.y - 0.01, -d.painting.lamp.z, PICTURE),
         ] : [V(0, 0, 0, 0), V(0, 0, 0, 0)]),
       ],
       // inside the niche: the screen, and the vestibule's light
@@ -1554,13 +1565,13 @@
       hexWood: archMaterial(textures.wood, woodScale, 0xb0845a, L.hexagon, { patina: 'wood', path, doors: doors(d.aIn), down: shaded }),
       hexPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.hexagon, { patina: 'plaster', path, doors: doors(d.aIn), down: shaded }),
       hexTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.hexagon, { patina: 'tiles', path, doors: doors(d.aIn - 0.3), down: shaded }),
-      vesWood: archMaterial(textures.wood, woodScale, 0xb0845a, L.vestibule, Object.assign({ patina: 'wood', path }, screenLit)),
-      vesPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.vestibule, Object.assign({ patina: 'plaster', path }, screenLit)),
-      vesTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.vestibule, Object.assign({ patina: 'tiles', path }, screenLit)),
+      vesWood: archMaterial(textures.wood, woodScale, 0xb0845a, L.vestibule, Object.assign({ patina: 'wood', path, down: VES_DOWN }, screenLit)),
+      vesPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.vestibule, Object.assign({ patina: 'plaster', path, down: VES_DOWN }, screenLit)),
+      vesTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.vestibule, Object.assign({ patina: 'tiles', path, down: VES_DOWN }, screenLit)),
       // the passages between clusters
-      pasWood: archMaterial(textures.wood, woodScale, 0xb0845a, L.passage, { patina: 'wood', path }),
-      pasPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.passage, { patina: 'plaster', path }),
-      pasTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.passage, { patina: 'tiles', path }),
+      pasWood: archMaterial(textures.wood, woodScale, 0xb0845a, L.passage, { patina: 'wood', path, down: PAS_DOWN }),
+      pasPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.passage, { patina: 'plaster', path, down: PAS_DOWN }),
+      pasTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.passage, { patina: 'tiles', path, down: PAS_DOWN }),
       // the hubs
       hubWood: archMaterial(textures.wood, woodScale, 0xb0845a, L.hub, { patina: 'wood', path: hubPath, doors: doors(d.aIn, true), down: shaded, falloff: 0.38, ambient: 0.16 }),
       hubPlaster: archMaterial(textures.plaster, [0.4, 0.4], 0xc9b99a, L.hub, { patina: 'plaster', path: hubPath, doors: doors(d.aIn, true), down: shaded, falloff: 0.38, ambient: 0.16 }),
@@ -1568,8 +1579,8 @@
       hubTiles: archMaterial(textures.tiles, tileScale, 0xc8b49a, L.hub, { patina: 'tiles', path: hubPath, doors: doors(d.aIn - 0.9, true), down: shaded, falloff: 0.38, ambient: 0.16 }),
       niche: archMaterial(textures.plaster, [0.4, 0.4], 0xffffff, L.niche, { vertexColors: true, colors: [SCREEN], falloff: 1.4, ambient: 0.04 }),
       screen: new THREE.MeshBasicMaterial({ map: textures.screen, fog: true }),
-      signs: signMaterial(textures.signs, L.vestibule, { colors: [null, null, null, SCREEN], ambient: 0.08 }),
-      pasSigns: signMaterial(textures.signs, L.passage, { ambient: 0.08 }),
+      signs: signMaterial(textures.signs, L.vestibule, { colors: [null, null, null, SCREEN], ambient: 0.08, down: VES_DOWN }),
+      pasSigns: signMaterial(textures.signs, L.passage, { ambient: 0.08, down: PAS_DOWN }),
       // the stairwell's walls, seen from inside it only: the flat one above the opening lies in the
       // plane of the drum's flat wall, back to back with it, and the round one meets that plane at
       // the opening's sides; seen from the hub too, each would flicker through its wall
@@ -1609,7 +1620,9 @@
       sinkMirror: new THREE.PlaneGeometry(d.sinkMirror.w, d.sinkMirror.h),
     };
     // each painting has its own texture, so its own material
-    const paintingMaterial = d.painting ? (map) => paintMaterial(map, L.passage) : null;
+    // a picture lamp's light is aimed at its painting, which it lights more than the walls round it
+    const canvasLights = L.passage.map((v, i) => (i >= 2 ? v.clone().setW(0.85) : v));
+    const paintingMaterial = d.painting ? (map) => paintMaterial(map, canvasLights, { down: PAS_DOWN }) : null;
     if (d.painting) geometries.canvas = buildCanvas(d);
     // the size of the tiles' pattern on the floor, in metres
     const tilePeriod = [tileRepeat, tileRepeat * textures.tilesAspect];

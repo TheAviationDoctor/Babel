@@ -4,15 +4,15 @@ A Web-based walkable simulation of Jorge Luis Borges's *[Library of Babel](https
 
 ## Features
 
-- Permanent book locations (deterministically generated from a seed)
-- Configurable environment (seed, book format, alphabet, bookshelves, look sensitivity, field of view)
-- Interactive objects (books, terminal, doors, beds, bedside lamps)
-- Reverse-search any text and teleport to the corresponding book
-- Copy and share locations of any book or text, incl. secret password-encrypted links
-- Read from an index of ~1K literature classics (all copyright-free)
-- A painting for every hexagon of books, each one different, and every possible painting somewhere
-- Find the passage where any picture hangs, and view famous copyright-free paintings
-- Traces of other librarians: figures glimpsed across the shaft, above and below, and pencil marks in the margins
+- Permanent book locations (deterministically generated from a seed).
+- Configurable environment (seed, book format, alphabet, bookshelves, look sensitivity, field of view).
+- Interactive objects (books, terminal display, doors, beds, bedside lamps).
+- Reverse-search any text and teleport to the corresponding book.
+- Copy and share locations of any book or text, incl. secret password-encrypted links.
+- Read from an index of copyright-free texts.
+- A painting for every hexagon of books, each one different, and every possible painting somewhere.
+- Find the passage where any picture hangs, and view famous copyright-free paintings.
+- Traces of other librarians: figures glimpsed across the shaft, above and below, and pencil marks in the margins.
 
 ## Getting started
 
