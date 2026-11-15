@@ -569,6 +569,7 @@ test('adapts the Library, the mirror and the dream each on its own, down when sl
   const r = await page.evaluate(() => {
     const { D, W } = T, Q = D.quality, R = D.renderer;
     T.quiet(); D.startWalking();
+    D.mirrors.reflector.visible = D.mirrors.sinkReflector.visible = false; // (frames with a mirror in sight count for the mirror)
     const run = (dt, n) => { for (let i = 0; i < n; i++) D.adaptQuality(dt); return { level: Q.world.level, pr: R.getPixelRatio(), far: W.view.farFloors }; };
     const out = { size: Q.ladder.length };
     out.slow = run(0.03, 240);
@@ -621,6 +622,42 @@ test('draws only the rooms that can be seen, and never hides what can (forty vie
   // (a few pixels may differ: hairline seams in the walls, which showed the room behind, now show the dark)
   assert(r.worst[0].diff <= 12, `culling hid what can be seen: ${JSON.stringify(r.worst)}`);
   assert(r.calls.culled < 0.75 * r.calls.all, `culling saved little: ${r.calls.culled} draws, against ${r.calls.all}`);
+});
+
+test('the mirror in a vestibule, between its hexagon\'s doorway and the cell\'s door, reflects when in sight, and loses nothing to culling', async (page) => {
+  const r = await page.evaluate(async () => {
+    const { D, P, W, d } = T, R = D.renderer, scene = W.root.parent;
+    const rt = new THREE.WebGLRenderTarget(320, 200), a = new Uint8Array(320 * 200 * 4), b = new Uint8Array(320 * 200 * 4);
+    let seed = 99; const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    T.quiet(); D.startWalking();
+    const t = P.roomTurn(), c = Math.cos(t), s = Math.sin(t), at = (hx, hz) => [hx * c - hz * s, hx * s + hz * c];
+    const out = { place: d.mirrorX - d.mirrorW / 2 > d.hallX0 && d.mirrorX + d.mirrorW / 2 < d.hingeX, views: [] };
+    // the mirror of site 0's vestibule, where the reader now measures from (their hexagon, or past the vestibule's middle, the stair hexagon)
+    const mirrorAt = () => { const f = P.cells().find((q) => q.site === 0).frame, z = -d.hallW / 2; return [f.x + d.mirrorX * f.c - z * f.s, f.z + d.mirrorX * f.s + z * f.c]; };
+    for (let i = 0; i < 8; i++) {
+      P.enabled = false;
+      const [x, z] = at(d.hallX0 + 0.2 + rnd() * (d.hallX1 - d.hallX0 - 0.4), -d.hallW / 2 + 0.5 + rnd() * (d.hallW - 0.7));
+      P._arrive(0, 0); P.x = x; P.z = z; P.y = 0; P._rebase();
+      const [mx, mz] = mirrorAt();
+      P.yaw = -Math.PI / 2 - Math.atan2(mz - P.z, mx - P.x) + (rnd() - 0.5) * 0.8; P.pitch = (rnd() - 0.5) * 0.4;
+      P._applyCamera(0, 0); W.update(P.site, P.cf, P.ch);
+      await T.frames(2); // (a frame places the mirror, and culls for what it sees)
+      const reflecting = D.mirrors.reflector.visible;
+      R.setRenderTarget(rt); R.render(scene, P.camera); R.readRenderTargetPixels(rt, 0, 0, 320, 200, b);
+      W.cull(P.camera, true); R.render(scene, P.camera); R.readRenderTargetPixels(rt, 0, 0, 320, 200, a); R.setRenderTarget(null);
+      let diff = 0; for (let k = 0; k < a.length; k += 4) if (Math.abs(a[k] - b[k]) > 3 || Math.abs(a[k + 1] - b[k + 1]) > 3 || Math.abs(a[k + 2] - b[k + 2]) > 3) diff++;
+      out.views.push({ reflecting, diff });
+    }
+    // facing away from it, it does not reflect
+    const [mx, mz] = mirrorAt(); P.yaw = -Math.PI / 2 - Math.atan2(mz - P.z, mx - P.x) + Math.PI; await T.frames(2);
+    out.away = D.mirrors.reflector.visible && D.mirrors.shown === 0; // (another vestibule's, seen through the stair hexagon, may)
+    rt.dispose(); T.quiet();
+    return out;
+  });
+  assert(r.place, 'the mirror is not between the hexagon\'s doorway and the cell\'s door');
+  assert(r.views.filter((v) => v.reflecting).length >= 6, `the mirror reflected in only ${r.views.filter((v) => v.reflecting).length} of 8 views of it`);
+  assert(r.views.every((v) => v.diff <= 12), `culling hid what the mirror shows: ${JSON.stringify(r.views)}`);
+  assert(!r.away, 'the mirror reflects with nobody looking at it');
 });
 
 test('lets go of spare hexagons after a while, and draws again where they were', async (page) => {

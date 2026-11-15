@@ -9,7 +9,7 @@
   const $ = (id) => document.getElementById(id);
   const isTouch = matchMedia('(hover: none) and (pointer: coarse)').matches;
 
-  let raw, lib, assets, world, player, renderer, scene, camera, sinkReflector, figure, figureLight, figureKey, terminal, music, sounds, ghost;
+  let raw, lib, assets, world, player, renderer, scene, camera, reflector, sinkReflector, figure, figureLight, figureKey, terminal, music, sounds, ghost;
   let mode = 'walking';
   let gaze = null, gazeKey = '';
   let reading = null;
@@ -97,8 +97,15 @@
       if (!document.hidden) last = performance.now(); // the time away is not a frame
     });
 
-    // The small mirror above the sink of the nearest cell. Its camera sees layer 1, where the reader's own figure lives.
+    // The mirror of the nearest vestibule in sight, and the small one above the sink of the nearest
+    // cell. Their cameras see layer 1, where the reader's own figure lives.
     const d = assets.dims;
+    reflector = new THREE.Reflector(assets.geometries.mirror, {
+      textureWidth: 512, textureHeight: 512, color: 0x8d877b, clipBias: 0.002, multisample: 0,
+    });
+    reflector.camera.layers.enableAll();
+    reflector.visible = false;
+    scene.add(reflector);
     sinkReflector = new THREE.Reflector(assets.geometries.sinkMirror, {
       textureWidth: 512, textureHeight: 512, color: 0x8d877b, clipBias: 0.002,
       multisample: 0, // (a mirror this small, its picture softened by the glass, needs no antialiasing)
@@ -109,7 +116,7 @@
     scene.add(sinkReflector);
     // A mirror seen in a mirror keeps its last picture rather than rendering again.
     let reflecting = false;
-    for (const r of [sinkReflector]) {
+    for (const r of [reflector, sinkReflector]) {
       const render = r.onBeforeRender;
       r.onBeforeRender = function (a, b, c) {
         if (reflecting) return;
@@ -167,6 +174,7 @@
     const f = MIRROR_SCALE[quality.mirror.level];
     const w = window.innerWidth * pr * f, h = window.innerHeight * pr * f, k = Math.min(1, 1024 / Math.max(w, h));
     sinkReflector.getRenderTarget().setSize(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)));
+    reflector.getRenderTarget().setSize(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)));
   }
 
   function onResize() {
@@ -1033,7 +1041,7 @@
     if (document.hidden) return;
     if (sleep && sleep.dreaming && mode === 'sleeping') judge(quality.dream, rawDt);
     else if (mode === 'walking' && !sleep) {
-      if (sinkReflector.visible) judge(quality.mirror, rawDt);
+      if (sinkReflector.visible || reflector.visible) judge(quality.mirror, rawDt);
       else {
         judge(quality.world, rawDt);
         world.busy = quality.world.median > 0.0185; // frames not easy: less time for the work spread over them
@@ -1124,6 +1132,17 @@
       obj.position.set(f.x + x * f.c - z * f.s, y, f.z + x * f.s + z * f.c);
       obj.rotation.y = turn - f.turn;
     };
+    // The vestibule's mirror that reflects is the nearest one in view; while none is, it reflects
+    // nothing. When it moves to another mirror, its reflection comes up out of the dark glass.
+    const shown = mirrorInView(cells);
+    reflector.visible = !!shown;
+    if (shown) {
+      if (shown.site !== mirrorShown) { mirrorShown = shown.site; mirrorFade = 0; }
+      mirrorFade = Math.min(1, mirrorFade + dt / 0.45);
+      const e = mirrorFade * mirrorFade * (3 - 2 * mirrorFade);
+      reflector.material.uniforms.color.value.copy(MIRROR_DARK).lerp(MIRROR_LIT, e);
+      placeIn(reflector, shown.frame, d.mirrorX, d.mirrorY0 + d.mirrorH / 2, -d.hallW / 2 + 0.043, 0);
+    } else mirrorShown = null;
     // the sink mirror of the nearest cell, while the reader is in it or at its open door
     const sinkCell = nearest(d.sinkMirror.x, d.sinkMirror.z);
     const [px, pz] = player.inFrame(sinkCell.frame);
@@ -1132,9 +1151,75 @@
     placeIn(sinkReflector, sinkCell.frame, d.sinkMirror.x - 0.014, d.sinkMirror.y0 + d.sinkMirror.h / 2, d.sinkMirror.z, -Math.PI / 2);
     Babel.Figure.pose(figure, player, dt);
     ghost.update(dt, player, camera, mode === 'walking' && !sleep);
-    // only what can be seen from where the reader stands is drawn (all of it while the mirror,
-    // which sees from elsewhere, is in sight)
-    world.cull(camera, sinkReflector.visible);
+    // only what can be seen from where the reader stands is drawn, and what can be seen in a mirror in sight
+    const mirrors = [];
+    if (reflector.visible) mirrors.push({ camera: reflectedCamera(reflector), room: ['V', shown.site, player.cf] });
+    if (sinkReflector.visible) mirrors.push({ camera: reflectedCamera(sinkReflector), room: ['V', sinkCell.site, player.cf] });
+    world.cull(camera, mirrors);
+  }
+
+  const MIRROR_DARK = new THREE.Color(0x1c1a17), MIRROR_LIT = new THREE.Color(0x8d877b);
+  let mirrorShown = null, mirrorFade = 0;
+  const mirrorFrustum = new THREE.Frustum(), mirrorView = new THREE.Matrix4(), mirrorBox = new THREE.Box3(), mirrorCorner = new THREE.Vector3();
+
+  /**
+   * Of the vestibules' mirrors around the reader, on their floor, the nearest that the camera can
+   * see: in front of it, in the field of view, and not hidden by the vestibule's walls (seen from
+   * a hexagon or a stair hexagon, through the doorway at that end).
+   */
+  function mirrorInView(cells) {
+    const d = assets.dims, mx = d.mirrorX, mz = -d.hallW / 2, my = d.mirrorY0 + d.mirrorH / 2;
+    if (Math.abs(player.y) > 1.5) return null; // (on the stair, away from its floor)
+    camera.updateMatrixWorld();
+    mirrorView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    mirrorFrustum.setFromProjectionMatrix(mirrorView);
+    let best = null, least = Infinity;
+    for (const c of cells) {
+      const f = c.frame, [hx, hz] = player.inFrame(f);
+      if (hz < mz + 0.05) continue; // behind the wall the mirror hangs on
+      let hidden = false;
+      for (const xe of [d.hallX0, d.hallX1]) {
+        if ((hx - xe) * (mx - xe) >= 0) continue; // this end of the vestibule is not between them
+        const ze = hz + ((xe - hx) / (mx - hx)) * (mz - hz);
+        if (Math.abs(ze) > d.hallW / 2) hidden = true;
+      }
+      if (hidden) continue;
+      // its glass, a box round it in the frame of the vestibule, in the field of view
+      mirrorBox.makeEmpty();
+      for (const ex of [-1, 1]) for (const ey of [-1, 1]) {
+        const x = mx + (ex * d.mirrorW) / 2, y = my + (ey * d.mirrorH) / 2;
+        mirrorBox.expandByPoint(mirrorCorner.set(f.x + x * f.c - mz * f.s, y, f.z + x * f.s + mz * f.c));
+      }
+      mirrorBox.expandByScalar(0.02);
+      if (!mirrorFrustum.intersectsBox(mirrorBox)) continue;
+      const far = Math.hypot(hx - mx, hz - mz);
+      if (far < least) { least = far; best = c; }
+    }
+    return best;
+  }
+
+  /**
+   * A camera where `mirror` reflects the reader's from: their camera, mirrored in its glass (as the
+   * mirror itself will draw it), for what can be seen in it to be drawn too (see world.cull).
+   */
+  const mirrorCameras = new Map();
+  function reflectedCamera(mirror) {
+    let cam = mirrorCameras.get(mirror);
+    if (!cam) mirrorCameras.set(mirror, (cam = camera.clone()));
+    mirror.updateMatrixWorld();
+    const n = new THREE.Vector3(0, 0, 1).applyQuaternion(mirror.getWorldQuaternion(new THREE.Quaternion())).normalize();
+    const p = mirror.getWorldPosition(new THREE.Vector3());
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n, p);
+    // the camera's place and the way it looks, each mirrored in the plane of the glass
+    const eye = camera.getWorldPosition(new THREE.Vector3()), ahead = eye.clone().add(camera.getWorldDirection(new THREE.Vector3()));
+    const flip = (v) => v.sub(n.clone().multiplyScalar(2 * plane.distanceToPoint(v)));
+    flip(eye); flip(ahead);
+    cam.copy(camera);
+    cam.position.copy(eye);
+    cam.up.set(0, 1, 0);
+    cam.lookAt(ahead);
+    cam.updateMatrixWorld();
+    return cam;
   }
 
   function updateGaze() {
@@ -1223,7 +1308,7 @@
   Babel.debug = {
     get lib() { return lib; }, get world() { return world; }, get player() { return player; },
     get renderer() { return renderer; }, get mode() { return mode; }, get sleep() { return sleep; }, journey, here,
-    get reading() { return reading; },
+    get reading() { return reading; }, get mirrors() { return { reflector, sinkReflector, shown: mirrorShown }; },
     openBook, openBookAt, startWalking, setMode, goToCell, goToAddress, fallAsleep, wakeUp, hexagonSeed,
     get lastJourney() { return lastJourney; }, quality, adaptQuality, get sounds() { return sounds; },
     get terminal() { return terminal; },

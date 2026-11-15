@@ -111,6 +111,12 @@
     d.nicheX = d.hallMid;
     d.closetH = Math.min(1.95, d.doorH - 0.05);
     d.hingeX = d.closetX - d.closetW / 2; // the south door is hung on its west side and opens inwards
+    // the mirror on the same wall, between the hexagon's doorway and the cell's door (away from
+    // the stair, so that from its hexagon few vestibules' mirrors are seen at once)
+    d.mirrorW = 0.78;
+    d.mirrorH = 1.45;
+    d.mirrorY0 = 0.45;
+    d.mirrorX = (d.hallX0 + d.hingeX - 0.06) / 2;
 
     // The cell behind the south door, its door in the middle of its north wall: a bed along its
     // south wall, a small table with a night lamp at the bed's head (west), and a sink with a
@@ -754,6 +760,14 @@
     wood.box(dx1 + 0.06, 0, -hw, x1, 0.1, -hw + 0.02, 'YZx');
     wood.box(x0, 0, hw - 0.02, nx0 - 0.06, 0.1, hw, 'YzX');
     wood.box(nx1 + 0.06, 0, hw - 0.02, x1, 0.1, hw, 'Yzx');
+    // the mirror's frame, on the south wall between the hexagon's doorway and the cell's door
+    // (its glass is a separate object, which reflects only while it is the one in sight)
+    const mx0 = d.mirrorX - d.mirrorW / 2, mx1 = d.mirrorX + d.mirrorW / 2, my0 = d.mirrorY0, my1 = d.mirrorY0 + d.mirrorH;
+    const fw = 0.07, fz = -hw + 0.04;
+    wood.box(mx0 - fw, my0 - fw, -hw, mx1 + fw, my0, fz, 'xXyYZ');
+    wood.box(mx0 - fw, my1, -hw, mx1 + fw, my1 + fw, fz, 'xXyYZ');
+    wood.box(mx0 - fw, my0, -hw, mx0, my1, fz, 'xXZ');
+    wood.box(mx1, my0, -hw, mx1 + fw, my1, fz, 'xXZ');
     // frame around the door of the cell (its leaf is a separate, moving object)
     wood.box(dx0 - 0.06, 0, -hw, dx0, dH + 0.06, -hw + 0.045, 'xXYZ');
     wood.box(dx1, 0, -hw, dx1 + 0.06, dH + 0.06, -hw + 0.045, 'xXYZ');
@@ -1763,6 +1777,7 @@
       signs: [0, 1, 2, 3, 4, 5].map((way) => buildSignFaces(d, way)), // by the direction a vestibule heads in
       cellWood: cell.wood, cellSoft: cell.soft, shade: cell.shade, bulb: cell.bulb,
       sinkMirror: new THREE.PlaneGeometry(d.sinkMirror.w, d.sinkMirror.h),
+      mirror: new THREE.PlaneGeometry(d.mirrorW, d.mirrorH),
     };
     // a picture lamp's light is aimed at its painting, which it lights more than the walls round it
     const canvasLights = L.passage.map((v, i) => (i >= 2 ? v.clone().setW(0.85) : v));

@@ -458,6 +458,11 @@
       lampGlow.position.set(d.nightLamp[0], d.nightLamp[1] + 0.25, d.nightLamp[2]);
       lampGlow.scale.set(0.7, 0.7, 0.7);
       interior.add(lampGlow);
+      // the vestibule's mirror: dark glass, but for the one nearest in sight, which reflects (see main.js)
+      const mirror = new THREE.Mesh(G.mirror, M.mirrorDark);
+      mirror.position.set(d.mirrorX, d.mirrorY0 + d.mirrorH / 2, -d.hallW / 2 + 0.041);
+      group.add(mirror);
+      parts.ves.push(mirror);
       const sinkMirror = new THREE.Mesh(G.sinkMirror, M.mirrorDark);
       sinkMirror.position.set(d.sinkMirror.x - 0.012, d.sinkMirror.y0 + d.sinkMirror.h / 2, d.sinkMirror.z);
       sinkMirror.rotation.y = -Math.PI / 2; // on the east wall, facing west
@@ -849,8 +854,9 @@
     }
 
     /**
-     * Hides what cannot be seen from `camera` (or nothing, with `all`: for a view not from it, such
-     * as the cell's mirror's). The Library is rooms: each hexagon of books, its vestibule, its
+     * Hides what cannot be seen from `camera`, nor from any of `also` ({ camera, room }: the
+     * mirrors' cameras, which see from behind their glass, and the rooms they hang in); or
+     * nothing, with `also` true. The Library is rooms: each hexagon of books, its vestibule, its
      * passage, each stair hexagon, a floor at a time; and the openings between them: the doors at
      * either end of a vestibule or a passage, and the hole each floor leaves for the shaft. From
      * the room the camera is in, what can be seen of each opening, as a rectangle of the screen,
@@ -859,14 +865,24 @@
      * rest, behind walls and floors, are not, so that the hexagons above and below, seen from a
      * stair hexagon only through its doors and up its shaft, cost little.
      */
-    cull(camera, all) {
-      const seen = all || !this.center ? null : this._portals(camera);
+    cull(camera, also) {
+      let seen = also === true || !this.center ? null : this._portals(camera);
+      // and what other cameras see (a mirror's, which looks from behind its glass, out of the room it hangs in)
+      if (seen && Array.isArray(also)) for (const other of also) {
+        const more = this._portals(other.camera, other.room);
+        if (!more) { seen = null; break; }
+        for (const [k, r] of more) if (!seen.has(k)) seen.set(k, r);
+      }
       this._seen = seen;
       this._show(seen);
     }
 
-    /** The rooms seen from `camera`, each with the rectangle of the screen it is seen in; null if the camera is in none. */
-    _portals(camera) {
+    /**
+     * The rooms seen from `camera`, each with the rectangle of the screen it is seen in; null if
+     * the camera is in none. `from`: the room to start from, if not the one the camera is in
+     * (['V', site, floor] for a mirror's, which hangs in a vestibule or a cell off it).
+     */
+    _portals(camera, from) {
       const d = this.d, pf = this.center[1], Hf = d.Hf;
       const V = new THREE.Vector3(), Q = new THREE.Vector4(), M = this._vp || (this._vp = new THREE.Matrix4()), inv = new THREE.Matrix4();
       camera.updateMatrixWorld();
@@ -963,8 +979,8 @@
         return 'P' + Math.min(s, t) + ',' + Math.max(s, t) + ',' + f;
       };
       // the room the camera is in
-      let start = null;
-      for (const c of cells.values()) {
+      let start = from || null;
+      if (!start) for (const c of cells.values()) {
         if (c.df !== storey) continue;
         V.copy(cam).applyMatrix4(inv.copy(c.group.matrix).invert());
         if (hexDist(V.x, V.z) <= d.a) { start = ['H', c.dh, c.df]; break; }
