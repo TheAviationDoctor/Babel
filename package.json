@@ -1,6 +1,7 @@
 {
   "name": "babel",
   "private": true,
+  "version": "1.0.0",
   "description": "A walkable rendering of Jorge Luis Borges's Library of Babel",
   "scripts": {
     "test": "node tests/library.test.js && node tests/browser.test.js"

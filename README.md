@@ -308,6 +308,8 @@ Walk from one hexagon to the next and the music of the one fades into the music 
 
 In `index.html`, every file name is followed by `?v=` and its version, a hash of its contents, such as `js/main.js?v=3f9c0a1b2d`. Browsers, and GitHub Pages, keep copies of files for a while; a file with a new version is fetched again, and the others are not, so a new page is never read with an old script, and a change brings only the files it touched. The files the page loads later, as it needs them (the lists of the collection's books and paintings, and the dictionary of **Find words**), have their versions in a small script just above the others. `stamp.js` writes them all, and the git hook runs it before every commit; run `node stamp.js` yourself to try a change before committing it, or `node stamp.js --check` to see whether the page is stamped as it should be.
 
+The release (the version of the Library as a whole, such as 1.0.0) is the `version` in `package.json`, and `stamp.js` writes it at the foot of the Catalogue's **Map** tab, beside the GitHub button, so that a visitor reporting a problem can say which they saw. To make a release, change it there, commit (the hook stamps the page), then tag that commit with the same version and push the tag, or create the release on GitHub from it: `npm version 1.1.0` does all but the push in one go (`git push --follow-tags` then sends both).
+
 | Path | Contents |
 |---|---|
 | `index.html` | The page |

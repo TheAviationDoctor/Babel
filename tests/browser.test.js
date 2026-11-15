@@ -441,6 +441,17 @@ test('finds a text in the Catalogue, goes to it, and the book there begins with 
   assert(r.picked, 'the reader was not set down before the book');
 });
 
+test('shows the release, as package.json gives it, at the foot of the Catalogue\'s map', async (page) => {
+  const release = require('../package.json').version;
+  const r = await page.evaluate(() => {
+    T.quiet(); T.D.terminal.open();
+    const el = document.getElementById('release'), box = el.getBoundingClientRect(), gh = el.nextElementSibling.getBoundingClientRect();
+    return { text: el.textContent, shown: box.width > 0 && box.height > 0, beside: Math.abs(box.top + box.height / 2 - (gh.top + gh.height / 2)) < 8 && box.right <= gh.left };
+  });
+  assert.strictEqual(r.text, `Version ${release}`);
+  assert(r.shown && r.beside, 'the release is not shown beside the GitHub button');
+});
+
 test('jumps through the Catalogue, and says how far it went', async (page) => {
   const r = await page.evaluate(() => {
     const { D } = T, lib = D.lib, $ = (id) => document.getElementById(id);

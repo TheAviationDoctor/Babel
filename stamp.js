@@ -9,6 +9,10 @@
  * paintings, and the dictionary of Find words), have their versions written into the page too,
  * as window.BABEL_VERSIONS, which js/terminal.js and js/words.js read.
  *
+ * And the version of the Library itself, the release, as package.json gives it ("version"),
+ * is written at the foot of the Catalogue's first tab, so that a visitor reporting a problem
+ * can say which they saw.
+ *
  * The git hook (.githooks/pre-commit) runs it before every commit. To run it yourself, from the
  * repository's folder:
  *
@@ -50,6 +54,10 @@ for (const file of LATER) if (fs.existsSync(path.join(ROOT, file))) later[file] 
 const block = `<script id="versions">window.BABEL_VERSIONS = ${JSON.stringify(later)};</script>`;
 if (/<script id="versions">.*?<\/script>/.test(html)) html = html.replace(/<script id="versions">.*?<\/script>/, block);
 else html = html.replace(/<script src=/, `${block}\n<script src=`);
+
+// the release, at the foot of the Catalogue's first tab
+const release = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
+if (release) html = html.replace(/(<span id="release"[^>]*>)[^<]*(<\/span>)/, `$1Version ${release}$2`);
 
 for (const file of missing) console.error(`stamp.js: index.html loads ${file}, which is not there.`);
 if (check) {
