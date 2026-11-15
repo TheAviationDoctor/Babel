@@ -53,6 +53,11 @@
     return 1 - burst * 0.7 * (1 - noise(t * 23)) - 0.03 * noise(t * 3);
   }
 
+  /** How far (x, z) is from the middle of a hexagon, as its apothem: a hexagon's sides face ±x. */
+  function hexDist(x, z) {
+    return Math.max(Math.abs(x), Math.abs(x / 2 + (z * Math.sqrt(3)) / 2), Math.abs(x / 2 - (z * Math.sqrt(3)) / 2));
+  }
+
   class World {
     constructor(scene, assets, library) {
       this.scene = scene;
@@ -348,6 +353,8 @@
         return c;
       };
       const look = { mats: {}, hex: [], ves: [], pas: [], lamps: [] };
+      // what belongs to the hexagon itself and what to its vestibule, to be hidden apart (see cull)
+      const parts = { hex: [], ves: [] };
       // the passage to the next cluster leaves by the hexagon's other door: it is built like a
       // vestibule (along +x), and turned to that door
       const passage = new THREE.Group();
@@ -355,8 +362,9 @@
       group.add(passage);
       const room = group;
       for (const [k] of PATINAS) {
-        const mat = mine(M[k]), part = k.slice(0, 3);
-        (part === 'pas' ? passage : group).add(new THREE.Mesh(G[k], mat));
+        const mat = mine(M[k]), part = k.slice(0, 3), mesh = new THREE.Mesh(G[k], mat);
+        (part === 'pas' ? passage : group).add(mesh);
+        if (parts[part]) parts[part].push(mesh);
         look.mats[k] = mat;
         look[part].push(mat);
       }
@@ -370,16 +378,20 @@
         const under = new THREE.Mesh(G.lampGlow, M.lamp.clone());
         under.rotation.y = turn;
         room.add(under);
+        parts.hex.push(under);
         let wash = null;
         if (G.lampWash) {
           wash = new THREE.Mesh(G.lampWash, M.lampWash.clone());
           wash.rotation.y = turn;
           room.add(wash);
+          parts.hex.push(wash);
         }
         look.lamps.push({ under, wash });
       }
       // the plates of the bookcases and of their rows
-      room.add(new THREE.Mesh(G.plates, M.plates));
+      const plates = new THREE.Mesh(G.plates, M.plates);
+      room.add(plates);
+      parts.hex.push(plates);
 
       // the door of the cell, turning on its hinge
       // each cell has its own lamp, so its interior and its door have their own materials
@@ -468,7 +480,8 @@
       const books = new THREE.InstancedMesh(geo, booksLit, S);
       books.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       room.add(books);
-      return { group, passage, pasSigns, books, tint, variant, tints: new Float32Array(S * 3), dh: 0, df: 0, kind: 0, door, interior, niche, signs, light, canvas, farCanvas, plate, farPlate, look, looks: null, owned: this._owned(group) };
+      parts.hex.push(books);
+      return { group, passage, pasSigns, books, tint, variant, tints: new Float32Array(S * 3), dh: 0, df: 0, kind: 0, door, interior, niche, signs, light, canvas, farCanvas, plate, farPlate, look, looks: null, parts, up: 0, n: 0, owned: this._owned(group) };
     }
 
     /** The materials of a cell or hub just made that are its own, not shared with the others. */
@@ -808,19 +821,17 @@
         }
         place(cell.group, s, df);
         cell.group.rotation.y = -H.turn(cell.kind); // its vestibule points at its hub
-        const up = Math.abs(df - pf);
-        // cells can only be seen from close by, through their door
-        cell.interior.visible = up <= 1 && n <= 2;
-        cell.door.visible = up <= 1;
-        cell.niche.visible = up <= 1;
-        cell.signs.visible = up <= 1;
-        if (cell.canvas) cell.canvas.visible = cell.farCanvas.visible = up <= 1;
+        cell.group.updateMatrix();
+        cell.up = Math.abs(df - pf);
+        cell.n = n;
       }
+      for (const hub of this.hubs.values()) hub.group.updateMatrix();
       // A passage belongs to both the hexagons it joins: it is drawn by the one that is petal 0, 1
       // or 2 of its cluster, or by the other if that one is not drawn.
       for (const cell of this.cells.values()) {
-        cell.passage.visible = cell.kind < 3 || !this.cells.has(this.neighbours(cell.dh)[1] + ',' + cell.df);
+        cell.drawsPassage = cell.kind < 3 || !this.cells.has(this.neighbours(cell.dh)[1] + ',' + cell.df);
       }
+      this._show(this._seen || null);
       if (this.paintings) {
         // the paintings of the hexagons nearest the reader, their own hexagon's first, made ahead of them
         const f = this.floor(pf);
@@ -835,6 +846,174 @@
       this._trimCaches(ps, pf);
       this.clearHover();
       return true;
+    }
+
+    /**
+     * Hides what cannot be seen from `camera` (or nothing, with `all`: for a view not from it, such
+     * as the cell's mirror's). The Library is rooms: each hexagon of books, its vestibule, its
+     * passage, each stair hexagon, a floor at a time; and the openings between them: the doors at
+     * either end of a vestibule or a passage, and the hole each floor leaves for the shaft. From
+     * the room the camera is in, what can be seen of each opening, as a rectangle of the screen,
+     * is what can be seen through it of the room beyond, and of the openings of that room in turn
+     * (a portal test: generous, never hiding what can be seen). The rooms reached are drawn; the
+     * rest, behind walls and floors, are not, so that the hexagons above and below, seen from a
+     * stair hexagon only through its doors and up its shaft, cost little.
+     */
+    cull(camera, all) {
+      const seen = all || !this.center ? null : this._portals(camera);
+      this._seen = seen;
+      this._show(seen);
+    }
+
+    /** The rooms seen from `camera`, each with the rectangle of the screen it is seen in; null if the camera is in none. */
+    _portals(camera) {
+      const d = this.d, pf = this.center[1], Hf = d.Hf;
+      const V = new THREE.Vector3(), Q = new THREE.Vector4(), M = this._vp || (this._vp = new THREE.Matrix4()), inv = new THREE.Matrix4();
+      camera.updateMatrixWorld();
+      M.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+      const cam = camera.getWorldPosition(new THREE.Vector3());
+      const storey = pf + Math.floor(cam.y / Hf);
+      // the hexagons of books by "site,floor", and the stair hexagons
+      const cells = this.cells, hubs = this.hubs;
+      // the openings, in a room's own frame: a door (at x, in a frame running along +x), and the shaft's hole (at height y)
+      const R = ((d.shaftA + 0.12) * 2) / Math.sqrt(3); // (and the railing's kerb round it)
+      const hole = [];
+      for (let k = 0; k < 6; k++) { const a = Math.PI / 6 + (k * Math.PI) / 3; hole.push([R * Math.cos(a), R * Math.sin(a)]); }
+      // (walls and floors have a thickness: an opening is taken at both its faces, so that what is
+      // seen of its sides is not hidden with the room beyond)
+      const w = d.hallW / 2 + 0.2, top = d.doorH + 0.25; // (and a little round it, for the frames and trim that belong to the room beyond)
+      // An opening is a prism: its corners, and the edges between them (each face's, and those from one face to the other).
+      // (`within`: whether the camera stands in the opening itself, where it bounds nothing of the view)
+      const prism = (corners, n, within) => {
+        const edges = [];
+        for (let i = 0; i < n; i++) edges.push([i, (i + 1) % n], [n + i, n + ((i + 1) % n)], [i, n + i]);
+        return { pts: corners, edges, within };
+      };
+      const local = (m) => V.copy(cam).applyMatrix4(inv.copy(m).invert());
+      const doorAt = (m, x0, x1) => {
+        x0 -= 0.05; x1 += 0.05;
+        const c = local(m), within = c.x > x0 - 0.1 && c.x < x1 + 0.1 && Math.abs(c.z) < w + 0.1 && c.y > -0.1 && c.y < top + 0.1;
+        return prism([x0, x1].flatMap((x) => [[x, -0.05, -w], [x, -0.05, w], [x, top, w], [x, top, -w]]).map(([a, b, cc]) => V.set(a, b, cc).applyMatrix4(m).clone()), 4, within);
+      };
+      const holeAt = (m, y0, y1) => {
+        y0 -= 0.05; y1 += 0.05;
+        const c = local(m), within = hexDist(c.x, c.z) < d.shaftA + 0.2 && c.y > y0 - 0.1 && c.y < y1 + 0.1;
+        return prism([y0, y1].flatMap((y) => hole.map(([a, cc]) => V.set(a, y, cc).applyMatrix4(m).clone())), 6, within);
+      };
+      const passageMatrix = (cell) => { cell.passage.updateMatrix(); return new THREE.Matrix4().multiplyMatrices(cell.group.matrix, cell.passage.matrix); };
+      // a rectangle of the screen: [x0, y0, x1, y1]; where an opening (a prism) falls within `rect`, or null. The part of it behind the camera is cut off first, at
+      // a plane just in front of the eye, so that an opening behind is not seen, and one the
+      // camera stands in is seen as wide as it is.
+      const through = (rect, shape) => {
+        if (shape.within) return rect;
+        const clip = shape.pts.map((p) => Q.set(p.x, p.y, p.z, 1).applyMatrix4(M).toArray());
+        const E = 0.02, kept = clip.filter((a) => a[3] >= E);
+        for (const [i, j] of shape.edges) {
+          const a = clip[i], b = clip[j];
+          if ((a[3] >= E) !== (b[3] >= E)) { const t = (E - a[3]) / (b[3] - a[3]); kept.push(a.map((v, k) => v + (b[k] - v) * t)); }
+        }
+        if (!kept.length) return null; // (all of it behind)
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const q of kept) {
+          const x = q[0] / q[3], y = q[1] / q[3];
+          if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        }
+        const r = [Math.max(x0, rect[0]), Math.max(y0, rect[1]), Math.min(x1, rect[2]), Math.min(y1, rect[3])];
+        return r[0] < r[2] && r[1] < r[3] ? r : null;
+      };
+      // each room's neighbours, with the opening between: [room, points]
+      const links = (room) => {
+        const [kind, s, f] = room, out = [], key = s + ',' + f;
+        if (kind === 'H') {
+          const c = cells.get(key);
+          if (!c) return out;
+          out.push([['V', s, f], doorAt(c.group.matrix, d.aIn, d.a)]);
+          out.push([['P', s, f], doorAt(passageMatrix(c), d.aIn, d.a)]);
+          if (cells.has(s + ',' + (f + 1))) out.push([['H', s, f + 1], holeAt(c.group.matrix, d.roomH, Hf)]);
+          if (cells.has(s + ',' + (f - 1))) out.push([['H', s, f - 1], holeAt(c.group.matrix, d.roomH - Hf, 0)]);
+        } else if (kind === 'V') {
+          const c = cells.get(key);
+          if (!c) return out;
+          out.push([['H', s, f], doorAt(c.group.matrix, d.aIn, d.a)]);
+          const h = this.neighbours(s)[0];
+          if (hubs.has(h + ',' + f)) out.push([['U', h, f], doorAt(c.group.matrix, d.Dx - d.a, d.Dx - d.aIn)]);
+        } else if (kind === 'P') {
+          // (a passage is known by either hexagon it joins: here, by the one whose frame is at hand)
+          const t = this.neighbours(s)[1], c = cells.get(key) || cells.get(t + ',' + f);
+          if (!c) return out;
+          const m = passageMatrix(c), near = c.dh === s ? s : t, far = c.dh === s ? t : s;
+          if (cells.has(near + ',' + f)) out.push([['H', near, f], doorAt(m, d.aIn, d.a)]);
+          if (cells.has(far + ',' + f)) out.push([['H', far, f], doorAt(m, d.Dx - d.a, d.Dx - d.aIn)]);
+        } else if (kind === 'U') {
+          const h = hubs.get(key);
+          if (!h) return out;
+          for (const p of this.neighbours(s)) {
+            const c = cells.get(p + ',' + f);
+            if (c) out.push([['V', p, f], doorAt(c.group.matrix, d.Dx - d.a, d.Dx - d.aIn)]);
+          }
+          if (hubs.has(s + ',' + (f + 1))) out.push([['U', s, f + 1], holeAt(h.group.matrix, d.roomH, Hf)]);
+          if (hubs.has(s + ',' + (f - 1))) out.push([['U', s, f - 1], holeAt(h.group.matrix, d.roomH - Hf, 0)]);
+        }
+        return out;
+      };
+      // a passage is one room, whichever hexagon it is known by
+      const name = ([kind, s, f]) => {
+        if (kind !== 'P') return kind + s + ',' + f;
+        const t = this.neighbours(s)[1];
+        return 'P' + Math.min(s, t) + ',' + Math.max(s, t) + ',' + f;
+      };
+      // the room the camera is in
+      let start = null;
+      for (const c of cells.values()) {
+        if (c.df !== storey) continue;
+        V.copy(cam).applyMatrix4(inv.copy(c.group.matrix).invert());
+        if (hexDist(V.x, V.z) <= d.a) { start = ['H', c.dh, c.df]; break; }
+        if (V.x > d.aIn && V.x < d.Dx - d.aIn && V.z > -d.hallW / 2 - 2 && V.z < d.hallW / 2 + 0.2) { start = ['V', c.dh, c.df]; break; } // (the cell off it too)
+        c.passage.updateMatrix();
+        V.copy(cam).applyMatrix4(inv.copy(c.group.matrix).invert()).applyMatrix4(inv.copy(c.passage.matrix).invert());
+        if (V.x > d.aIn && V.x < d.Dx - d.aIn && Math.abs(V.z) < d.hallW / 2 + 0.2) { start = ['P', c.dh, c.df]; break; }
+      }
+      if (!start) for (const h of hubs.values()) {
+        if (h.df !== storey) continue;
+        const p = h.group.position;
+        if (hexDist(cam.x - p.x, cam.z - p.z) <= d.a) { start = ['U', h.site, h.df]; break; }
+      }
+      if (!start) return null;
+      // out from it, through each opening seen, to the rooms beyond, as far as anything is seen
+      const rects = new Map([[name(start), [-1, -1, 1, 1]]]), queue = [[start, [-1, -1, 1, 1]]];
+      for (let guard = 0; queue.length && guard < 400; guard++) {
+        const [room, rect] = queue.shift();
+        for (const [next, pts] of links(room)) {
+          const r = through(rect, pts);
+          if (!r) continue;
+          const k = name(next), was = rects.get(k);
+          if (was && was[0] <= r[0] && was[1] <= r[1] && was[2] >= r[2] && was[3] >= r[3]) continue; // (nothing more of it seen this way)
+          const u = was ? [Math.min(was[0], r[0]), Math.min(was[1], r[1]), Math.max(was[2], r[2]), Math.max(was[3], r[3])] : r;
+          rects.set(k, u);
+          queue.push([next, u]);
+        }
+      }
+      rects.start = name(start);
+      return rects;
+    }
+
+    /** Shows what is seen (`seen`, from _portals; or, if null, everything near enough to be drawn at all). */
+    _show(seen) {
+      const pass = (s, f) => { const t = this.neighbours(s)[1]; return 'P' + Math.min(s, t) + ',' + Math.max(s, t) + ',' + f; };
+      for (const c of this.cells.values()) {
+        const key = c.dh + ',' + c.df, near = c.up <= 1;
+        const hex = !seen || seen.has('H' + key), ves = !seen || seen.has('V' + key), pas = !seen || seen.has(pass(c.dh, c.df));
+        for (const m of c.parts.hex) m.visible = hex;
+        for (const m of c.parts.ves) m.visible = ves;
+        // cells can only be seen from close by, through their door
+        c.interior.visible = ves && near && c.n <= 2;
+        c.door.visible = ves && near;
+        c.niche.visible = ves && near;
+        c.signs.visible = (ves || hex) && near;
+        c.passage.visible = c.drawsPassage && pas;
+        if (c.canvas) c.canvas.visible = c.farCanvas.visible = near;
+      }
+      for (const h of this.hubs.values()) h.group.visible = !seen || seen.has('U' + h.site + ',' + h.df);
     }
 
     /** Names the painting of site s of floor df (as the catalogue knows it), on the plate under it. */

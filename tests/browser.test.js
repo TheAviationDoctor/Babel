@@ -585,6 +585,44 @@ test('adapts the Library, the mirror and the dream each on its own, down when sl
   assert.strictEqual(r.dream, 0, 'the dream was lowered for the Library\'s frames');
 });
 
+test('draws only the rooms that can be seen, and never hides what can (forty views, culled and not)', async (page) => {
+  const r = await page.evaluate(() => {
+    const { D, P, W, d } = T, R = D.renderer, scene = W.root.parent;
+    const rt = new THREE.WebGLRenderTarget(320, 200), a = new Uint8Array(320 * 200 * 4), b = new Uint8Array(320 * 200 * 4);
+    let seed = 2024; const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const settle = () => { W.update(P.site, P.cf, P.ch); for (let k = 0; k < 300 && W.pending; k++) W.update(P.site, P.cf, P.ch); };
+    T.quiet();
+    const hub = W.neighbours(0).find((s) => W.isHub(s)), turn = P.roomTurn();
+    const inFrame = (hx, hz, t) => [hx * Math.cos(t) - hz * Math.sin(t), hx * Math.sin(t) + hz * Math.cos(t)];
+    const at = (s, x, z, y) => { P._arrive(s, 0); P.x = x; P.z = z; P.y = y; };
+    const poses = [
+      () => { const th = rnd() * 6.28, r = 1.8 + rnd() * 1.2; at(0, r * Math.cos(th), r * Math.sin(th), 0); }, // round the shaft
+      () => { const [x, z] = inFrame(d.aIn - 0.3 + rnd() * (d.Dx / 2 - d.aIn), (rnd() - 0.5) * (d.hallW - 0.6), turn); at(0, x, z, 0); }, // a doorway, the vestibule
+      () => { const [x, z] = inFrame(d.aIn + rnd() * (d.Dx / 2 - d.aIn), (rnd() - 0.5) * (d.hallW - 0.6), turn + d.passageTurn); at(0, x, z, 0); }, // the passage
+      () => { const th = rnd() * 6.28, r = 1.8 + rnd() * 1.4; at(hub, r * Math.cos(th), r * Math.sin(th), 0); }, // round the stair
+      () => { const th = rnd() * 6.28, r = 0.75 + rnd() * 0.6; at(hub, r * Math.cos(th), r * Math.sin(th), 0); P.y = P._stair(P.x, P.z, rnd() * 3.4) || 0; }, // on it
+      () => { at(0, (rnd() - 0.5) * 1.6, (rnd() - 0.5) * 1.6, (rnd() - 0.5) * 3.4); }, // falling down the shaft
+    ];
+    const worst = [], calls = { culled: 0, all: 0 };
+    for (let i = 0; i < 40; i++) {
+      poses[i % poses.length](); P._rebase();
+      P.yaw = rnd() * 6.283; P.pitch = (rnd() - 0.5) * 2.6; P._applyCamera(0, 0); settle(); P.camera.updateMatrixWorld();
+      R.setRenderTarget(rt);
+      W.cull(P.camera, true); R.info.reset(); R.render(scene, P.camera); calls.all += R.info.render.calls; R.readRenderTargetPixels(rt, 0, 0, 320, 200, a);
+      W.cull(P.camera, false); R.info.reset(); R.render(scene, P.camera); calls.culled += R.info.render.calls; R.readRenderTargetPixels(rt, 0, 0, 320, 200, b);
+      R.setRenderTarget(null);
+      let diff = 0; for (let k = 0; k < a.length; k += 4) if (Math.abs(a[k] - b[k]) > 3 || Math.abs(a[k + 1] - b[k + 1]) > 3 || Math.abs(a[k + 2] - b[k + 2]) > 3) diff++;
+      worst.push({ i, diff });
+    }
+    W.cull(P.camera, true); rt.dispose();
+    worst.sort((x, y) => y.diff - x.diff);
+    return { worst: worst.slice(0, 3), calls };
+  });
+  // (a few pixels may differ: hairline seams in the walls, which showed the room behind, now show the dark)
+  assert(r.worst[0].diff <= 12, `culling hid what can be seen: ${JSON.stringify(r.worst)}`);
+  assert(r.calls.culled < 0.75 * r.calls.all, `culling saved little: ${r.calls.culled} draws, against ${r.calls.all}`);
+});
+
 test('lets go of spare hexagons after a while, and draws again where they were', async (page) => {
   const r = await page.evaluate(async () => {
     const { D, P, W } = T, R = D.renderer;

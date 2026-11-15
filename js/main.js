@@ -1132,6 +1132,9 @@
     placeIn(sinkReflector, sinkCell.frame, d.sinkMirror.x - 0.014, d.sinkMirror.y0 + d.sinkMirror.h / 2, d.sinkMirror.z, -Math.PI / 2);
     Babel.Figure.pose(figure, player, dt);
     ghost.update(dt, player, camera, mode === 'walking' && !sleep);
+    // only what can be seen from where the reader stands is drawn (all of it while the mirror,
+    // which sees from elsewhere, is in sight)
+    world.cull(camera, sinkReflector.visible);
   }
 
   function updateGaze() {
