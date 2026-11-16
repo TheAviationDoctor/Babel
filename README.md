@@ -1,6 +1,6 @@
 # Babel
 
-A Web-based walkable simulation loosely adapted from Jorge Luis Borges's *[Library of Babel](https://en.wikipedia.org/wiki/The_Library_of_Babel)* 1941 novella. It contains every book that was ever written, and every book that wasn't. The complication, of course, is knowing where to look.
+A Web-based walkable adaptation of Jorge Luis Borges's *[Library of Babel](https://en.wikipedia.org/wiki/The_Library_of_Babel)* 1941 novella. It contains every book that was ever written, and every book that wasn't. The complication, of course, is knowing where to look.
 
 ## Features
 
@@ -34,7 +34,7 @@ On a phone or tablet, drag on the right of the screen to look, hold and slide on
 
 ## Is the Library a maze?
 
-Not really; its topology is predictable. It is comprised of rows of repeating clusters of seven hexagonal rooms each: one hub hexagon (in purple in the diagram below) featuring a central staircase to the floors above and below, plus hallways open on every side; and six surrounding spoke hexagons arranged in a circle around the hub, each containing four bookshelves and two connecting hallways. The cluster structure repeats itself across every floor and tiles the plane (see diagram below).
+Not really; its topology is predictable. It is comprised of rows of repeating clusters, each with seven hexagonal rooms: one hub hexagon (in purple in the diagram below) featuring a central staircase leading to the floors above and below, plus hallways open on every side; and six surrounding spoke hexagons arranged in a circle around the hub, each containing four bookshelves and two connecting hallways. The cluster structure repeats itself across every floor and tiles the plane (see diagram below).
 
 ![Topology of the Library](babel-seven-hexagon-modules.png)
 *Illustration: An aerial view of part of a floor.*

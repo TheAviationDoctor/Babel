@@ -586,6 +586,58 @@ test('adapts the Library, the mirror and the dream each on its own, down when sl
   assert.strictEqual(r.dream, 0, 'the dream was lowered for the Library\'s frames');
 });
 
+test('draws the mirrors smaller at each step down, even on a screen so large their best is held at 1,024 pixels', async (page) => {
+  const r = await page.evaluate(() => {
+    const { D } = T, Q = D.quality, R = D.renderer, { reflector, sinkReflector } = D.mirrors;
+    // a 4K screen of 1.5 device pixels to a CSS pixel, as the browser would report it
+    const saved = ['innerWidth', 'innerHeight'].map((k) => [k, Object.getOwnPropertyDescriptor(window, k)]);
+    const pr = R.getPixelRatio;
+    Object.defineProperty(window, 'innerWidth', { value: 2560, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 1440, configurable: true });
+    R.getPixelRatio = () => 1.5;
+    const sizes = [];
+    try {
+      for (let level = 0; level < Q.mirror.size; level++) {
+        Q.mirror.level = level; Q.mirror.apply(level);
+        const a = reflector.getRenderTarget(), b = sinkReflector.getRenderTarget();
+        sizes.push([a.width, a.height, b.width, b.height]);
+      }
+    } finally {
+      R.getPixelRatio = pr;
+      for (const [k, desc] of saved) if (desc) Object.defineProperty(window, k, desc); else delete window[k];
+      Q.mirror.level = 0; Q.mirror.apply(0);
+    }
+    return sizes;
+  });
+  assert.deepStrictEqual(r[0], [1024, 576, 1024, 576], `at its best, the mirror was ${r[0]}`);
+  for (let i = 1; i < r.length; i++) assert(r[i][0] < r[i - 1][0] * 0.8 && r[i][1] < r[i - 1][1] * 0.8, `step ${i} drew the mirror at ${r[i]}, after ${r[i - 1]}`);
+  for (const s of r) assert(s[0] === s[2] && s[1] === s[3], `the two mirrors were drawn at different sizes: ${s}`);
+});
+
+test('with a mirror in sight, lowers the Library once the mirror is at its least and still slow, and leaves it to recover with the mirror away', async (page) => {
+  const r = await page.evaluate(() => {
+    const { D } = T, Q = D.quality, { reflector, sinkReflector } = D.mirrors;
+    T.quiet(); D.startWalking();
+    const reset = (q) => { Object.assign(q, { level: 0, samples: [], median: 0, easy: 0, wait: 15, trial: false }); q.apply(0); };
+    reset(Q.world); reset(Q.mirror);
+    const run = (dt, n, seen) => {
+      for (let i = 0; i < n; i++) { reflector.visible = seen; sinkReflector.visible = false; D.adaptQuality(dt); }
+      return { world: Q.world.level, mirror: Q.mirror.level };
+    };
+    const out = {};
+    out.mirrorFirst = run(0.03, 240, true); // two slow spells: the mirror, twice
+    out.thenWorld = run(0.03, 240, true); // the mirror at its least and still slow: now the Library
+    out.easyInSight = run(0.0167, 120 * 300, true); // easy: the mirror back up; the Library left as it is
+    out.easyAway = run(0.0167, 120 * 300, false); // and the Library back up with the mirror away
+    reflector.visible = false;
+    return out;
+  });
+  assert.deepStrictEqual(r.mirrorFirst, { world: 0, mirror: 2 }, `slow with the mirror in sight: ${JSON.stringify(r.mirrorFirst)}`);
+  assert(r.thenWorld.world >= 1 && r.thenWorld.mirror === 2, `the Library was not lowered once the mirror could do no more: ${JSON.stringify(r.thenWorld)}`);
+  assert.strictEqual(r.easyInSight.mirror, 0, 'the mirror did not come back up when easy');
+  assert.strictEqual(r.easyAway.world, 0, 'the Library did not come back up with the mirror away');
+});
+
 test('draws only the rooms that can be seen, and never hides what can (forty views, culled and not)', async (page) => {
   const r = await page.evaluate(() => {
     const { D, P, W, d } = T, R = D.renderer, scene = W.root.parent;

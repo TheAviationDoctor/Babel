@@ -169,12 +169,15 @@
 
   function sizeMirror() {
     const pr = renderer.getPixelRatio();
-    // half the screen's resolution (less on a machine it slows), and no more than 1,024 pixels on
-    // its longer side: the mirror is small, and its picture need be no sharper than the screen shows it
-    const f = MIRROR_SCALE[quality.mirror.level];
-    const w = window.innerWidth * pr * f, h = window.innerHeight * pr * f, k = Math.min(1, 1024 / Math.max(w, h));
-    sinkReflector.getRenderTarget().setSize(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)));
-    reflector.getRenderTarget().setSize(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)));
+    // at best, half the screen's resolution and no more than 1,024 pixels on its longer side: the
+    // mirror is small, and its picture need be no sharper than the screen shows it. A machine it
+    // slows gets a fraction of that best, so that each step down draws fewer pixels, even on
+    // screens so large that the best is held at 1,024
+    const w0 = window.innerWidth * pr * MIRROR_SCALE[0], h0 = window.innerHeight * pr * MIRROR_SCALE[0];
+    const k = Math.min(1, 1024 / Math.max(w0, h0)) * MIRROR_SCALE[quality.mirror.level] / MIRROR_SCALE[0];
+    const w = Math.max(1, Math.round(w0 * k)), h = Math.max(1, Math.round(h0 * k));
+    sinkReflector.getRenderTarget().setSize(w, h);
+    reflector.getRenderTarget().setSize(w, h);
   }
 
   function onResize() {
@@ -977,12 +980,13 @@
   /*
    * How finely the Library is drawn, adapted to this machine: each kind of work on its own
    * settings, from the finest down, and judged on the frames where it is done.
-   *   - the Library (frames walking, the cell's mirror out of sight): the screen's pixels (up to
+   *   - the Library (frames walking, no mirror in sight): the screen's pixels (up to
    *     1.75 to a CSS pixel), then fewer floors seen up and down the shaft, then fewer pixels
    *     than the screen has. Frames not easy also halve the time given each frame to making
    *     paintings and dressing hexagons;
-   *   - the cell's mirror (frames walking while it is seen): its picture, from half the screen's
-   *     pixels across down to a quarter;
+   *   - the mirrors (frames walking while one is seen): their picture, from half the screen's
+   *     pixels across (at most 1,024) down to half that. Once the mirror is at its least and the
+   *     frames are still slow, they count for the Library as well;
    *   - the dream (frames dreaming): its pixels, from one to a CSS pixel down to half that.
    * Each 120 such frames, their median interval decides: slow (under some 42 frames a second),
    * one step down; easy for a while, one step back up, on trial. A step up that proves too much
@@ -1041,8 +1045,11 @@
     if (document.hidden) return;
     if (sleep && sleep.dreaming && mode === 'sleeping') judge(quality.dream, rawDt);
     else if (mode === 'walking' && !sleep) {
-      if (sinkReflector.visible || reflector.visible) judge(quality.mirror, rawDt);
-      else {
+      const M = quality.mirror, mirrored = sinkReflector.visible || reflector.visible;
+      if (mirrored) judge(M, rawDt);
+      // with a mirror in sight, the Library is judged too once the mirror can be made no cheaper
+      // and is still slow: the rest of the cost is the Library's
+      if (!mirrored || (M.level === M.size - 1 && M.median > 0.024)) {
         judge(quality.world, rawDt);
         world.busy = quality.world.median > 0.0185; // frames not easy: less time for the work spread over them
       }
